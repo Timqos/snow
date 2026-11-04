@@ -1,7 +1,7 @@
 {
-  "stage": "Snow role-aware sound designer, generative groovebox and backup-first installer",
-  "version": "v0.6-snow",
-  "source_commit": "e3d7db822b9d3f1e1be41926092b54f512d6f295",
+  "stage": "Snow animated boot identity, role-aware groovebox and backup-first installer",
+  "version": "v0.6.1-snow",
+  "source_commit": "23ea6bdc10da53f0a5c347039ac4d21f216461f1",
   "source_dirty": false,
-  "package_sha256": "cb95f44ffd68063b3b02bbbab92621df7378be1c51cc5ca0b6892d64fc6bec95"
+  "package_sha256": "f6c7b7ca5bc5e30a6951f6ddf12273a8f016086e0982533b5906bf7e1f8b023b"
 }

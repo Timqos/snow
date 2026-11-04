@@ -1,0 +1,290 @@
+{
+  "kick": [
+    {
+      "preset": 1,
+      "energy95_ms": 60.86,
+      "centroid_hz": 52,
+      "below_1k": 1.0,
+      "strongest_bin": 0.505
+    },
+    {
+      "preset": 2,
+      "energy95_ms": 24.13,
+      "centroid_hz": 67,
+      "below_1k": 1.0,
+      "strongest_bin": 0.3653
+    },
+    {
+      "preset": 3,
+      "energy95_ms": 39.3,
+      "centroid_hz": 48,
+      "below_1k": 1.0,
+      "strongest_bin": 0.426
+    },
+    {
+      "preset": 4,
+      "energy95_ms": 33.4,
+      "centroid_hz": 74,
+      "below_1k": 1.0,
+      "strongest_bin": 0.4313
+    },
+    {
+      "preset": 5,
+      "energy95_ms": 345.56,
+      "centroid_hz": 41,
+      "below_1k": 1.0,
+      "strongest_bin": 0.5683
+    },
+    {
+      "preset": 6,
+      "energy95_ms": 124.22,
+      "centroid_hz": 54,
+      "below_1k": 1.0,
+      "strongest_bin": 0.5809
+    },
+    {
+      "preset": 7,
+      "energy95_ms": 18.75,
+      "centroid_hz": 80,
+      "below_1k": 0.9999,
+      "strongest_bin": 0.2852
+    },
+    {
+      "preset": 8,
+      "energy95_ms": 7.89,
+      "centroid_hz": 202,
+      "below_1k": 0.9939,
+      "strongest_bin": 0.1209
+    },
+    {
+      "preset": 9,
+      "energy95_ms": 207.39,
+      "centroid_hz": 33,
+      "below_1k": 1.0,
+      "strongest_bin": 0.6531
+    },
+    {
+      "preset": 10,
+      "energy95_ms": 15.56,
+      "centroid_hz": 115,
+      "below_1k": 0.9967,
+      "strongest_bin": 0.1024
+    }
+  ],
+  "snare": [
+    {
+      "preset": 1,
+      "energy95_ms": 42.43,
+      "centroid_hz": 1352,
+      "below_1k": 0.6577,
+      "strongest_bin": 0.224
+    },
+    {
+      "preset": 2,
+      "energy95_ms": 11.77,
+      "centroid_hz": 5248,
+      "below_1k": 0.1189,
+      "strongest_bin": 0.0114
+    },
+    {
+      "preset": 3,
+      "energy95_ms": 64.54,
+      "centroid_hz": 237,
+      "below_1k": 0.9496,
+      "strongest_bin": 0.4121
+    },
+    {
+      "preset": 4,
+      "energy95_ms": 22.38,
+      "centroid_hz": 437,
+      "below_1k": 0.9045,
+      "strongest_bin": 0.2789
+    },
+    {
+      "preset": 5,
+      "energy95_ms": 18.23,
+      "centroid_hz": 7959,
+      "below_1k": 0.0199,
+      "strongest_bin": 0.0031
+    },
+    {
+      "preset": 6,
+      "energy95_ms": 56.05,
+      "centroid_hz": 3492,
+      "below_1k": 0.3159,
+      "strongest_bin": 0.084
+    },
+    {
+      "preset": 7,
+      "energy95_ms": 10.41,
+      "centroid_hz": 9896,
+      "below_1k": 0.0041,
+      "strongest_bin": 0.0025
+    },
+    {
+      "preset": 8,
+      "energy95_ms": 36.62,
+      "centroid_hz": 4294,
+      "below_1k": 0.1263,
+      "strongest_bin": 0.0112
+    },
+    {
+      "preset": 9,
+      "energy95_ms": 148.93,
+      "centroid_hz": 2285,
+      "below_1k": 0.3005,
+      "strongest_bin": 0.0086
+    },
+    {
+      "preset": 10,
+      "energy95_ms": 81.29,
+      "centroid_hz": 10413,
+      "below_1k": 0.0896,
+      "strongest_bin": 0.0328
+    }
+  ],
+  "hat": [
+    {
+      "preset": 1,
+      "energy95_ms": 10.45,
+      "centroid_hz": 8707,
+      "below_1k": 0.0068,
+      "strongest_bin": 0.0027
+    },
+    {
+      "preset": 2,
+      "energy95_ms": 118.44,
+      "centroid_hz": 12958,
+      "below_1k": 0.0003,
+      "strongest_bin": 0.0021
+    },
+    {
+      "preset": 3,
+      "energy95_ms": 7.37,
+      "centroid_hz": 10834,
+      "below_1k": 0.0023,
+      "strongest_bin": 0.0022
+    },
+    {
+      "preset": 4,
+      "energy95_ms": 5.19,
+      "centroid_hz": 13612,
+      "below_1k": 0.0002,
+      "strongest_bin": 0.0016
+    },
+    {
+      "preset": 5,
+      "energy95_ms": 155.62,
+      "centroid_hz": 8143,
+      "below_1k": 0.0119,
+      "strongest_bin": 0.0037
+    },
+    {
+      "preset": 6,
+      "energy95_ms": 15.19,
+      "centroid_hz": 8325,
+      "below_1k": 0.0101,
+      "strongest_bin": 0.003
+    },
+    {
+      "preset": 7,
+      "energy95_ms": 3.61,
+      "centroid_hz": 15671,
+      "below_1k": 0.0012,
+      "strongest_bin": 0.0018
+    },
+    {
+      "preset": 8,
+      "energy95_ms": 21.68,
+      "centroid_hz": 10221,
+      "below_1k": 0.0037,
+      "strongest_bin": 0.0025
+    },
+    {
+      "preset": 9,
+      "energy95_ms": 93.49,
+      "centroid_hz": 6846,
+      "below_1k": 0.0278,
+      "strongest_bin": 0.0044
+    },
+    {
+      "preset": 10,
+      "energy95_ms": 39.34,
+      "centroid_hz": 13881,
+      "below_1k": 0.0001,
+      "strongest_bin": 0.0022
+    }
+  ],
+  "perc": [
+    {
+      "preset": 1,
+      "energy95_ms": 108.75,
+      "centroid_hz": 260,
+      "below_1k": 0.993,
+      "strongest_bin": 0.5995
+    },
+    {
+      "preset": 2,
+      "energy95_ms": 10.25,
+      "centroid_hz": 266,
+      "below_1k": 0.9998,
+      "strongest_bin": 0.1636
+    },
+    {
+      "preset": 3,
+      "energy95_ms": 17.03,
+      "centroid_hz": 352,
+      "below_1k": 0.995,
+      "strongest_bin": 0.268
+    },
+    {
+      "preset": 4,
+      "energy95_ms": 4.67,
+      "centroid_hz": 396,
+      "below_1k": 0.9956,
+      "strongest_bin": 0.071
+    },
+    {
+      "preset": 5,
+      "energy95_ms": 38.3,
+      "centroid_hz": 88,
+      "below_1k": 1.0,
+      "strongest_bin": 0.4812
+    },
+    {
+      "preset": 6,
+      "energy95_ms": 26.17,
+      "centroid_hz": 613,
+      "below_1k": 0.8488,
+      "strongest_bin": 0.3277
+    },
+    {
+      "preset": 7,
+      "energy95_ms": 3.61,
+      "centroid_hz": 525,
+      "below_1k": 0.9995,
+      "strongest_bin": 0.0533
+    },
+    {
+      "preset": 8,
+      "energy95_ms": 10.86,
+      "centroid_hz": 13056,
+      "below_1k": 0.0003,
+      "strongest_bin": 0.0023
+    },
+    {
+      "preset": 9,
+      "energy95_ms": 70.25,
+      "centroid_hz": 176,
+      "below_1k": 1.0,
+      "strongest_bin": 0.483
+    },
+    {
+      "preset": 10,
+      "energy95_ms": 2.68,
+      "centroid_hz": 5226,
+      "below_1k": 0.0359,
+      "strongest_bin": 0.0088
+    }
+  ]
+}

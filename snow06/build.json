@@ -1,0 +1,7 @@
+{
+  "stage": "Snow role-aware sound designer, generative groovebox and backup-first installer",
+  "version": "v0.6-snow",
+  "source_commit": "e3d7db822b9d3f1e1be41926092b54f512d6f295",
+  "source_dirty": false,
+  "package_sha256": "cb95f44ffd68063b3b02bbbab92621df7378be1c51cc5ca0b6892d64fc6bec95"
+}

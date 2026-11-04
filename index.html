@@ -5,7 +5,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Snow for the M-VAVE FM-1: six dedicated instruments, smart sound generation, generative patterns, a browser simulator and backup-first installation.">
-  <title>Snow · FM-1</title>
+  <title>Snow Firmware · FM-1</title>
+  <link rel="icon" href="snow/logo.svg" type="image/svg+xml">
   <style>
     @font-face { font-family: Panel; src: url("try/fonts/DotGothic16-subset.woff") format("woff"); font-display: swap; }
     :root { color-scheme: dark; --bg: #111310; --fg: #e9eadf; --muted: #a3a697; --line: #3d4236; --accent: #ecbd60; }
@@ -13,7 +14,7 @@
     body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.65 system-ui, sans-serif; }
     main { max-width: 940px; margin: auto; padding: 56px 24px; }
     header { display: flex; justify-content: space-between; gap: 20px; align-items: center; border-bottom: 1px solid var(--line); padding-bottom: 18px; }
-    .wordmark { font: 28px Panel, monospace; letter-spacing: .13em; }
+    .wordmark { display:flex;align-items:center;gap:16px;text-decoration:none;font: 28px Panel, monospace; letter-spacing: .13em; }
     .status, .eyebrow { color: var(--accent); font: 12px/1.7 monospace; letter-spacing: .08em; }
     .intro { padding: 56px 0 32px; }
     h1 { margin: 12px 0 20px; max-width: 750px; font-size: clamp(34px, 6vw, 56px); line-height: 1.15; letter-spacing: -.035em; }
@@ -33,24 +34,24 @@
     footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 13px; }
     footer a { display: inline-block; margin-right: 18px; }
     code { font-size: 12px; }
-    @media (max-width: 540px) { main { padding: 24px 18px; } header { align-items: start; } .intro { padding-top: 36px; } .tracks { grid-template-columns: repeat(3, 1fr); } .track:nth-child(3) { border-right: 0; } .track:nth-child(-n+3) { border-bottom: 1px solid var(--line); } }
+    @media (max-width: 540px) { main { padding: 24px 18px; } header { align-items: start; } .wordmark{font-size:20px;gap:10px}.wordmark img{width:35px;height:35px}.status{font-size:10px}.intro { padding-top: 36px; } .tracks { grid-template-columns: repeat(3, 1fr); } .track:nth-child(3) { border-right: 0; } .track:nth-child(-n+3) { border-bottom: 1px solid var(--line); } }
   </style>
 </head>
 <body>
 <main>
-  <header><span class="wordmark">SNOW</span><span class="status">M-VAVE FM-1<br>0.6 / SMART SOUND DESIGN</span></header>
+  <header><a class="wordmark" href="snow/?v=061"><img src="snow/logo.svg" width="49" height="49" alt="">Snow Firmware</a><span class="status">M-VAVE FM-1<br>0.6.1 / FM-1 FIRMWARE</span></header>
   <section class="intro" aria-labelledby="title">
     <div class="eyebrow">SIX INSTRUMENTS. YOUR GROOVE.</div>
     <h1 id="title">Fresh sounds.<br>Patterns with a pulse.</h1>
     <p class="muted">A custom six-channel groovebox firmware for the M-VAVE FM-1. Kick, snare, hat, pitched percussion, bass and chord — deep synthesis, independent effects and an instrument-aware generative sequencer.</p>
-    <div class="actions"><a class="button primary" href="snow/?v=06">Play Snow 0.6 →</a><a class="button" href="snow/install/">Install &amp; back up</a><a class="button" href="https://github.com/Timqos/snow/tree/codex/snow-deep-synthesis">Source code</a></div>
-    <div class="note"><p><strong>New in 0.6: smart sound generation.</strong> RANDOM EDIT builds a fresh sound while retaining the instrument’s body, note tracking and articulation. Coordinated synthesis, modulation and effect choices replace destructive full-range dice. The simulator page now includes installation guidance and an English button manual.</p></div>
+    <div class="actions"><a class="button primary" href="snow/?v=061">Play Snow 0.6.1 →</a><a class="button" href="snow/install/">Install &amp; back up</a><a class="button" href="https://github.com/Timqos/snow/tree/codex/snow-deep-synthesis">Source code</a></div>
+    <div class="note"><p><strong>New in 0.6.1: a Snow identity.</strong> The pixel snowflake assembles at startup, followed by the Snow name. The simulator page opens with an introduction, then the playable device, installation guide and button manual. Smart sound generation and the six-instrument workflow remain ready to explore.</p></div>
   </section>
   <section aria-labelledby="instruments"><h2 id="instruments">One role. Many voices.</h2><div class="tracks" aria-label="Dedicated instruments"><span class="track">KICK</span><span class="track">SNARE</span><span class="track">HAT</span><span class="track">PERC</span><span class="track">BASS</span><span class="track">CHORD</span></div>
     <p>Ten factory sounds per instrument, three oscillators, six algorithms, full ADSR, pitch/FM envelopes, filters and two LFOs. Per-channel delay, reverb, chorus, Tape, bitcrush and insert effects. Six-channel HOME, MIXER and PATTERNS, with a pixel interface and icons linked directly to parameter position.</p>
     <h2>Try it in your browser.</h2><p class="muted">Open the simulator and click Switch on. Use the device’s buttons, keys and encoders; Shift-click holds a button. SEQ → SEQ GEN → OCT+ creates a phrase. EDIT → first page → OCT+ creates a new instrument sound. A quick-start guide and button reference sit below the device. Your browser saves are kept locally.</p>
-    <h2>Install with a way back.</h2><p class="muted">Snow 0.6 is experimental FM-1 firmware and has not yet been validated on physical hardware. Back up your music and keep the current firmware before installing. The Snow installer verifies the exact release, offers complete backups for supported firmware and requires a saved backup before writing. Use desktop Chrome or Edge, direct USB and stable power. Read all installation and recovery notes first.</p>
+    <h2>Install with a way back.</h2><p class="muted">Snow 0.6.1 is experimental FM-1 firmware and has not yet been validated on physical hardware. Back up your music and keep the current firmware before installing. The Snow installer verifies the exact release, offers complete backups for supported firmware and requires a saved backup before writing. Use desktop Chrome or Edge, direct USB and stable power. Read all installation and recovery notes first.</p>
     <div class="actions"><a class="button primary" href="snow/install/">Open the Snow installer</a><a class="button" href="try/">Skiff baseline</a></div>
   </section>
-  <footer><p>Built on <a href="https://github.com/illuminus5/skiff">Skiff / illuminus5</a> and Felucca / Leo Kuroshita, Hügelton Instruments. Original authorship and licences are retained.</p><a href="snow/LICENSING.md">Licences &amp; credits</a><a href="snow/build.json">Snow build details</a><a href="https://github.com/Timqos/snow/issues">Report an issue</a><p>Source <code>e3d7db822b9d</code> · Skiff baseline 2.2 · Snow is not affiliated with M-VAVE or Elektron.</p></footer>
+  <footer><p>Built on <a href="https://github.com/illuminus5/skiff">Skiff / illuminus5</a> and Felucca / Leo Kuroshita, Hügelton Instruments. Original authorship and licences are retained.</p><a href="snow/LICENSING.md">Licences &amp; credits</a><a href="snow/build.json">Snow build details</a><a href="https://github.com/Timqos/snow/issues">Report an issue</a><p>Source <code>23ea6bdc10da</code> · Skiff baseline 2.2 · Snow is not affiliated with M-VAVE or Elektron.</p></footer>
 </main></body></html>

@@ -6,8 +6,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Snow 0.6 · FM-1 groovebox</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 rx=%223%22 fill=%22%23111%22/%3E%3Crect x=%223%22 y=%229%22 width=%223%22 height=%224%22 fill=%22%23ff5a36%22/%3E%3Crect x=%227%22 y=%226%22 width=%223%22 height=%227%22 fill=%22%2322c3b4%22/%3E%3Crect x=%2211%22 y=%223%22 width=%223%22 height=%2210%22 fill=%22%23ffbf00%22/%3E%3C/svg%3E">
+<title>Snow Firmware 0.6.1 · FM-1 groovebox</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml">
 <meta name="description" content="Snow for the M-VAVE FM-1: six instruments, smart sound generation, generative patterns and a browser simulator. Install, back up and learn the controls.">
 <style>
 /* DotGothic16 (SIL OFL 1.1, fonts/OFL.txt), cut to printable ASCII, for the knob labels */
@@ -72,7 +72,8 @@ footer small { font-size: 11px; opacity: .8; }
 html,body{background:#101010;color:#e9e9e4;color-scheme:dark}
 :root{--snow-accent:#39dbf5;--snow-rule:#353638}
 main{max-width:1040px}.keys,footer{color:#a4a5a8}kbd{color:#e9e9e4;border-color:#555}
-.snow-header{display:flex;justify-content:space-between;align-items:center;margin:0 0 18px;color:#a4a5a8;font:12px monospace;letter-spacing:.08em}.snow-header strong{color:var(--snow-accent);font-size:20px;letter-spacing:.18em}
+.snow-header{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:4px 0 22px;margin:0;color:#a4a5a8;font:12px monospace;border-bottom:1px solid var(--snow-rule)}.snow-brand{display:flex;align-items:center;gap:14px;color:#e9e9e4;text-decoration:none;white-space:nowrap}.snow-brand img{display:block;image-rendering:pixelated}.snow-brand>span{font:600 23px/1.2 system-ui,sans-serif;letter-spacing:-.035em}.snow-brand>span>span{font-weight:400;color:#a4a5a8}.snow-header nav{display:flex;gap:22px}.snow-header nav a{text-decoration:none}.snow-header nav a:hover{color:#e9e9e4}
+.snow-intro{display:grid;grid-template-columns:minmax(0,2fr) minmax(200px,1fr);gap:48px;padding:34px 0 30px}.snow-intro h1{font-size:clamp(32px,4.8vw,50px);line-height:1.08;letter-spacing:-.045em;margin:12px 0 18px}.snow-intro .lede{font-size:16px;margin:0;max-width:610px}.intro-note{font-size:12px;color:#a4a5a8;margin:14px 0 0}.intro-details{align-self:center;border-left:1px solid var(--snow-rule);padding:8px 0 8px 28px;font:12px/1.9 monospace;color:#a4a5a8}.intro-details .release-tag{color:var(--snow-accent)}.intro-details a{color:#e9e9e4;text-decoration:none}.intro-details a span{color:var(--snow-accent);margin-left:12px}
 .install-strip,.snow-guide{box-sizing:border-box}.install-strip{display:grid;grid-template-columns:minmax(210px,.8fr) minmax(0,2fr);gap:28px;margin:16px 0 22px;padding:24px;border:1px solid var(--snow-rule);background:#161616}
 .install-strip h2{font-size:24px;margin:5px 0 18px}.install-action{display:flex;align-items:flex-start;flex-direction:column}.eyebrow{font:11px monospace;letter-spacing:.12em;color:var(--snow-accent)}
 .primary-button{display:inline-flex;gap:22px;justify-content:space-between;align-items:center;padding:13px 17px;background:var(--snow-accent);color:#101010;border:1px solid var(--snow-accent);font:600 14px monospace;text-decoration:none;cursor:pointer}.primary-button:hover{filter:brightness(1.15)}.primary-button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var(--snow-accent);outline-offset:4px}
@@ -80,20 +81,22 @@ main{max-width:1040px}.keys,footer{color:#a4a5a8}kbd{color:#e9e9e4;border-color:
 .snow-guide{padding-top:36px}.guide-heading{max-width:720px;margin:0 0 32px}.guide-heading h1{font-size:clamp(30px,5vw,52px);line-height:1.08;letter-spacing:-.04em;margin:14px 0 20px}.lede{font-size:17px;color:#c4c5c5;max-width:650px}
 .feature-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 36px}.feature-grid article{border-top:1px solid var(--snow-rule);padding:18px 0 20px}.feature-grid h2,.quickstart h2,.manual h2,.release-links h2{font-size:21px;line-height:1.3;letter-spacing:-.02em}.feature-grid p{color:#c4c5c5}.feature-grid strong{color:#e9e9e4}.quickstart,.manual,.release-links{border-top:1px solid var(--snow-rule);padding:26px 0}.quickstart ol{padding-left:20px;max-width:800px}.quickstart li{margin:0 0 14px;padding-left:5px}
 .control-reference{margin:22px 0}.control-reference>div{display:grid;grid-template-columns:minmax(180px,1fr) minmax(0,3fr);gap:24px;border-top:1px solid #262628;padding:16px 0}.control-reference dt{font:12px/1.6 monospace;color:var(--snow-accent)}.control-reference dd{margin:0;color:#c4c5c5}.release-links nav{display:flex;flex-wrap:wrap;gap:12px 24px;font-size:13px}.release-links p{max-width:800px;color:#c4c5c5}footer{border-top:1px solid var(--snow-rule);padding-top:20px;text-align:left}
-@media(max-width:650px){.install-strip,.feature-grid{grid-template-columns:1fr}.install-strip{padding:18px;gap:20px}.control-reference>div{grid-template-columns:1fr;gap:8px}.guide-heading h1{font-size:34px}.snow-header{font-size:10px;gap:12px}}
+@media(max-width:650px){.install-strip,.feature-grid,.snow-intro{grid-template-columns:1fr}.install-strip{padding:18px;gap:20px}.control-reference>div{grid-template-columns:1fr;gap:8px}.snow-intro{gap:18px;padding-top:26px}.intro-details{border-left:0;border-top:1px solid var(--snow-rule);padding:16px 0 0}.intro-details p{display:none}.snow-header{font-size:10px;gap:12px;padding:8px 0 18px}.snow-header nav{gap:12px}.snow-brand{gap:9px}.snow-brand>span{font-size:19px}.snow-brand img{width:35px;height:35px}}
 
 </style>
 </head>
 <body>
 <main>
-<header class="snow-header"><strong>SNOW</strong><span>SIX INSTRUMENTS / M-VAVE FM-1 / 0.6</span></header><div class="device" id="device">
+<header class="snow-header"><a class="snow-brand" href="../" aria-label="Snow Firmware home"><img src="logo.svg" alt="" width="42" height="42"><span>Snow <span>Firmware</span></span></a><nav aria-label="Main navigation"><a href="#device">Simulator</a><a href="install/">Install</a><a href="#manual-title">Manual</a></nav></header>
+<section class="snow-intro" aria-labelledby="snow-title"><div><p class="eyebrow">CUSTOM FIRMWARE / M-VAVE FM-1</p><h1 id="snow-title">Six instruments.<br>Your next sound.</h1><p class="lede">Kick, snare, hat, pitched percussion, bass and chord. Shape each sound with deep synthesis, discover new voices with smart randomisation, and build fresh grooves with the generative sequencer.</p><p class="intro-note">Play the firmware in your browser below. The install guide and button manual follow the device.</p></div><div class="intro-details"><span class="release-tag">SNOW 0.6.1 · EXPERIMENTAL</span><p>Six dedicated channels<br>Three oscillators · Six algorithms<br>Independent effects<br>Generative patterns</p><a href="#device">Explore the simulator <span aria-hidden="true">↓</span></a></div></section>
+<div class="device" id="device">
   <svg id="panel" viewBox="0 0 1000 624" aria-hidden="true"></svg>
   <canvas id="screen" width="240" height="240" role="img" aria-label="The screen"></canvas>
   <div class="start" id="start"><button id="go" type="button">Switch on</button><p id="status" hidden></p></div>
 </div>
 
 <section class="install-strip" aria-labelledby="install-title">
-  <div class="install-action"><span class="eyebrow">ON YOUR FM-1</span><h2 id="install-title">Make it yours.</h2><a class="primary-button" href="install/">Install Snow 0.6 <span aria-hidden="true">↗</span></a><a class="quiet-link" href="snow-0.6.fwsc" download>Download firmware (.fwsc)</a><span class="release-tag">Experimental firmware · FM-1 only</span></div>
+  <div class="install-action"><span class="eyebrow">ON YOUR FM-1</span><h2 id="install-title">Make it yours.</h2><a class="primary-button" href="install/">Install Snow 0.6.1 <span aria-hidden="true">↗</span></a><a class="quiet-link" href="snow-0.6.1.fwsc" download>Download firmware (.fwsc)</a><span class="release-tag">Experimental firmware · FM-1 only</span></div>
   <div class="install-notes"><p><strong>Back up before you install.</strong> Save your projects, sounds, samples and settings to your computer, and keep a copy of your current firmware. The installer downloads a complete backup when the running firmware supports it. Otherwise, export with that firmware’s own tools first.</p><p>Use desktop Chrome or Edge, a direct USB connection and reliable power. Close other MIDI applications. Keep the device connected and this tab open until the installer finishes. Snow changes the instrument model: projects and sounds from other firmware may not translate. Keep the backup for rollback.</p><p class="subtle">Snow has passed software and memory-budget checks; this release has not been validated on physical FM-1 hardware. An interrupted or failed update may require recovery tools. Read the <a href="install/#recovery">installation and recovery guide</a> before continuing.</p></div>
 </section>
 <p class="keys">
@@ -104,7 +107,7 @@ main{max-width:1040px}.keys,footer{color:#a4a5a8}kbd{color:#e9e9e4;border-color:
   <span><kbd>←</kbd> <kbd>→</kbd> ALGORITHM</span>
   <span><kbd>Shift</kbd>-click holds a button</span>
 </p><section class="snow-guide" aria-labelledby="about-title">
-  <header class="guide-heading"><span class="eyebrow">SNOW / 0.6</span><h1 id="about-title">Six instruments.<br>Fresh sounds. Your patterns.</h1><p class="lede">A custom groovebox firmware for the M-VAVE FM-1. Six dedicated instruments, deep synthesis, independent effects and a generative sequencer that knows what each part is meant to do.</p></header>
+  <header class="guide-heading"><span class="eyebrow">INSIDE SNOW</span><h2 id="about-title">Made for hands-on sound.</h2></header>
   <div class="feature-grid">
     <article><h2>One role. Many voices.</h2><p><strong>Kick · Snare · Hat · Percussion · Bass · Chord.</strong> Each channel starts with ten factory sounds and stays its own instrument. Go much further with three oscillators, FM pair/chain/parallel, ring, additive and fold algorithms; sine, triangle, saw, square, pulse and organ waves.</p><p>Full amp ADSR, pitch/FM envelopes, filters, two LFOs and modulation are available from 27 EDIT pages. Percussion can play pitched notes; bass follows your line, and chords keep their polyphonic body.</p></article>
     <article><h2>A new sound, with a backbone.</h2><p>On the first EDIT page, <strong>OCT+ creates a fresh instrument sound</strong>. It coordinates oscillator ratios, register, envelopes, filtering, modulation and effects instead of throwing every control to an unrelated extreme.</p><p>Chords stay playable chords. Bass keeps its low end. Drums keep their attack and body. Sounds are generated from a large parameter space, rather than cycled through the factory presets. Hold SAVE to undo.</p></article>
@@ -126,7 +129,7 @@ main{max-width:1040px}.keys,footer{color:#a4a5a8}kbd{color:#e9e9e4;border-color:
   <section class="release-links" aria-labelledby="release-title"><h2 id="release-title">Open source, in progress.</h2><p>Snow builds on <a href="https://github.com/illuminus5/skiff">Skiff</a> and <a href="https://github.com/hugelton/Felucca">Felucca</a>. The firmware and simulator share the same sound engine. Development and software testing continue; hardware validation is still required.</p><nav aria-label="Project resources"><a href="https://github.com/Timqos/snow/tree/codex/snow-deep-synthesis">Source code</a><a href="https://github.com/Timqos/snow/issues">Report an issue</a><a href="build.json">Build details</a><a href="install/">Install &amp; recovery</a><a href="LICENSING.md">Licences &amp; credits</a></nav></section>
 </section>
 <footer>
-  <small class="version">v0.6-snow (experimental)</small><br>
+  <small class="version">v0.6.1-snow (experimental)</small><br>
   Skiff by illuminus5, built on Felucca by Leo Kuroshita, Hügelton Instruments · <a href="https://www.gnu.org/licenses/gpl-3.0.html">GPL-3.0</a> · browser build after charlesvestal's <a href="https://github.com/charlesvestal/fm1-x0x">X0X</a> · DotGothic16 font, <a href="fonts/OFL.txt">SIL OFL 1.1</a><br>
   Saves stay in this browser. Not here: USB (the editor, MIDI out, audio), the TRS MIDI jack.<br>
 
@@ -426,7 +429,7 @@ async function switchOn() {
   try {
     const ac = new AudioContext({ sampleRate: 44100, latencyHint: "interactive" });
     const [wasm] = await Promise.all([
-      fetch("felucca.wasm?v=8a374c1bd962").then((r) => { if (!r.ok) throw new Error(`felucca.wasm: ${r.status}`); return r.arrayBuffer(); }),
+      fetch("felucca.wasm?v=a8a58015d03a").then((r) => { if (!r.ok) throw new Error(`felucca.wasm: ${r.status}`); return r.arrayBuffer(); }),
       ac.audioWorklet.addModule("worklet.js?v=1176e72da3c3")]);
     node = new AudioWorkletNode(ac, "felucca", { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
     node.connect(ac.destination);
