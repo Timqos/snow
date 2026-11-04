@@ -94,6 +94,10 @@ if (typeof registerProcessor === "function") {
       else if (m.type === "snow-scene" && ex.web_snow_scene) {
         if(ex.web_snow_scene(m.vary?1:0))this.port.postMessage({type:"snow-notice",text:"Дочекайся запуску запланованого патерна."});
       }
+      else if(m.type==="snow-random-sound"&&ex.web_snow_random_sound){
+        ex.web_snow_random_sound(m.track>>>0);
+        this.port.postMessage({type:"snow-schema",schema:this.snowSchema()});
+      }
       else if(m.type==="snow-genparm"&&ex.web_snow_genparm)ex.web_snow_genparm(m.all?1:0);
       else if(m.type==="snow-clear"&&ex.web_snow_clear)ex.web_snow_clear(m.all?1:0);
       else if(m.type==="snow-color"&&ex.web_snow_color)ex.web_snow_color(m.value>>>0);

@@ -6,7 +6,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Snow 0.4 · sound laboratory</title>
+<title>Snow 0.5 · sound laboratory</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 rx=%223%22 fill=%22%23111%22/%3E%3Crect x=%223%22 y=%229%22 width=%223%22 height=%224%22 fill=%22%23ff5a36%22/%3E%3Crect x=%227%22 y=%226%22 width=%223%22 height=%227%22 fill=%22%2322c3b4%22/%3E%3Crect x=%2211%22 y=%223%22 width=%223%22 height=%2210%22 fill=%22%23ffbf00%22/%3E%3C/svg%3E">
 <meta name="description" content="Skiff, the six-track groovebox firmware for the M-VAVE FM-1, running in your browser: the same code the unit runs.">
 <style>
@@ -146,20 +146,20 @@ html,body{background:#10130e;color:#e9eadf;color-scheme:dark}
 </p>
 
 <footer>
-  <small class="version">v0.4-snow (prototype)</small><br>
+  <small class="version">v0.5-snow (prototype)</small><br>
   Skiff by illuminus5, built on Felucca by Leo Kuroshita, Hügelton Instruments · <a href="https://www.gnu.org/licenses/gpl-3.0.html">GPL-3.0</a> · browser build after charlesvestal's <a href="https://github.com/charlesvestal/fm1-x0x">X0X</a> · DotGothic16 font, <a href="fonts/OFL.txt">SIL OFL 1.1</a><br>
   Saves stay in this browser. Not here: USB (the editor, MIDI out, audio), the TRS MIDI jack.<br>
-  <nav><a href="snow-0.4.fwsc">Prototype firmware</a><a href="../webapp/editor/">Editor</a><a href="../learn/">Learn</a><a href="https://github.com/Timqos/snow/tree/codex/snow-deep-synthesis">Source</a></nav>
+  <nav><a href="snow-0.5.fwsc">Prototype firmware</a><a href="../webapp/editor/">Editor</a><a href="../learn/">Learn</a><a href="https://github.com/Timqos/snow/tree/codex/snow-deep-synthesis">Source</a></nav>
   <small>M-VAVE and FM-1 are trademarks of their respective owners. Skiff is not affiliated with or endorsed by them.</small>
 </footer>
 <section id="snow-lab" aria-label="Snow instrument laboratory">
-  <header class="lab-heading"><div><span class="lab-eyebrow">SNOW / FM-1 · 0.4</span><h1>SNOW / FM-1</h1></div><button id="snow-power">Увімкнути звук</button></header>
+  <header class="lab-heading"><div><span class="lab-eyebrow">SNOW / FM-1 · 0.5</span><h1>SNOW / FM-1</h1></div><button id="snow-power">Увімкнути звук</button></header>
   <p class="lab-intro">KICK · SNARE · HAT · PERC · BASS · CHORD. По 10 пресетів свого інструмента на канал. Усі алгоритми, хвилі та огинаючі доступні для ручного перетворення звуку.</p>
   <div class="lab-actions"><button id="snow-demo" disabled>Завантажити демо</button><button id="snow-play" disabled>PLAY / STOP</button><label>BPM <input id="snow-tempo" type="number" min="40" max="240" value="120" disabled></label><button id="snow-save" disabled>Temp Save</button><button id="snow-reload" disabled>Reload all</button><button id="snow-reload-track" disabled>Reload channel</button></div>
   <p class="lab-hint">Увімкни звук → завантаж демо → PLAY. Демо замінює поточні кроки. Або відкрий ГЕНЕРАТОР та натисни GEN RND.</p>
   <div id="snow-channels" class="lab-channels"></div>
   <nav class="lab-tabs" aria-label="Редактор"><button data-view="sound" aria-pressed="true">СИНТЕЗ</button><button data-view="fx">ЕФЕКТИ КАНАЛУ</button><button data-view="patterns">ПАТЕРНИ / SEQ</button><button data-view="gen">ГЕНЕРАТОР</button></nav>
-  <div class="lab-sound"><strong id="snow-selection">KICK / CH 1</strong><label>Пресет інструмента <select id="snow-preset" disabled><option value="">Обрати звук…</option></select></label></div>
+  <div class="lab-sound"><strong id="snow-selection">KICK / CH 1</strong><button id="snow-random-sound" disabled>RANDOM EDIT</button><label>Пресет інструмента <select id="snow-preset" disabled><option value="">Обрати звук…</option></select></label></div>
   <p id="snow-notice" role="status" aria-live="polite"></p>
   <section id="snow-pattern-panel" hidden>
     <div class="lab-actions"><strong>НЕЗАЛЕЖНІ ПАТЕРНИ КАНАЛІВ</strong><button id="snow-pattern-half">A–H → I–P</button></div>
@@ -168,7 +168,7 @@ html,body{background:#10130e;color:#e9eadf;color-scheme:dark}
     <p class="lab-hint">Новий слот порожній. Вибери його, дочекайся запуску під час гри й створи варіацію у ГЕНЕРАТОРІ. Звук каналу зберігається при перемиканні патернів.</p>
   </section>
   <section id="snow-generator-panel" hidden>
-    <div class="lab-actions"><label>Генерувати <select id="snow-target" disabled><option value="all">Усі 6 каналів</option><option value="channel">Обраний канал</option></select></label><button id="snow-rnd" disabled>GEN RND</button><button id="snow-parm" disabled>GEN PARM</button><label>PARM AMT <input id="snow-parm-amt" type="range" min="0" max="100" value="30" disabled><output id="snow-amt-value">30%</output></label><button id="snow-clear" disabled>CLEAR</button></div>
+    <div class="lab-actions"><label>Генерувати <select id="snow-target" disabled><option value="channel">KK</option><option value="all">ALL</option></select></label><button id="snow-rnd" disabled>GEN RND</button><button id="snow-parm" disabled>GEN PARM</button><label>PARM AMT <input id="snow-parm-amt" type="range" min="0" max="100" value="30" disabled><output id="snow-amt-value">30%</output></label><button id="snow-clear" disabled>CLEAR</button></div>
     <p class="lab-hint">GEN RND — нові ноти, ритм і velocity. GEN PARM — нові параметр-локи поверх цього рисунка; ноти та velocity залишаються. PARM AMT — кількість і глибина локів. CLEAR — прибрати кроки та локи. Кожне натискання дає новий результат; музичні напрями змішуються всередині генератора.</p>
     <div id="snow-step-grid" class="lab-step-grid" aria-label="Згенеровані кроки обраного каналу"></div>
     <p class="lab-hint">Висота смуги — velocity; крапка — параметр-лок; ×2/3/4 — ретригер. Для хета й перкусії прикраса звучить не частіше одного кроку кожного другого такту. Перкусія, бас і акорди враховують тональність. Density: 0 — тиша, 100 — усі кроки. EVOLVE — нова фраза кожні 1/2/4 цикли.</p>
@@ -177,7 +177,7 @@ html,body{background:#10130e;color:#e9eadf;color-scheme:dark}
   <section id="snow-fx-panel" hidden><p class="lab-hint">Окремі буфери й налаштування кожного каналу. Delay: час або tempo sync, feedback, tone, width. Reverb: room/hall/plate, decay, damping, predelay. Chorus: rate, depth, feedback. Tape та Bitcrush — зі своїми MIX і параметрами. Значення MIX 0 вимикає ефект; BYPASS вимикає весь ланцюг.</p><div id="snow-fx-controls"></div></section>
   <section id="snow-sound-panel"><div id="snow-sound-controls"><p class="lab-hint">Увімкни звук, щоб відкрити параметри синтезу.</p></div></section>
   <details class="lab-help"><summary>Послухати нові барабанні пресети</summary><p>По 10 сухих ударів у фабричному порядку, без ефектів. Один удар кожні 1,3 с. Це рендер C-движка FM-1.</p><label>KICK <audio controls preload="none" src="kick-presets.wav"></audio></label><label>SNARE <audio controls preload="none" src="snare-presets.wav"></audio></label><label>HAT <audio controls preload="none" src="hat-presets.wav"></audio></label><label>PERC <audio controls preload="none" src="perc-presets.wav"></audio></label></details>
-  <details class="lab-help"><summary>Кнопки FM-1 та збереження</summary><p>SEQ → SEQ GEN. OCT+ — GEN RND, OCT− — GEN PARM, SAVE + OCT− — CLEAR. TARGET задає CHANNEL / ALL 6. K4 — PARM AMT. Під генератором завжди видно справжню сітку кроків.</p><p>Утримуй SEQ: усі шість каналів на дисплеї. K1–K4 перемикають патерни каналів 1–4; ALGORITHM — басу, PRESETS — акордів. OCT± — A–H / I–P.</p><p>Утримуй GLO: ті самі шість ручок керують рівнями. Перші шість чорних клавіш — MUTE, білих — SOLO, E4 — ALL, F4 — FILL, G4 — TAP. GLO + OCT− повертає рівні та мʼюти. GLO + EDIT + K1–K4 — Control All; GLO + EDIT + OCT− — маска каналу. GLO + SAVE — Temp Save; GLO + HOME — Reload all; GLO + OCT+ — Reload channel. Звичайний SAVE зберігає проєкт.</p><label>Колір інтерфейсу <select id="snow-color" disabled></select></label><p>Прошивка ще потребує перевірки на фізичному FM-1. <a href="../try/">Skiff baseline</a> · <a href="../SNOW_PREVIEW.md">Перевірки та обмеження</a>.</p></details>
+  <details class="lab-help"><summary>Кнопки FM-1 та збереження</summary><p>SEQ → SEQ GEN. OCT+ — GEN RND, OCT− — GEN PARM, SAVE + OCT− — CLEAR. TARGET: KK / SN / HH / PR / BS / CH або ALL. За замовчуванням — поточний канал. K4 — PARM AMT. Під генератором завжди видно справжню сітку кроків.</p><p>EDIT → перша сторінка MACROS → OCT+: рандом усіх 96 параметрів усіх сторінок EDIT поточного каналу, включно з FX. Утримання SAVE — UNDO. На інших сторінках OCT+ має звичайну дію.</p><p>Іконки HOME показують положення останнього зміненого параметра: 0% — початкова форма, 100% — кінцева. Форма залишається на місці після зупинки ручки та використовує колір теми.</p><p>Утримуй SEQ: усі шість каналів на дисплеї. K1–K4 перемикають патерни каналів 1–4; ALGORITHM — басу, PRESETS — акордів. OCT± — A–H / I–P.</p><p>Утримуй GLO: ті самі шість ручок керують рівнями. Перші шість чорних клавіш — MUTE, білих — SOLO, E4 — ALL, F4 — FILL, G4 — TAP. GLO + OCT− повертає рівні та мʼюти. GLO + EDIT + K1–K4 — Control All; GLO + EDIT + OCT− — маска каналу. GLO + SAVE — Temp Save; GLO + HOME — Reload all; GLO + OCT+ — Reload channel. Звичайний SAVE зберігає проєкт.</p><label>Колір інтерфейсу <select id="snow-color" disabled></select></label><p>Прошивка ще потребує перевірки на фізичному FM-1. <a href="../try/">Skiff baseline</a> · <a href="../SNOW_PREVIEW.md">Перевірки та обмеження</a>.</p></details>
 </section>
 
 </main>
@@ -186,7 +186,7 @@ html,body{background:#10130e;color:#e9eadf;color-scheme:dark}
 <script type="module">
 // the panel's controls and its drawing: ../panel.js (window.PANEL, shared with the Learn page)
 const { B, EN, PLAY_GREEN, WHITE, ROW1, ROW2, KNOBS } = window.PANEL;
-const STORE = "snow-fm1-prototype-04";
+const STORE = "snow-fm1-prototype-05";
 
 // ------------------------------------------------------------------ the panel
 // Two drawings of the same controls (PANEL.draw): WIDE after the FM-1's own layout, TALL for a phone held upright.
@@ -201,6 +201,7 @@ const knobs = [], buttons = [], keys = [];
 const btnBy = new Map(), keyBy = new Map();                   // pointer / key code -> label bit or key
 const send = (m) => { if (node) node.port.postMessage(m); };
 let snowSelected=0,snowSchema=null,snowControls=[],snowDescriptorKey='',snowView='sound',snowHalf=0;
+let snowUpgradeFrom04=false;
 const snowRoles=['KICK','SNARE','HAT','PERC','BASS','CHORD'];
 const snowById=(id)=>document.getElementById(id);
 const snowPost=(type,data={})=>send({type,track:snowSelected,...data});
@@ -241,6 +242,8 @@ snowById('snow-rnd').onclick=()=>{snowPost(snowAll()?'snow-scene':'snow-generate
 snowById('snow-parm').onclick=()=>{snowPost('snow-genparm',{all:snowAll()});snowNotice('GEN PARM: нові локи поверх поточних нот.');};
 snowById('snow-clear').onclick=()=>{snowPost('snow-clear',{all:snowAll()});snowNotice('Кроки та локи очищено.');};
 snowById('snow-parm-amt').oninput=e=>{snowById('snow-amt-value').textContent=e.target.value+'%';const index=snowSchema?.params.findIndex(p=>p.name==='PARM AMT');if(index>=0){for(const track of snowAll()?[0,1,2,3,4,5]:[snowSelected])snowPost('snow-set',{track,index,value:+e.target.value});}};
+snowById('snow-target').onchange=()=>{const index=snowSchema?.params.findIndex(p=>p.name==='TARGET');if(index>=0)snowPost('snow-set',{index,value:snowAll()?1:0});};
+snowById('snow-random-sound').onclick=()=>{snowPost('snow-random-sound');snowNotice('RANDOM EDIT: усі параметри EDIT поточного каналу. SAVE held — UNDO.');};
 snowById('snow-color').onchange=e=>snowPost('snow-color',{value:+e.target.value});
 snowById('snow-preset').onchange=(e)=>{if(e.target.value!==''){snowPost('snow-preset',{preset:+e.target.value});snowNotice(`${snowRoles[snowSelected]}: ${e.target.selectedOptions[0].textContent}`);e.target.value='';}};
 function snowDesigner(schema){
@@ -276,6 +279,7 @@ function snowFrame(state){
 
  if(state.selected!==snowSelected){snowSelected=state.selected;snowPost('snow-schema');}
  if(state.values&&snowSchema){const key=snowSchema.params.map((p,i)=>p.group==='DRIVE / INSERT / DUCK'&&p.name==='TYPE'?state.values[i]:'').join(',');if(snowDescriptorKey&&key!==snowDescriptorKey)snowPost('snow-schema');snowDescriptorKey=key;}
+ if(snowSchema&&state.values){const target=snowById('snow-target'),index=snowSchema.params.findIndex(p=>p.name==='TARGET');target.options[0].textContent=['KK','SN','HH','PR','BS','CH'][snowSelected];if(index>=0&&document.activeElement!==target)target.value=state.values[index]?'all':'channel';}
  snowById('snow-selection').textContent=`${snowRoles[snowSelected]} / CH ${snowSelected+1}`;
  for(const b of document.querySelectorAll('[data-track]'))b.setAttribute('aria-pressed',String(+b.dataset.track===snowSelected));
  for(const c of document.querySelectorAll('[data-mask]'))c.checked=!!(state.mask&(1<<+c.dataset.mask));
@@ -287,7 +291,7 @@ function snowFrame(state){
  if(state.tempo&&document.activeElement!==snowById('snow-tempo'))snowById('snow-tempo').value=state.tempo;
  if(state.values)snowControls.forEach((c,i)=>{if(document.activeElement!==c.input){c.input.value=state.values[i];c.value.textContent=state.text?.[i]??state.values[i];}});
 }
-function snowReady(schema){snowDesigner(schema);for(const input of document.querySelectorAll('#snow-lab button,#snow-lab select,#snow-lab input'))input.disabled=false;snowById('snow-power').disabled=true;snowById('snow-power').textContent='Звук увімкнено';}
+function snowReady(schema){snowDesigner(schema);if(snowUpgradeFrom04){const index=schema.params.findIndex(p=>p.name==='TARGET');if(index>=0)for(let track=0;track<6;track++)snowPost('snow-set',{track,index,value:0});snowUpgradeFrom04=false;}for(const input of document.querySelectorAll('#snow-lab button,#snow-lab select,#snow-lab input'))input.disabled=false;snowById('snow-power').disabled=true;snowById('snow-power').textContent='Звук увімкнено';}
 
 
 function build(name) {
@@ -502,7 +506,9 @@ function drawLights([litB, litK, dimB, dimK, dimLo = 0, brB = 0, brK = 0, midK =
 // ------------------------------------------------------------------ the flash, kept in this browser
 function loadFlash() {
   try {
-    const raw = JSON.parse(localStorage.getItem(STORE) || "{}"), out = {};
+    const current = localStorage.getItem(STORE), previous = current ? null : localStorage.getItem("snow-fm1-prototype-04");
+    snowUpgradeFrom04 = !!previous;
+    const raw = JSON.parse(current || previous || "{}"), out = {};
     for (const [off, b64] of Object.entries(raw)) out[off] = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
     return out;
   } catch { return {}; }
@@ -548,8 +554,8 @@ async function switchOn() {
   try {
     const ac = new AudioContext({ sampleRate: 44100, latencyHint: "interactive" });
     const [wasm] = await Promise.all([
-      fetch("felucca.wasm?v=f2c705c456b4").then((r) => { if (!r.ok) throw new Error(`felucca.wasm: ${r.status}`); return r.arrayBuffer(); }),
-      ac.audioWorklet.addModule("worklet.js?v=79e991b8abf7")]);
+      fetch("felucca.wasm?v=f7ae8aef21be").then((r) => { if (!r.ok) throw new Error(`felucca.wasm: ${r.status}`); return r.arrayBuffer(); }),
+      ac.audioWorklet.addModule("worklet.js?v=5e0b57b0f9fb")]);
     node = new AudioWorkletNode(ac, "felucca", { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
     node.connect(ac.destination);
     let warned = false;
