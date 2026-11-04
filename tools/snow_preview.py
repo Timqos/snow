@@ -29,7 +29,9 @@ def main():
     html = (ROOT / "web/emu/index.html").read_text().replace("@VERSION@", VERSION).replace("@PREVIEW@", " (prototype)")
     html = html.replace('<title>Try Skiff</title>', '<title>Snow 0.2 · sound laboratory</title>')
     html = html.replace('"skiff-emu-flash"', '"snow-fm1-prototype-02"')
-    html = html.replace('"felucca.wasm"', '"felucca.wasm?v=02"').replace('"worklet.js"', '"worklet.js?v=02"')
+    wasm_key = hashlib.sha256((OUT / "felucca.wasm").read_bytes()).hexdigest()[:12]
+    worklet_key = hashlib.sha256((ROOT / "web/emu/worklet.js").read_bytes()).hexdigest()[:12]
+    html = html.replace('"felucca.wasm"', f'"felucca.wasm?v={wasm_key}"').replace('"worklet.js"', f'"worklet.js?v={worklet_key}"')
     html = html.replace('</style>', (ROOT / "web/snow/lab.css").read_text() + "\n</style>", 1)
     html = html.replace('<main>', '<main>\n' + (ROOT / "web/snow/lab.html").read_text(), 1)
     html = html.replace('<a href="../webapp/installer/">Install</a>', '<a href="snow-0.2.fwsc">Prototype firmware</a>')
