@@ -1,6 +1,6 @@
 {
   "project": "Snow",
-  "stage": "Snow 0.5 value-linked icons, channel targets and full EDIT randomization + Skiff baseline",
+  "stage": "Snow 0.6 role-aware sound design and English backup-first simulator + Skiff baseline",
   "baseline_version": "2.2",
   "source_commit": "815358c56ce9307ed1cb4085351cd0fd94c15ee4",
   "source_dirty": false,
@@ -12,14 +12,15 @@
     "snow01": "snow01/",
     "snow02": "snow02/",
     "snow03": "snow03/",
-    "snow04": "snow04/"
+    "snow04": "snow04/",
+    "snow05": "snow05/"
   },
   "snow_build": {
-    "stage": "Snow fixed instruments, pixel UI and random phrase generator",
-    "version": "v0.5-snow",
-    "source_commit": "6212116de6ac153a561ff5236309367e495a14a3",
+    "stage": "Snow role-aware sound designer, generative groovebox and backup-first installer",
+    "version": "v0.6-snow",
+    "source_commit": "e3d7db822b9d3f1e1be41926092b54f512d6f295",
     "source_dirty": false,
-    "package_sha256": "ac53fe58ec662ff9ad1ad83fb17987dd66bb2e84c259256c74e54acafa150c8f"
+    "package_sha256": "cb95f44ffd68063b3b02bbbab92621df7378be1c51cc5ca0b6892d64fc6bec95"
   },
-  "website_source_commit": "6212116de6ac153a561ff5236309367e495a14a3"
+  "website_source_commit": "e3d7db822b9d3f1e1be41926092b54f512d6f295"
 }
