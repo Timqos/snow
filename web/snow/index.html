@@ -1,10 +1,10 @@
 <!doctype html>
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-<html lang="uk">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Snow — власна шестидоріжкова FM-прошивка для M-VAVE FM-1. Браузерна лабораторія, збірки й план розробки.">
+  <meta name="description" content="Snow for the M-VAVE FM-1: six dedicated instruments, smart sound generation, generative patterns, a browser simulator and backup-first installation.">
   <title>Snow · FM-1</title>
   <style>
     @font-face { font-family: Panel; src: url("try/fonts/DotGothic16-subset.woff") format("woff"); font-display: swap; }
@@ -38,38 +38,19 @@
 </head>
 <body>
 <main>
-  <header><span class="wordmark">SNOW</span><span class="status">FM-1 / РОЗРОБКА<br>ПРОТОТИП 0.5 — VALUE ICONS / RANDOM EDIT</span></header>
+  <header><span class="wordmark">SNOW</span><span class="status">M-VAVE FM-1<br>0.6 / SMART SOUND DESIGN</span></header>
   <section class="intro" aria-labelledby="title">
-    <div class="eyebrow">ШІСТЬ ДОРІЖОК. ВЛАСНИЙ ХАРАКТЕР.</div>
-    <h1 id="title">Шість інструментів.<br>Твій характер звучання.</h1>
-    <p class="muted">Розробляємо прошивку для M-VAVE FM-1 з фіксованими KICK, SNARE, HAT, PERC, BASS, CHORD та 10 пресетами кожного. Вільне редагування синтезу, власні ефекти каналів і випадкова генерація фраз.</p>
-    <div class="actions">
-      <a class="button primary" href="snow/">Спробувати Snow 0.5 →</a>
-      <a class="button" href="try/">Порівняти зі Skiff</a>
-      <a class="button" href="https://github.com/Timqos/snow">Код і прогрес</a>
-    </div>
-    <div class="note"><p><strong>Snow 0.5: нові барабани, піксельний інтерфейс, живі фрази.</strong> Незалежні delay/reverb/chorus кожного каналу, Tape і Bitcrush. 138 параметрів, 27 EDIT-сторінок; усі шість каналів у HOME, MIXER та PATTERNS. GEN RND / GEN PARM, тональна перкусія та рідкі тріолі. Іконки від положення ручки, RANDOM EDIT для всіх 96 параметрів вибраного каналу.</p></div>
+    <div class="eyebrow">SIX INSTRUMENTS. YOUR GROOVE.</div>
+    <h1 id="title">Fresh sounds.<br>Patterns with a pulse.</h1>
+    <p class="muted">A custom six-channel groovebox firmware for the M-VAVE FM-1. Kick, snare, hat, pitched percussion, bass and chord — deep synthesis, independent effects and an instrument-aware generative sequencer.</p>
+    <div class="actions"><a class="button primary" href="snow/?v=06">Play Snow 0.6 →</a><a class="button" href="snow/install/">Install &amp; back up</a><a class="button" href="https://github.com/Timqos/snow/tree/codex/snow-deep-synthesis">Source code</a></div>
+    <div class="note"><p><strong>New in 0.6: smart sound generation.</strong> RANDOM EDIT builds a fresh sound while retaining the instrument’s body, note tracking and articulation. Coordinated synthesis, modulation and effect choices replace destructive full-range dice. The simulator page now includes installation guidance and an English button manual.</p></div>
   </section>
-  <section aria-labelledby="plan">
-    <h2 id="plan">Шість фіксованих ролей, вільне редагування</h2>
-    <div class="tracks" aria-label="Універсальні канали">
-      <span class="track">KICK</span><span class="track">SNARE</span><span class="track">HAT</span><span class="track">PERC</span><span class="track">BASS</span><span class="track">CHORD</span>
-    </div>
-    <p>Кожен канал має власну роль і бібліотеку. Параметри дозволяють радикально змінювати його звук. Генератор враховує роль інструмента та змішує музичні підходи без жанрового меню. Без семплів; секвенсор до 64 кроків. <a href="SNOW_SPEC.md">Повна погоджена концепція</a>.</p>
-    <h2>Як спробувати</h2>
-    <p class="muted">Відкрийте симулятор і натисніть <span lang="en">Увімкнути звук</span>, потім «Завантажити демо» → PLAY / STOP. Клавіші можна натискати мишею або клавіатурою, ручки — тягнути вгору й униз. Додаткові параметри й аудіоприклади нових пресетів доступні під панеллю. Збережені проєкти залишаються в цьому браузері; Temp Save діє до перезавантаження. Встановлювати програми на комп’ютер не потрібно.</p>
-    <h2>Збірка для FM-1</h2>
-    <p class="muted">Індивідуальні ефекти вже доступні у вкладці «ЕФЕКТИ КАНАЛУ». Піксельне оформлення застосоване до всіх сторінок і меню. Апаратна стабільність FM-1 ще не перевірена. Пакет прототипу доступний у симуляторі; базовий Skiff — нижче.</p>
-    <div class="actions">
-      <a class="button" href="firmware/skiff-@VERSION@.fwsc" download>Завантажити базову .fwsc</a>
-      <a class="button" href="firmware/SHA256SUMS">SHA-256</a>
-    </div>
+  <section aria-labelledby="instruments"><h2 id="instruments">One role. Many voices.</h2><div class="tracks" aria-label="Dedicated instruments"><span class="track">KICK</span><span class="track">SNARE</span><span class="track">HAT</span><span class="track">PERC</span><span class="track">BASS</span><span class="track">CHORD</span></div>
+    <p>Ten factory sounds per instrument, three oscillators, six algorithms, full ADSR, pitch/FM envelopes, filters and two LFOs. Per-channel delay, reverb, chorus, Tape, bitcrush and insert effects. Six-channel HOME, MIXER and PATTERNS, with a pixel interface and icons linked directly to parameter position.</p>
+    <h2>Try it in your browser.</h2><p class="muted">Open the simulator and click Switch on. Use the device’s buttons, keys and encoders; Shift-click holds a button. SEQ → SEQ GEN → OCT+ creates a phrase. EDIT → first page → OCT+ creates a new instrument sound. A quick-start guide and button reference sit below the device. Your browser saves are kept locally.</p>
+    <h2>Install with a way back.</h2><p class="muted">Snow 0.6 is experimental FM-1 firmware and has not yet been validated on physical hardware. Back up your music and keep the current firmware before installing. The Snow installer verifies the exact release, offers complete backups for supported firmware and requires a saved backup before writing. Use desktop Chrome or Edge, direct USB and stable power. Read all installation and recovery notes first.</p>
+    <div class="actions"><a class="button primary" href="snow/install/">Open the Snow installer</a><a class="button" href="try/">Skiff baseline</a></div>
   </section>
-  <footer>
-    <p>Основа: <a href="https://github.com/illuminus5/skiff">Skiff / illuminus5</a> та Felucca / Hügelton Instruments. Авторство й ліцензії збережено.</p>
-    <a href="firmware/LICENSE">GPL-3.0</a><a href="firmware/LICENSING.md">Компоненти й автори</a><a href="build.json">Дані збірки</a>
-    <p>Skiff @VERSION@ · <code>@REVISION@</code> · Snow не пов’язаний з M-VAVE або Elektron.</p>
-  </footer>
-</main>
-</body>
-</html>
+  <footer><p>Built on <a href="https://github.com/illuminus5/skiff">Skiff / illuminus5</a> and Felucca / Leo Kuroshita, Hügelton Instruments. Original authorship and licences are retained.</p><a href="snow/LICENSING.md">Licences &amp; credits</a><a href="snow/build.json">Snow build details</a><a href="https://github.com/Timqos/snow/issues">Report an issue</a><p>Source <code>@REVISION@</code> · Skiff baseline @VERSION@ · Snow is not affiliated with M-VAVE or Elektron.</p></footer>
+</main></body></html>

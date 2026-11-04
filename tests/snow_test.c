@@ -259,12 +259,24 @@ static void random_sound_tests(void)
             for(uint32_t id=0;id<P_COUNT;id++){
                 int included=(initial_mask[id/32u]>>(id%32u))&1u;
                 if(!included)assert(trk[k].p[id]==params[k][id]);
-                else {const param_desc_t*d=track_desc(&trk[k],id);assert(trk[k].p[id]>=d->min&&trk[k].p[id]<=d->max);if(trk[k].p[id]<low[id])low[id]=trk[k].p[id];if(trk[k].p[id]>high[id])high[id]=trk[k].p[id];}
+                else {const param_desc_t*d=track_desc(&trk[k],id);if(trk[k].p[id]<d->min||trk[k].p[id]>d->max)printf("INVALID role=%u id=%u %s value=%d min=%d max=%d\n",k,id,d->label,trk[k].p[id],d->min,d->max);assert(trk[k].p[id]>=d->min&&trk[k].p[id]<=d->max);if(trk[k].p[id]<low[id])low[id]=trk[k].p[id];if(trk[k].p[id]>high[id])high[id]=trk[k].p[id];}
             }
+            assert(trk[k].p[P_VOICE]==(k==5?V_POLY:V_MONO));
+            assert(trk[k].p[SN_KEYTRACK]==(k>=3?127:0));assert(trk[k].p[SN_MODE]==(k>=4));
+            if(k==0){assert(trk[k].p[SN_TUNE]>=-34&&trk[k].p[SN_TUNE]<=-22);assert(trk[k].p[SN_PDEC]<=21);}
+            if(k==2)assert(trk[k].p[SN_NOISE]>=111);
+            if(k>=3)assert(trk[k].p[SN_TUNE]%12==0);
+            if(k>=4)assert(trk[k].p[P_SUS]>=58&&trk[k].p[SN_NOISE]<=4);
+            uint32_t colours=(trk[k].p[P_DIST]>0)+(trk[k].p[SN_TMIX]>0)+(trk[k].p[SN_BMIX]>0)+(trk[k].p[P_IMIX]>0);assert(colours<=1);
+            assert(trk[k].p[SN_DFB]<=48&&trk[k].p[SN_CFB]<=12&&trk[k].p[SN_BBITS]>=12);
             for(uint32_t j=0;j<NTRK;j++){assert(!memcmp(steps[j],trk[j].step,sizeof steps[j]));assert(trk[j].eng_req==eng[j]&&trk[j].preset==preset[j]);if(j!=k)assert(!memcmp(params[j],trk[j].p,sizeof params[j]));}
             assert(motion.count==locks.count);for(uint32_t e=0;e<locks.count;e++)assert(!memcmp(&motion.event[e],&locks.event[e],sizeof locks.event[e]));
         }
-        for(uint32_t id=0;id<P_COUNT;id++)if((initial_mask[id/32u]>>(id%32u))&1u)assert(high[id]>low[id]);
+        for(uint32_t id=0;id<P_COUNT;id++)if((initial_mask[id/32u]>>(id%32u))&1u){
+            int invariant=id==SN_MODE||id==SN_KEYTRACK||id==P_VOICE||id==P_ED_PIT||id==SN_FX_BYPASS||id==P_DTYPE||
+                (k<4u&&id==P_SUS)||(k==2u&&(id==SN_PAMT||id==P_E2))||((k==0u||k>=3u)&&id==SN_FILTER);
+            assert(invariant||high[id]>low[id]);
+        }
         int16_t previous[P_COUNT];memcpy(previous,trk[k].p,sizeof previous);snow_random_sound(k);undo_step(0);assert(!memcmp(previous,trk[k].p,sizeof previous));ui.undo_w=0;
     }
     sel_set(0);ui.home=0;ui.page=(uint8_t)page_first(FAM_EDIT);ui.force=1;advance(150);
@@ -275,6 +287,21 @@ static void random_sound_tests(void)
     /* Only the first EDIT page owns this shortcut. */
     ui.page++;ui.force=1;advance(80);memcpy(before,trk[0].p,sizeof before);tap(B_OCTUP);assert(!memcmp(before,trk[0].p,sizeof before));
     puts("Random EDIT: all exposed parameters, selected channel only, bounds, sequence/locks intact, undo, physical OCT+ passed");
+}
+static int hash_order(const void *a,const void *b){uint64_t x=*(const uint64_t*)a,y=*(const uint64_t*)b;return x<y?-1:x>y;}
+static void smart_diversity_tests(void)
+{
+    uint32_t mask[(P_COUNT+31u)/32u];uint64_t hashes[4096];int16_t p[P_COUNT];sel_set(0);snow_edit_mask(mask);
+    for(uint32_t k=0;k<NTRK;k++){
+        for(uint32_t n=0;n<4096;n++){
+            snow_design_sound(&trk[k],k,(n+1u)*0x9e3779b9u,mask,p);
+            uint64_t h=1469598103934665603ull;
+            for(uint32_t id=0;id<P_COUNT;id++)if((mask[id/32u]>>(id%32u))&1u)h=(h^(uint16_t)p[id])*1099511628211ull;
+            hashes[n]=h;
+        }
+        qsort(hashes,4096,sizeof hashes[0],hash_order);for(uint32_t n=1;n<4096;n++)assert(hashes[n]!=hashes[n-1]);
+        printf("Smart sound role %u: 4096 generated patches without a repeated parameter set\n",k+1);
+    }
 }
 static void interface_tests(void)
 {
@@ -302,8 +329,8 @@ static void interface_tests(void)
 int main(void)
 {
     setvbuf(stdout,0,_IOLBF,0);web_nor_erase();web_boot();advance(1000);
-    synth_tests();generation_tests();ornament_tests();patterns_and_snapshot();fx_tests();pattern_controls();interface_tests();icon_position_tests();random_sound_tests();
-    puts("ALL SNOW 0.5 TESTS PASSED");return 0;
+    synth_tests();generation_tests();ornament_tests();patterns_and_snapshot();fx_tests();pattern_controls();interface_tests();icon_position_tests();random_sound_tests();smart_diversity_tests();
+    puts("ALL SNOW 0.6 TESTS PASSED");return 0;
 }
 
 #endif

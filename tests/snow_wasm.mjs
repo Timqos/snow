@@ -56,7 +56,7 @@ await worklet.onMessage({type:'snow-pattern',track:2,slot:2});
 worklet.publish();const frame=worklet.messages.findLast(m=>m.type==='frame');
 assert.equal(frame.snow.selected,2);assert.equal(frame.snow.patterns[2],2);assert.equal(frame.snow.values[alg],3);
 assert.equal(frame.snow.text.length,count);
-console.log('SNOW 0.5 WASM + WORKLET PASSED:',count,'editable parameters, algorithms, waveforms, ADSR, generation, independent patterns and control messages');
+console.log('SNOW 0.6 WASM + WORKLET PASSED:',count,'editable parameters, algorithms, waveforms, ADSR, generation, independent patterns and control messages');
 
 assert.equal(str(x.web_snow_role(0)),'KICK');assert.equal(str(x.web_snow_preset_name(0,8)),'SOFT LOW');
 assert.equal(str(x.web_snow_preset_name(1,8)),'BRUSH');assert.equal(x.web_snow_preset(0,10),1);
@@ -67,7 +67,7 @@ for(const group of ['CHANNEL DELAY','CHANNEL REVERB','CHANNEL CHORUS','TAPE','BI
 await worklet.onMessage({type:'snow-scene',vary:true});
 await worklet.onMessage({type:'snow-genparm',all:true});
 worklet.publish();const scene=worklet.messages.at(-1).snow;assert.equal(scene.used.length,6);assert.equal(scene.active.length,6);
-console.log('SNOW 0.5 ROLES / FX / RANDOM PASSED: 60 role-specific presets, per-channel FX controls, random phrases, auto locks and pattern grid metadata');
+console.log('SNOW 0.6 ROLES / FX / RANDOM PASSED: 60 role-specific presets, per-channel FX controls, random phrases, auto locks and pattern grid metadata');
 // Simultaneous racks run in the same firmware audio path as the browser and device.
 const z=await boot();render(z,1000);z.web_snow_demo();
 function parameter(group,name){return Array.from({length:z.web_snow_param_count()},(_,i)=>i).find(i=>{
@@ -106,4 +106,13 @@ assert.equal(worklet.messages.at(-1).schema.params.find(p=>p.name==='TARGET').op
 v.web_buttons(1<<10);render(v,70);v.web_buttons(0);render(v,70);
 for(let i=0;i<24;i++){assert.equal(v.web_snow_random_sound(i%6),0);const a=render(v,120);assert(a.peak<=1);}
 assert.equal(v.web_playing(),1);
-console.log('SNOW 0.5 RANDOM EDIT / TARGET PASSED: 96 EDIT parameters, role labels, unchanged sequence/other channels, live random-patch audio');
+console.log('SNOW 0.6 RANDOM EDIT / TARGET PASSED: 96 EDIT parameters, role labels, unchanged sequence/other channels, live random-patch audio');
+// The device-only page does not request the removed editor's large metadata.
+await worklet.onMessage({type:'snow-detail',on:false});
+worklet.sentDraws=-1;worklet.sentLeds='';worklet.publish();
+const lean=worklet.messages.at(-1);
+assert.deepEqual(Object.keys(lean.snow).sort(),['color','mask','selected']);
+assert.equal(lean.fb.length,240*240);assert(lean.leds.length>=8);
+await worklet.onMessage({type:'snow-detail',on:true});worklet.publish();
+assert.equal(worklet.messages.at(-1).snow.values.length,count);
+console.log('DEVICE-ONLY WORKLET PASSED: native screen/LEDs/theme retained, unused editor metadata disabled');

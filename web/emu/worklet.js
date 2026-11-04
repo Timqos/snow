@@ -92,18 +92,19 @@ if (typeof registerProcessor === "function") {
         this.port.postMessage({type:"snow-schema", schema:this.snowSchema()});
       }
       else if (m.type === "snow-scene" && ex.web_snow_scene) {
-        if(ex.web_snow_scene(m.vary?1:0))this.port.postMessage({type:"snow-notice",text:"Дочекайся запуску запланованого патерна."});
+        if(ex.web_snow_scene(m.vary?1:0))this.port.postMessage({type:"snow-notice",text:"Wait for the queued pattern to launch."});
       }
       else if(m.type==="snow-random-sound"&&ex.web_snow_random_sound){
         ex.web_snow_random_sound(m.track>>>0);
         this.port.postMessage({type:"snow-schema",schema:this.snowSchema()});
       }
+      else if(m.type==="snow-detail")this.snowDetail=!!m.on;
       else if(m.type==="snow-genparm"&&ex.web_snow_genparm)ex.web_snow_genparm(m.all?1:0);
       else if(m.type==="snow-clear"&&ex.web_snow_clear)ex.web_snow_clear(m.all?1:0);
       else if(m.type==="snow-color"&&ex.web_snow_color)ex.web_snow_color(m.value>>>0);
       else if (m.type === "snow-tempo" && ex.web_snow_tempo) ex.web_snow_tempo(m.value>>>0);
       else if (m.type === "snow-generate" && ex.web_snow_generate) {
-        if(ex.web_snow_generate(m.track>>>0,m.vary?1:0))this.port.postMessage({type:"snow-notice",text:"Дочекайся запуску запланованого патерна."});
+        if(ex.web_snow_generate(m.track>>>0,m.vary?1:0))this.port.postMessage({type:"snow-notice",text:"Wait for the queued pattern to launch."});
       }
       else if (m.type === "snow-pattern" && ex.web_snow_pattern) {
         const rc=ex.web_snow_pattern(m.track >>> 0, m.slot >>> 0);
@@ -139,8 +140,8 @@ if (typeof registerProcessor === "function") {
       const msg = { type: "frame" };
       if (ex.web_snow_selected) {
         const selected=ex.web_snow_selected();
-        msg.snow = {selected, mask:ex.web_snow_mask_get()};
-        if(ex.web_snow_param_count) {
+        msg.snow = {selected, mask:ex.web_snow_mask_get(),color:ex.web_snow_color_get()};
+        if(this.snowDetail!==false&&ex.web_snow_param_count) {
           msg.snow.values=Array.from({length:ex.web_snow_param_count()},(_,i)=>ex.web_snow_param_value(selected,i));
           msg.snow.text=Array.from({length:ex.web_snow_param_count()},(_,i)=>this.string(ex.web_snow_param_text(selected,i)));
           msg.snow.patterns=Array.from({length:6},(_,i)=>ex.web_snow_pattern_get(i));

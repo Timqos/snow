@@ -1,119 +1,114 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Snow 0.5 — іконки від значення та RANDOM EDIT
+# Snow 0.6 — sound design with an instrument body
 
-Симулятор: https://timqos.github.io/snow/snow/?v=05
+[Open the simulator](https://timqos.github.io/snow/snow/?v=06) ·
+[Install & back up](https://timqos.github.io/snow/snow/install/)
 
-У браузері виконується той самий C-код синтезу та UI через WebAssembly.
-На першому місці — віртуальна панель FM-1. Нижче — додатковий вебредактор.
-Shift-клік утримує кнопку віртуального пристрою.
+Snow is custom firmware for the M-VAVE FM-1. Its browser simulator runs the
+same C synthesis and interface through WebAssembly. Physical FM-1 validation
+is still required; the package has passed software and memory-budget checks.
 
-## Кнопки генератора
+## Six instruments, deep synthesis
 
-Натисни SEQ, ручкою SELECT знайди **SEQ GEN**. TARGET за замовчуванням — поточний канал: **KK / SN / HH / PR / BS / CH**; друге значення — **ALL**. Назва змінюється разом із вибором каналу ручкою ALGORITHM.
+KICK / SNARE / HAT / PERC / BASS / CHORD retain fixed roles and ten factory
+sounds each. Three oscillators, six algorithms, multiple waveforms, full ADSR,
+pitch/FM envelopes, filters, two LFOs and modulation remain manually editable
+through 27 EDIT pages. Each channel has independent delay/reverb/chorus state
+and tails, Tape, bitcrush, drive and insert effects. Manual ranges remain open.
 
-- **OCT+ — GEN RND:** нові ритм, ноти й velocity, новий seed кожного разу.
-- **OCT− — GEN PARM:** нові локи, зі збереженням нот та velocity.
-- **K4 — PARM AMT:** кількість і розкид параметр-локів.
-- **SAVE + OCT− — CLEAR:** прибрати кроки та локи; синтез і FX залишаються.
+## Smart RANDOM EDIT
 
-Жанрового меню немає. Генератор поєднує випадкові Euclidean pulses/rotation,
-backbeat/ghost notes, різну щільність, акценти, ноти й контури для шести ролей.
-Музичний приклад взаємодії — Grbox.html користувача; його вісім каналів
-та семплер не перенесені. Перкусія грає ноти в тональності.
-Під параметрами GEN показана справжня сітка з velocity, локами й ретригерами.
-Рідкі прикраси хета/перкусії допускають не більше одного ретригера на кожен
-другий музичний такт, зберігаючи основний удар у решті тактів.
+On the first EDIT / MACROS page, OCT+ generates a fresh instrument sound across
+all EDIT pages. Hold SAVE to undo. Other pages keep their ordinary OCT+ action.
 
-GEN PARM замінює власні попередні локи, зберігає ручні й залишає місце для них
-у спільному пулі: до 8 авто-локів на канал, до 52 зайнятих слотів із 64.
-Патерни зберігають ознаку походження локів. Seed має 28 біт; його простір
-не обмежений видимими 128 значеннями молодшої частини.
-Density 0 — тиша, 100 — кожен крок. KIND: rhythm / melody / both.
-GEN FEEL, GEN RHYTHM, GEN MELODY, GEN LIVE — додаткові параметри;
-EVOLVE оновлює фразу кожні 1/2/4 цикли.
+Generation coordinates register, oscillator structure, envelopes, filters,
+modulation and effects instead of drawing unrelated full-range values:
 
-## RANDOM EDIT
+- Kick: low fundamental and short pitch transient.
+- Snare: pitched body and coloured noise spring, including softer variants.
+- Hat: high-frequency noise with a restrained metallic component.
+- Percussion: pitched skin, wood, metal and noisy-body variations.
+- Bass: monophonic gated voice, low register and stable note tracking.
+- Chord: polyphonic gated voice, harmonic oscillator ratios and sustained body.
 
-На першій сторінці **EDIT / MACROS** натисни **OCT+**: нове випадкове значення
-отримують усі **96 параметрів**, доступні на всіх 27 сторінках EDIT обраного
-каналу, включно з його delay/reverb/chorus, Tape/Bitcrush і insert.
-Повні діапазони параметрів і залежні від TYPE описи дотримані.
-Повторне натискання — новий звук. **Утримання SAVE — UNDO** повного рандому.
-Канальний тип і бібліотека, ноти, ритм, параметр-локи, генератор, мікшер,
-транспорт та інші пʼять каналів зберігаються. На інших EDIT-сторінках OCT+
-не запускає RANDOM EDIT. Підказка є на першій сторінці; у вебредакторі є
-кнопка RANDOM EDIT. Це повний рандом параметрів, а не вибір фабричного пресету.
+Identity-defining settings stay coherent. Modulation is shallow and timbral;
+chorus/delay feedbacks are bounded. Sends leave the dry instrument in front.
+Only one gentle drive/Tape/bitcrush/insert colour is active at once. Bitcrush
+keeps 12–16 bits at low mix. A 32-bit per-channel seed walk creates new parameter
+combinations, not a rotation through factory presets. The parameter space is
+large; software checks sample thousands of outputs rather than claiming to
+have listened to every possible sound.
 
-## Шість каналів в одному вікні
+Notes, rhythm, locks, generator controls, mixer, transport and other channels
+are preserved. Undo restores the preceding sound. User-written automation or
+Control All offsets remain part of the performance and can still alter it.
 
-HOME — шість карток 3×2, назва пресету, P1–P16, шість різних іконок,
-останній змінений параметр та відсоток, осцилограма знизу.
-Іконки змінюють геометрію за нормалізованим значенням останнього зміненого
-параметра: 0% — початкова форма, 100% — кінцева. Перетворюються контури,
-внутрішні лінії й фігури, із незмінними межами та центром. Зупинка ручки
-залишає форму на місці; зворотний рух точно відновлює попередні стани.
-Іконки постійно використовують колір теми; мʼют лише приглушує його.
-Це графіка значення, без таймера чи програвання анімації після дотику.
-Орієнтир взаємодії — [параметрична графіка Syntakt](https://www.elektron.se/wp-content/uploads/2026/03/Syntakt-User-Manual_ENG_OS1.40_260304.pdf);
-шість мотивів Snow збережені, їхня геометрія й перетворення власні.
-Усі сторінки та меню мають піксельні шрифти/контури; 10 системних кольорів.
-Колір: MENU → COLOR або вебредактор → «Керування пристроєм».
+## Phrase generation and performance
 
-Утримуй **SEQ**: усі шість колонок патернів. K1–K4 — канали 1–4,
-ALGORITHM — бас, PRESETS — акорди. OCT± — A–H / I–P.
-Білі клавіші обирають патерн, чорні — канал. Підсвічено поточний слот;
-рамка позначає запланований. При перемиканні зберігається звук каналу.
+SEQ → SELECT to SEQ GEN. TARGET defaults to the selected channel’s short name,
+or choose ALL. OCT+: GEN RND; OCT−: GEN PARM; SAVE + OCT−: CLEAR. K4: PARM AMT.
+The grid shows generated notes, velocity, locks and retriggers. Pitched parts
+respect the scale. Hat/percussion ornaments are sparse and limited to one
+ornamented step per second musical bar. Musical influences are internal,
+without a genre selector. The generator from 0.5 is retained.
 
-Утримуй **GLO**: усі шість рівнів. Ті самі енкодери керують своїми каналами.
-Перші шість чорних клавіш — MUTE, білих — SOLO; E4 ALL, F4 FILL, G4 TAP.
-GLO + OCT− повертає рівні, мʼюти й темп, захоплені при відкритті мікшера.
-GLO + EDIT + K1–K4 — Control All; GLO + EDIT + OCT− — маска каналу.
-GLO + SAVE — Temp Save; GLO + HOME — Reload all; GLO + OCT+ — Reload channel.
-Temp Save існує в RAM. Звичайний SAVE зберігає проєкт.
-Пул патернів і черга відкладених записів мають межі Skiff; під час тривалої
-гри створення нових слотів може попросити зупинити транспорт для збереження.
+Hold SEQ for six independent pattern columns. K1–K4 control channels 1–4,
+ALGORITHM bass and PRESETS chords. OCT±: A–H / I–P. Black keys choose a channel;
+white keys its pattern. Launches are quantized during playback.
 
-## Нові барабанні пресети
+Hold GLO for six levels, mute and solo. The six encoders have the same mapping.
+First six black keys: mute; first six white keys: held solo. E4: unmute all;
+F4: fill; G4: tap tempo. GLO + SELECT: tempo. GLO + OCT−: restore mixer snapshot.
+GLO + EDIT + K1–K4: Control All; GLO + EDIT + OCT−: selected channel’s inclusion.
+GLO + SAVE: RAM snapshot; GLO + HOME: reload all; GLO + OCT+: reload selected.
+Use SAVE’s PROJECT pages for permanent storage. RAM snapshots do not survive
+power-off. The pool has 64 unique patterns, 16 positions per channel; deferred
+writes have finite capacity, so stop when the device asks for space to save.
 
-Перероблено всі 10 кіків, 10 снейрів і 10 хетів. Хети мають переважно
-шумовий спектр, високочастотну фільтрацію та невелику металеву складову;
-дзвінкі синусні пари більше не домінують над шумом. Снейри відрізняються
-корпусом, частотою, кількістю шуму, фільтром, FM та огинаючими.
-Кіки: round, hard knock, FM thud, 909 drive, 808 sub, dub pillow,
-break punch, IDM click, soft low та short techno.
-Більшість барабанних пресетів короткі, кілька мають звичайний довший хвіст;
-перкусія також отримала коротші фабричні огинаючі. Повний ручний діапазон
-DECAY збережено. Бібліотеки баса й акордів залишаються попередніми.
-На сторінці є чотири аудіоприклади по 10 пресетів у фабричному порядку:
-сухі удари однакової velocity, з реального C-движка. Спектральна перевірка
-вимірює частотний центр і тривалість, а не тільки порівнює хеші семплів.
+## Interface and browser page
 
-## Збережені можливості синтезу
+All native pages/menus use pixel fonts and ten system colours. HOME shows six
+cards and a bottom scope. Existing icon motifs derive their geometry from the
+last touched parameter’s 0–100% position. Bounds/centres are fixed, reverse
+motion is reproducible, there is no idle animation clock, and icons use the
+selected theme ink.
 
-Шість фіксованих ролей, 60 пресетів, 27 EDIT-сторінок, 138 вебпараметрів.
-Шість алгоритмів, три осцилятори, різні хвилі, full ADSR, pitch/FM envelopes,
-два LFO, filter/resonance, voice controls і модуляція.
-Виміряна основа ROUND KICK після transient: 53.3 Гц.
-Кожен канал має власні delay/reverb/chorus state і буфери, Tape та Bitcrush
-із власними параметрами; drive/insert і bypass залишаються.
+The English simulator page retains the device panel. The install button and
+backup/recovery notes sit immediately below it, followed by a firmware overview,
+quick start and button manual. The duplicate parameter/preset builder is removed.
+The page disables detailed per-frame editor metadata to reduce worklet allocation.
+Browser storage 0.6 copies compatible 0.5 data first, falling back to 0.4; earlier
+archives remain untouched. Browser saves are separate from a physical FM-1 backup.
 
-## Перевірки й межі
+## Installing
 
-Native та WASM перевіряють варіативність рисунків, повторні фізичні OCT+,
-GEN PARM без зміни нот/velocity, збереження локів і seed, тональну перкусію,
-рідкі тріолі, шість енкодерів GLO/SEQ, шість мʼютів, десять кольорів,
-60 різних пресетів, ADSR, ізоляцію FX та шість одночасних FX-ланцюгів.
-Регресійні перевірки базових UI, bank, persistence, insert, perform збережені.
+Use the Snow-specific installer, not a generic Skiff download. It verifies the
+release SHA-256 and FM-1 identity before connecting. A supported device’s complete
+backup is validated and downloaded before writing can be enabled. If the old
+firmware does not offer this protocol, export with its own tools first. A loader
+cannot export data; resume only with a backup saved before the interruption.
 
-Іконки перемальовуються лише при зміні значення; осцилограма — до 20 кадрів/с. Змінюються тільки брудні
-картки (до двох за кадр). Огляди шести каналів кешуються й малюються смугами
-в наявному буфері. Анімація не виконується в audio ISR.
+The user must confirm their backup and installation notices. Device/model changes,
+failed backups/downloads and unconfirmed backup steps block writing. Stock or
+other-fork projects are not automatically converted or restored. Keep the original
+firmware and its tools for rollback. Direct USB, stable power, a desktop Web MIDI
+SysEx browser, no competing MIDI apps, and an uninterrupted tab are required.
+Physical recovery may require FM-1-transporter if the loader is unavailable.
 
-Апаратний білд вкладається в RAM; точні розміри — у журналі збірки.
-На фізичному FM-1 не прошивалося: CPU/SPI-навантаження, тріск і поведінка
-живих ручок потребують перевірки на пристрої. Успішний WASM-тест не є
-вимірюванням realtime-бюджету процесора FM-1.
+## Verification and limits
 
-У браузері 0.5 має окреме сховище snow-fm1-prototype-05. При першому запуску
-сумісна flash-копія з 0.4 переноситься вперед; музичні дані зберігаються,
-TARGET встановлюється на поточний канал. Архів 0.4 зберігає своє сховище.
+Native, sanitizer and WASM tests cover role identity, playable register/envelopes,
+parameter bounds, sound diversity, notes/locks/other-channel preservation, undo,
+physical controls, generator variation, factory sounds, isolated FX and six-rack
+audio. Generated page tests check English-only content, removal of the editor,
+installation placement and browser-save migration. Installer tests use the exact
+shipped modules with a real firmware package and simulated MIDI; no hardware is
+flashed by these tests. Physical installation, CPU/SPI headroom and real device
+audio remain unvalidated.
+
+The role-aware designer is sampled with 4096 generated parameter sets per role
+(24,576 total), without repeated sets in that sample. Another 64 sounds per role
+are rendered through the C oscillators/filter/envelope: 384 distinct dry renders,
+bounded peaks, low-frequency kick/bass bodies and broad high-frequency hats.
+These measurements detect regressions; they do not replace listening or certify
+every possible generated sound.

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Snow 0.5: fixed instrument roles, with the complete open synthesis surface. */
+ * Snow 0.6: fixed instrument roles, with the complete open synthesis surface. */
 #include "snow_params.h"
 static const char *const SN_ALGS[] = {"FM PAIR","FM CHAIN","FM PAR","RING","ADDITIVE","FOLD"};
 static const char *const SN_WAVES[] = {"SINE","TRI","SAW","SQUARE","PULSE","ORGAN"};

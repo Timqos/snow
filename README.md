@@ -1,8 +1,8 @@
 > **Snow / FM-1:** KICK / SNARE / HAT / PERC / BASS / CHORD, ten factory sounds each.
-> Snow 0.5 keeps six fixed instruments and deep synthesis, with a pixel UI throughout,
-> six-channel mixer/pattern screens, value-linked icons, full EDIT randomization and GEN RND / GEN PARM. Default builds retain Skiff.
+> Snow 0.6 keeps six fixed instruments and deep synthesis, with a pixel UI throughout,
+> six-channel mixer/pattern screens, value-linked icons, role-aware sound generation, GEN RND / GEN PARM and a backup-first installer. Default builds retain Skiff.
 > [Prototype guide](docs/SNOW_PREVIEW.md) · [Current goals](docs/SNOW_SPEC.md) · [Cloud build](docs/CLOUD_BUILD.md).
-> [**Try Snow 0.5**](https://timqos.github.io/snow/snow/) · [Skiff baseline](https://timqos.github.io/snow/try/).
+> [**Try Snow 0.6**](https://timqos.github.io/snow/snow/) · [Skiff baseline](https://timqos.github.io/snow/try/).
 
 <p align="center">
   <picture>
