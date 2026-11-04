@@ -1,6 +1,6 @@
 {
   "project": "Snow",
-  "stage": "Snow 0.6.1 animated snowflake startup and branded simulator + Skiff baseline",
+  "stage": "Snow 0.6.2 dedicated LFO/FX randomisation and audited installer + Skiff baseline",
   "baseline_version": "2.2",
   "source_commit": "815358c56ce9307ed1cb4085351cd0fd94c15ee4",
   "source_dirty": false,
@@ -14,20 +14,21 @@
     "snow03": "snow03/",
     "snow04": "snow04/",
     "snow05": "snow05/",
-    "snow06": "snow06/"
+    "snow06": "snow06/",
+    "snow061": "snow061/"
   },
   "snow_build": {
     "stage": "Snow animated boot identity, role-aware groovebox and backup-first installer",
-    "version": "v0.6.1-snow",
-    "source_commit": "23ea6bdc10da53f0a5c347039ac4d21f216461f1",
+    "version": "v0.6.2-snow",
+    "source_commit": "f4b6222224f5644f046f722754b55c1e304b7bca",
     "source_dirty": false,
-    "package_sha256": "f6c7b7ca5bc5e30a6951f6ddf12273a8f016086e0982533b5906bf7e1f8b023b",
+    "package_sha256": "9ba27acab63c3bb0256c2718703038b986c445c71e7fc1a6d5823df6a962f20e",
     "installation_audit": {
       "report": "update-audit.json",
-      "audit_source_commit": "b74f42ee76f16d2ee8f7258f61974e48ade02327",
+      "audit_source_commit": "f4b6222224f5644f046f722754b55c1e304b7bca",
       "software_checks": "passed",
       "physical_fm1_validation": "pending"
     }
   },
-  "website_source_commit": "b74f42ee76f16d2ee8f7258f61974e48ade02327"
+  "website_source_commit": "f4b6222224f5644f046f722754b55c1e304b7bca"
 }
