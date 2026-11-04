@@ -38,28 +38,28 @@
 </head>
 <body>
 <main>
-  <header><span class="wordmark">SNOW</span><span class="status">FM-1 / РОЗРОБКА<br>ПРОТОТИП 0.1 — ШІСТЬ FM-МАШИН</span></header>
+  <header><span class="wordmark">SNOW</span><span class="status">FM-1 / РОЗРОБКА<br>ПРОТОТИП 0.2 — ВІДКРИТИЙ СИНТЕЗ</span></header>
   <section class="intro" aria-labelledby="title">
     <div class="eyebrow">ШІСТЬ ДОРІЖОК. ВЛАСНИЙ ХАРАКТЕР.</div>
-    <h1 id="title">Шість FM-машин.<br>Перший прототип Snow.</h1>
-    <p class="muted">Розробляємо прошивку для M-VAVE FM-1 з шістьма спеціалізованими FM-інструментами, parameter locks, Control All та миттєвим поверненням до збереженого стану.</p>
+    <h1 id="title">Кожен канал —<br>твій інструмент.</h1>
+    <p class="muted">Розробляємо прошивку для M-VAVE FM-1 з шістьма універсальними каналами: алгоритми, хвилі, ADSR, власна генерація ритмів і мелодій, незалежні патерни та Control All.</p>
     <div class="actions">
-      <a class="button primary" href="snow/">Спробувати Snow 0.1 →</a>
+      <a class="button primary" href="snow/">Спробувати Snow 0.2 →</a>
       <a class="button" href="try/">Порівняти зі Skiff</a>
       <a class="button" href="https://github.com/Timqos/snow">Код і прогрес</a>
     </div>
-    <div class="note"><p><strong>Snow 0.1: шість фіксованих FM-машин без семплів.</strong> Уже можна спробувати Control All, виключення доріжок, parameter locks і тимчасове Save/Reload без зупинки гри. Незалежні delay/reverb та фінальний піксельний інтерфейс ще розробляються. Апаратну стабільність FM-1 ще не перевірено.</p></div>
+    <div class="note"><p><strong>Snow 0.2: будь-який звук на будь-якому каналі.</strong> Шість алгоритмів, три осцилятори з вибором хвиль, повна ADSR, два незалежні LFO, 110 параметрів у вебредакторі й 19 сторінок EDIT. Додано власний генеративний секвенсор і патерни A–P окремо для кожного каналу.</p></div>
   </section>
   <section aria-labelledby="plan">
-    <h2 id="plan">Наші шість інструментів</h2>
-    <div class="tracks" aria-label="Заплановані FM-інструменти">
-      <span class="track">KICK</span><span class="track">SNARE</span><span class="track">HAT</span><span class="track">PERC</span><span class="track">BASS</span><span class="track">CHORD</span>
+    <h2 id="plan">Шість каналів без фіксованих ролей</h2>
+    <div class="tracks" aria-label="Універсальні канали">
+      <span class="track">CH 1</span><span class="track">CH 2</span><span class="track">CH 3</span><span class="track">CH 4</span><span class="track">CH 5</span><span class="track">CH 6</span>
     </div>
-    <p>Без семплів. Глибоке редагування, два LFO на доріжку, окремі ефекти та секвенсор до 64 кроків. <a href="SNOW_SPEC.md">Повна погоджена концепція</a>.</p>
+    <p>Кік, снейр, хет, бас, акорди й FX — стартові точки синтезу на кожному каналі. Seed, density, syncopation, scale, contour та еволюція патернів. Без семплів; секвенсор до 64 кроків. <a href="SNOW_SPEC.md">Повна погоджена концепція</a>.</p>
     <h2>Як спробувати</h2>
-    <p class="muted">Відкрийте симулятор і натисніть <span lang="en">Switch on</span>. Клавіші можна натискати мишею або клавіатурою, ручки — тягнути вгору й униз. Збереження залишаються в цьому браузері. Встановлювати програми на комп’ютер не потрібно.</p>
+    <p class="muted">Відкрийте симулятор і натисніть <span lang="en">Увімкнути звук</span>, потім «Завантажити демо» → PLAY / STOP. Клавіші можна натискати мишею або клавіатурою, ручки — тягнути вгору й униз. Параметри доступні прямо над панеллю. Збережені проєкти залишаються в цьому браузері; Temp Save діє до перезавантаження. Встановлювати програми на комп’ютер не потрібно.</p>
     <h2>Збірка для FM-1</h2>
-    <p class="muted">Це збірка вихідної прошивки Skiff для перевірки нашого процесу розробки. Робота в браузері не підтверджує продуктивність на фізичному FM-1.</p>
+    <p class="muted">Незалежні chorus/delay/reverb й фінальне піксельне оформлення ще розробляються. Апаратна стабільність FM-1 ще не перевірена. Пакет прототипу доступний у симуляторі; базовий Skiff — нижче.</p>
     <div class="actions">
       <a class="button" href="firmware/skiff-2.2.fwsc" download>Завантажити базову .fwsc</a>
       <a class="button" href="firmware/SHA256SUMS">SHA-256</a>
@@ -68,7 +68,7 @@
   <footer>
     <p>Основа: <a href="https://github.com/illuminus5/skiff">Skiff / illuminus5</a> та Felucca / Hügelton Instruments. Авторство й ліцензії збережено.</p>
     <a href="firmware/LICENSE">GPL-3.0</a><a href="firmware/LICENSING.md">Компоненти й автори</a><a href="build.json">Дані збірки</a>
-    <p>Skiff 2.2 · <code>5606c398e429</code> · Snow не пов’язаний з M-VAVE або Elektron.</p>
+    <p>Skiff 2.2 · <code>8cc25c78e109</code> · Snow не пов’язаний з M-VAVE або Elektron.</p>
   </footer>
 </main>
 </body>

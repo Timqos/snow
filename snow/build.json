@@ -1,7 +1,7 @@
 {
-  "stage": "Snow FM prototype",
-  "version": "v0.1-snow",
-  "source_commit": "5606c398e42956970201908afd410b4618be9373",
+  "stage": "Snow open synthesis prototype",
+  "version": "v0.2-snow",
+  "source_commit": "8cc25c78e109a42450c5299e78df4a53d7c44ce6",
   "source_dirty": false,
-  "package_sha256": "9d5f0cf7d01250ca97dee594d59159c4d06975e1108587052d2d6b3b2da49128"
+  "package_sha256": "a645c44917213f8c4ff6e2b8957e3af7ce8b77efeedc8562ac03c13eb680df3f"
 }
