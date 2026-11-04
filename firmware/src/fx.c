@@ -975,7 +975,7 @@ static __attribute__((noinline)) void lpan_mix(track_t *t, const int32_t *b, con
 {
     int32_t lvl = LEVEL_Q12[t->p[P_LEVEL] & 127], pan = t->p[P_PAN];
     int32_t gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
-    int32_t c = t->p[P_CHOR] * 258, dl = t->p[P_DLY] * 258, r = t->p[P_REV] * 258, pk = t->peak;
+    int32_t c = FELUCCA_SNOW?0:t->p[P_CHOR] * 258, dl = FELUCCA_SNOW?0:t->p[P_DLY] * 258, r = FELUCCA_SNOW?0:t->p[P_REV] * 258, pk = t->peak;
     int32_t xmax = c > dl ? c : dl;
     uint32_t i;
     xmax = 0x7FFFFFFF / ((xmax > r ? xmax : r) | 1);
@@ -995,6 +995,10 @@ static __attribute__((noinline)) void lpan_mix(track_t *t, const int32_t *b, con
     }
     t->peak = pk;
 }
+#if FELUCCA_SNOW
+#include "snow_fx.c"
+#endif
+
 static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_t n SM_DECL)
 {
     int32_t *d = SPREAD_BUF(t), *e = t->lpan_on ? LPAN_BUF(t) : 0;
@@ -1004,7 +1008,7 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
     int32_t gla = 4096 - (pa > 0 ? pa * 64 : 0), gra = 4096 + (pa < 0 ? pa * 64 : 0);
     int32_t glb = 4096 - (pb > 0 ? pb * 64 : 0), grb = 4096 + (pb < 0 ? pb * 64 : 0);
     int32_t glm = (gla + glb) >> 1, grm = (gra + grb) >> 1, gld = (gla - glb) >> 1, grd = (gra - grb) >> 1;
-    int32_t c = t->p[P_CHOR] * 258, dl = t->p[P_DLY] * 258, r = t->p[P_REV] * 258, pk = t->peak;
+    int32_t c = FELUCCA_SNOW?0:t->p[P_CHOR] * 258, dl = FELUCCA_SNOW?0:t->p[P_DLY] * 258, r = FELUCCA_SNOW?0:t->p[P_REV] * 258, pk = t->peak;
     int32_t xmax = c > dl ? c : dl;
     xmax = 0x7FFFFFFF / ((xmax > r ? xmax : r) | 1);
     if (!e)
@@ -1014,12 +1018,18 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
     if (t->p[P_ITYPE] | t->ins_run)
         track_insert(t, b, n);                          /* (the mono sum, as DRIVE) */
     slicer_track_sd(t, b, d, e, n);
+#if FELUCCA_SNOW
+    snow_fx_process(t,b,n);
+#endif
     if (((pf.mute >> k) & 1u) || t->p[P_MUTE] || pf.mg[k] != 32768) {   /* (the mute's ramp on both: from the same start,
                                                                           * the same; (2.0) a MUTE's too) */
         int32_t g0 = pf.mg[k];
         AUDIO_FAR(perf_mute)(k, b, n);
         pf.mg[k] = g0;
         AUDIO_FAR(perf_mute)(k, d, n);
+#if FELUCCA_SNOW
+        pf.mg[k]=g0;AUDIO_FAR(perf_mute)(k,snow_fx[k].side,n);
+#endif
         if (e) {
             pf.mg[k] = g0;
             AUDIO_FAR(perf_mute)(k, e, n);
@@ -1028,6 +1038,9 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
     if ((duck_on >> k) & 1u) {                          /* (the DUCK's gains: the same on both) */
         duck_apply(k, b, n);
         duck_apply(k, d, n);
+#if FELUCCA_SNOW
+        duck_apply(k,snow_fx[k].side,n);
+#endif
         if (e)
             duck_apply(k, e, n);
     }
@@ -1046,6 +1059,10 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
             SM(d)[i] += mulq15(xs, dl);
         if (r)
             SM(v)[i] += mulq15(xs, r);
+#if FELUCCA_SNOW
+        int32_t side=((snow_fx[k].side[i]>>2)*lvl)>>10;
+        SM(l)[i]+=(side*glm)>>12;SM(r)[i]-=(side*grm)>>12;
+#endif
         SM(l)[i] += ((x * glm) >> 12) + ((y * gld) >> 12);
         SM(r)[i] += ((x * grm) >> 12) + ((y * grd) >> 12);
     }
@@ -1118,7 +1135,7 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
 #endif
         t->tail = t->p[P_ITYPE] ? 64 : 16;              /* blocks of DIST / INSERT state to run out after the last
                                                          * voice ((1.3) the INSERT's: 46 ms, a flanger's feedback) */
-    else if ((!t->tail || !(t->p[P_DIST] | t->p[P_ITYPE]) || !--t->tail) && !slicer_busy(t)) {
+    else if (!FELUCCA_SNOW && (!t->tail || !(t->p[P_DIST] | t->p[P_ITYPE]) || !--t->tail) && !slicer_busy(t)) {
         slicer_track(t, 0, n);                          /* (the SLICER's step clock runs on) */
         if (t->ins_run && !t->p[P_ITYPE])
             ins_rest(t);                                /* ((1.3) TYPE OFF while silent: no fade-out left for the next
@@ -1136,17 +1153,31 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
     {
         int32_t lvl = LEVEL_Q12[t->p[P_LEVEL] & 127], pan = t->p[P_PAN];
         int32_t gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
-        int32_t c = t->p[P_CHOR] * 258, d = t->p[P_DLY] * 258, r = t->p[P_REV] * 258, pk = t->peak;
+        int32_t c = FELUCCA_SNOW?0:t->p[P_CHOR] * 258, d = FELUCCA_SNOW?0:t->p[P_DLY] * 258, r = FELUCCA_SNOW?0:t->p[P_REV] * 258, pk = t->peak;
         int32_t xmax = c > d ? c : d;
         xmax = 0x7FFFFFFF / ((xmax > r ? xmax : r) | 1);   /* sends: loud chords at a high LEVEL */
         track_dist(t, b, n);
         if (t->p[P_ITYPE] | t->ins_run)
             track_insert(t, b, n);                      /* ((1.3) the INSERT: off, nothing) */
         slicer_track(t, b, n);                          /* slicer.c: before the level, pan and sends */
-        if (((pf.mute >> (t - trk)) & 1u) || t->p[P_MUTE] || pf.mg[t - trk] != 32768)   /* perform.c (RAM): a black */
-            AUDIO_FAR(perf_mute)((uint32_t)(t - trk), b, n);   /* key held, (2.0) a MUTE, the ramp back */
-        if ((duck_on >> (t - trk)) & 1u)
-            duck_apply((uint32_t)(t - trk), b, n);      /* (Skiff) duck.c: under its source's hits */
+#if FELUCCA_SNOW
+        snow_fx_process(t,b,n);
+#endif
+        if (((pf.mute >> (t-trk))&1u) || t->p[P_MUTE] || pf.mg[t-trk]!=32768) {
+#if FELUCCA_SNOW
+            int32_t g0=pf.mg[t-trk];
+#endif
+            AUDIO_FAR(perf_mute)((uint32_t)(t-trk),b,n);
+#if FELUCCA_SNOW
+            pf.mg[t-trk]=g0;AUDIO_FAR(perf_mute)((uint32_t)(t-trk),snow_fx[t-trk].side,n);
+#endif
+        }
+        if((duck_on>>(t-trk))&1u) {
+            duck_apply((uint32_t)(t-trk),b,n);
+#if FELUCCA_SNOW
+            duck_apply((uint32_t)(t-trk),snow_fx[t-trk].side,n);
+#endif
+        }
         for (i = 0; i < n; i++) {
             int32_t x = ((b[i] >> 2) * lvl) >> 10, a = x < 0 ? -x : x;   /* pre-shift: 8 loud voices */
             int32_t xs = clamp(x, -xmax, xmax);         /* sends: mulq15 would overflow */
@@ -1158,6 +1189,10 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
                 SM(d)[i] += mulq15(xs, d);
             if (r)
                 SM(v)[i] += mulq15(xs, r);
+#if FELUCCA_SNOW
+            int32_t side=((snow_fx[t-trk].side[i]>>2)*lvl)>>10;
+            SM(l)[i]+=(side*gl)>>12;SM(r)[i]-=(side*gr)>>12;
+#endif
             SM(l)[i] += (x * gl) >> 12;
             SM(r)[i] += (x * gr) >> 12;
         }
@@ -1281,7 +1316,11 @@ static void mix_block(int32_t *out, uint32_t n)
         throw_off();                                    /* (Skiff) .. and off: nothing else sees them */
     if (perf)
         AUDIO_FAR(perf_pre)(mix_l, mix_r, send_d, send_r, n);
+#if FELUCCA_SNOW
+    for(i=0;i<n;i++)wet[i]=0;
+#else
     fx_buses(send_c, send_d, send_r, wet, n);
+#endif
     if (hl.side)
         rev_side_mix(mix_l, mix_r, n);                  /* HALL: stereo */
     if (perf) {

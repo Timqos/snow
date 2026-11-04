@@ -1840,6 +1840,25 @@ static void graph_user(void)
  * panel): TEXT while something uses it, MID and outlined DIM while nothing does (it can be cleared: bank.c pool_refs);
  * the one KNOB 1 picked TEXT, INK on it (outlined TEXT when unused); an empty id a dot */
 #define PV_W 28                                      /* a tile 28 wide, 30 apart from x 1: 1 .. 238 */
+#if FELUCCA_SNOW
+static void snow_pattern_grid(uint32_t top)
+{
+    for(uint32_t col=0;col<4u;col++) {
+        uint32_t ch=top+col;if(ch>=NTRK)continue;
+        int32_t x=2+(int32_t)col*59;
+        for(uint32_t row=0;row<8u;row++) {
+            uint32_t slot=snow_pattern_half*8u+row;
+            int selected=snow_pattern_current(ch)==slot,used=snow_pattern_used(ch,slot);
+            uint16_t bg=selected?T_ACCENT:T_SURF,fg=selected?T_INK:used?T_TEXT:T_DIM;
+            char label[3]={(char)('A'+slot),0};
+            cv_rect(x,1+(int32_t)row*12,55,11,bg);
+            cv_bg=bg;cv_text(x+5,1+(int32_t)row*12,&AF_S,label,fg);
+            if(used)cv_rect(x+43,5+(int32_t)row*12,4,4,fg);
+        }
+    }
+    cv_bg=T_BG;
+}
+#endif
 static void graph_bank(void)
 {
     int32_t th = 15, py = 17;
@@ -2660,6 +2679,11 @@ static void draw_graph(void)
             cv_oy = pad;
             graph_user();
             break;
+#if FELUCCA_SNOW
+        case GR_SNOW_PAT:
+            snow_pattern_grid(pg->id[0]);
+            break;
+#endif
         case GR_BANK:                                /* (Skiff phase 5) the pool view, from the panel's top (the mockup's) */
             cv_oy = 0;
             graph_bank();

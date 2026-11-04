@@ -2102,10 +2102,12 @@ static void ui_input(void)
 #if FELUCCA_SNOW
     if (snow_buttons(pressed)) return;
     snow_sequence_poll();
-    if(!ui.home && !ui.menu && !ui.confirm && cur_page()->fam==FAM_SEQ &&
-       (cur_page()->id[0]==SN_G_DENS || cur_page()->id[0]==SN_G_BASE || cur_page()->id[0]==SN_G_LIVE) &&
-       ((pressed>>panel.btn[B_OCTUP])&1u)) {
-        (void)snow_generate(song.sel,1);ui_message("GENERATED: OCT+ AGAIN");return;
+    if(!ui.home && !ui.menu && !ui.confirm && !((fm1_in.buttons>>panel.btn[B_SEQ])&1u) && cur_page()->fam==FAM_SEQ &&
+       (cur_page()->id[0]==SN_G_DENS || cur_page()->id[0]==SN_G_BASE || cur_page()->id[0]==SN_G_LIVE || cur_page()->id[0]==SN_G_STYLE || cur_page()->id[0]==SN_G_ROTATE) &&
+       ((pressed>>panel.btn[B_OCTUP])&1u || (pressed>>panel.btn[B_OCTDN])&1u)) {
+        int all=(pressed>>panel.btn[B_OCTDN])&1u;
+        int rc=all?snow_generate_scene((uint32_t)TSEL->p[SN_G_STYLE],1,0):snow_generate(song.sel,1);
+        ui_message(rc?"WAIT PATTERN LAUNCH":all?"GENERATED: ALL 6":"GENERATED: CHANNEL");return;
     }
 #endif
     fm6_poll();                                         /* FM6: PTCH turned -> its patch */

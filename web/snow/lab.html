@@ -1,13 +1,26 @@
-<section id="snow-lab" aria-label="Snow sound laboratory">
-  <header class="lab-heading"><div><span class="lab-eyebrow">SNOW / FM-1 · 0.2</span><h1>Шість каналів. Будь-який звук.</h1></div><button id="snow-power">Увімкнути звук</button></header>
-  <p class="lab-intro">На кожному каналі — всі алгоритми, хвилі й огинаючі. Стартові звуки можна повністю перебудувати: кік → снейр → хет → синтезатор → FX.</p>
-  <div class="lab-actions"><button id="snow-demo" disabled>Завантажити демо</button><button id="snow-play" disabled>PLAY / STOP</button><button id="snow-save" disabled>Temp Save</button><button id="snow-reload" disabled>Reload all</button><button id="snow-reload-track" disabled>Reload channel</button></div>
-  <p class="lab-hint">Увімкни звук → завантаж демо → натисни PLAY на панелі нижче. Демо замінює поточні кроки всіх каналів.</p>
+<section id="snow-lab" aria-label="Snow instrument laboratory">
+  <header class="lab-heading"><div><span class="lab-eyebrow">SNOW / FM-1 · 0.3</span><h1>Свої інструменти. Вільний синтез.</h1></div><button id="snow-power">Увімкнути звук</button></header>
+  <p class="lab-intro">KICK · SNARE · HAT · PERC · BASS · CHORD. По 10 пресетів свого інструмента на канал. Усі алгоритми, хвилі та огинаючі доступні для ручного перетворення звуку.</p>
+  <div class="lab-actions"><button id="snow-demo" disabled>Завантажити демо</button><button id="snow-play" disabled>PLAY / STOP</button><label>BPM <input id="snow-tempo" type="number" min="40" max="240" value="120" disabled></label><button id="snow-save" disabled>Temp Save</button><button id="snow-reload" disabled>Reload all</button><button id="snow-reload-track" disabled>Reload channel</button></div>
+  <p class="lab-hint">Увімкни звук → завантаж демо → PLAY. Демо замінює поточні кроки. Або відкрий ГЕНЕРАТОР та створи грув обраного стилю.</p>
   <div id="snow-channels" class="lab-channels"></div>
-  <div class="lab-sound"><strong id="snow-selection">CH 1 / SOUND DESIGN</strong><label>Стартовий звук <select id="snow-preset" disabled><option value="">Обрати звук…</option></select></label></div>
-  <div class="lab-actions"><button id="snow-generate" disabled>Генерувати з seed</button><button id="snow-vary" disabled>Нова варіація</button><span id="snow-notice" role="status" aria-live="polite"></span></div>
-  <p class="lab-hint">Генерація змінює обраний канал. У GENERATIVE SEQUENCER нижче: ритм / мелодія / разом, density, syncopation, seed, contour, scale та автоматичне EVOLVE. Новий слот патерна спочатку порожній.</p>
-  <div id="snow-designer"><p class="lab-hint">Увімкни звук, щоб відкрити параметри синтезу.</p></div>
-  <p class="lab-hint">PATTERN A–P перемикається незалежно для кожного каналу; під час гри діє квантування запуску. На пристрої: SAVE → PATTERNS 1–4 / 5–6, кожна ручка керує своїм каналом. SEQ → GEN… → OCT+ створює варіацію. EDIT → сторінки параметрів.</p>
-  <details class="lab-help"><summary>Control All, збереження та керування</summary><p>Позначки ALL визначають канали для Control All. Утримуй GLO та крути K1–K4; Shift-клік фіксує GLO. GLO + SAVE — Temp Save, GLO + HOME — Reload, GLO + OCT− — маска каналу, GLO + OCT+ — Reload одного каналу. Ручки панелі тягни вгору й униз. Temp Save зберігає стан у RAM до перезавантаження; звичайний SAVE зберігає проєкт.</p><p>Патерни зберігають ноти й locks; звук задається окремо для каналу. Канали мають власні filter, drive та insert. Chorus/delay/reverb поки використовують спільні sends. Це прототип; перевірка на фізичному FM-1 ще попереду. <a href="../try/">Базовий Skiff</a> · <a href="../SNOW_PREVIEW.md">Можливості й перевірки</a>.</p></details>
+  <nav class="lab-tabs" aria-label="Редактор"><button data-view="sound" aria-pressed="true">СИНТЕЗ</button><button data-view="fx">ЕФЕКТИ КАНАЛУ</button><button data-view="patterns">ПАТЕРНИ / SEQ</button><button data-view="gen">ГЕНЕРАТОР / СТИЛІ</button></nav>
+  <div class="lab-sound"><strong id="snow-selection">KICK / CH 1</strong><label>Пресет інструмента <select id="snow-preset" disabled><option value="">Обрати звук…</option></select></label></div>
+  <p id="snow-notice" role="status" aria-live="polite"></p>
+  <section id="snow-pattern-panel" hidden>
+    <div class="lab-actions"><strong>НЕЗАЛЕЖНІ ПАТЕРНИ КАНАЛІВ</strong><button id="snow-pattern-half">A–H → I–P</button></div>
+    <p class="lab-hint">Кожна ручка під своєю колонкою перемикає тільки цей інструмент. На пристрої: утримуй SEQ; OCT+ — канали 5–6, OCT− — A–H / I–P. Активний патерн підсвічений, запланований — із пунктиром. Крапка означає збережений або поточний непорожній патерн.</p>
+    <div id="snow-pattern-grid" class="lab-pattern-grid"></div>
+    <p class="lab-hint">Новий слот порожній. Вибери його, дочекайся запуску під час гри й створи варіацію у ГЕНЕРАТОРІ. Звук каналу зберігається при перемиканні патернів.</p>
+  </section>
+  <section id="snow-generator-panel" hidden>
+    <div class="lab-scene"><label>Стиль для ансамблю <select id="snow-scene-style" disabled></select></label><label><input id="snow-style-tempo" type="checkbox" checked> Темп стилю</label><button id="snow-scene" disabled>Згенерувати всі 6 каналів</button></div>
+    <p class="lab-hint">Один стиль, шість різних ролей: кік тримає основу, снейр — backbeat/ghost notes, хет — пульсацію й дроблення, перкусія — додатковий ритм, бас — лінію, акорди — гармонію. Стиль і параметри нижче можна задати окремо для вибраного каналу.</p>
+    <div class="lab-actions"><button id="snow-generate" disabled>Генерувати канал із seed</button><button id="snow-vary" disabled>Нова варіація каналу</button></div>
+    <p class="lab-hint">Density 50 — типова щільність стилю для інструмента; 0 — тиша, 100 — усі кроки. Complexity додає ghost notes і дроблення; Variation — відхилення від опорних долей; Human — живу нерівність. Seed повторює результат. EVOLVE створює варіації кожні 1/2/4 цикли.</p>
+    <div id="snow-gen-controls"></div>
+  </section>
+  <section id="snow-fx-panel" hidden><p class="lab-hint">Окремі буфери й налаштування кожного каналу. Delay: час або tempo sync, feedback, tone, width. Reverb: room/hall/plate, decay, damping, predelay. Chorus: rate, depth, feedback. Tape та Bitcrush — зі своїми MIX і параметрами. Значення MIX 0 вимикає ефект; BYPASS вимикає весь ланцюг.</p><div id="snow-fx-controls"></div></section>
+  <section id="snow-sound-panel"><div id="snow-sound-controls"><p class="lab-hint">Увімкни звук, щоб відкрити параметри синтезу.</p></div></section>
+  <details class="lab-help"><summary>Керування пристроєм і збереження</summary><p>EDIT — параметри синтезу та ефектів; SEQ → GEN STYLE — стиль і варіативність. OCT+ на GEN — варіація каналу, OCT− — ансамбль у поточному стилі. Утримання SEQ — сітка патернів; K1–K4 відповідають своїм каналам. OCT+ перемикає сторінки каналів 1–4 / 5–6, OCT− — слоти A–H / I–P. Shift-клік у браузері утримує кнопку.</p><p>Позначки ALL визначають канали для Control All. GLO + K1–K4 — макрозміни, GLO + SAVE — Temp Save, GLO + HOME — Reload, GLO + OCT− — маска, GLO + OCT+ — Reload одного каналу. Temp Save існує в RAM до перезавантаження; звичайний SAVE зберігає проєкт. Прошивка ще потребує перевірки на фізичному FM-1. <a href="../try/">Skiff baseline</a> · <a href="../SNOW_PREVIEW.md">Можливості та перевірки</a>.</p></details>
 </section>

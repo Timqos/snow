@@ -925,11 +925,11 @@ static void draw_columns(void)
 #if FELUCCA_SNOW
     if(cur_page()->graph==GR_SNOW_PAT) {
         for(uint32_t c=0;c<4u;c++) {
-            uint32_t k=cur_page()->id[c];char label[8]={'C','H',(char)('1'+k),0};
+            uint32_t k=cur_page()->id[c];
             if(k>=NTRK){draw_column(c,"--","--","",VR_DIM,-1,ICON_NONE);continue;}
             uint32_t entry=snow_pattern_current(k);
             char pattern[3]={(char)('A'+entry),0};
-            draw_column(c,label,pattern,"PATTERN",VR_LIVE,-1,ICON_AUTO);
+            draw_column(c,SN_ROLES[k],pattern,"PATTERN",VR_LIVE,-1,ICON_AUTO);
         }
         return;
     }

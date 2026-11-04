@@ -1,9 +1,8 @@
-> **Snow / FM-1:** six universal synthesis channels, inspired by Model:Cycles immediacy.
-> Snow 0.2 adds selectable algorithms/waveforms, full ADSR, two independent LFOs,
-> original rhythm/melody generation and independent channel patterns. The default build retains Skiff.
-> See the [prototype guide](docs/SNOW_PREVIEW.md), [current specification](docs/SNOW_SPEC.md)
-> and [cloud build instructions](docs/CLOUD_BUILD.md).
-> [**Try Snow 0.2**](https://timqos.github.io/snow/snow/) · [Skiff baseline](https://timqos.github.io/snow/try/).
+> **Snow / FM-1:** KICK / SNARE / HAT / PERC / BASS / CHORD, ten factory sounds each.
+> Snow 0.3 retains open manual synthesis, adds independent channel FX with Tape/Bitcrush,
+> a held-SEQ pattern grid, and role-aware generation in 20 styles. Default builds retain Skiff.
+> [Prototype guide](docs/SNOW_PREVIEW.md) · [Current goals](docs/SNOW_SPEC.md) · [Cloud build](docs/CLOUD_BUILD.md).
+> [**Try Snow 0.3**](https://timqos.github.io/snow/snow/) · [Skiff baseline](https://timqos.github.io/snow/try/).
 
 <p align="center">
   <picture>

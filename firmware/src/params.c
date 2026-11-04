@@ -123,7 +123,7 @@ static const param_desc_t TP[P_COUNT] = {
     [P_AHOLD] = PE("HOLD", N_ONOFF, 0),
     [P_AORDER] = PE("ORDER", N_ORDER, 0),
     [P_ROOT] = PD("ROOT", F_NOTE, 0, 11, 0),
-    [P_SCALE] = PE("SCALE", N_SCALE, 0),
+    [P_SCALE] = PE("SCALE", N_SCALE, FELUCCA_SNOW?2:0),
     [P_QUANT] = PE("QUANTIZE", N_QUANT, 0),
     [P_TRANS] = PD("TRANSP", F_SEMI, -24, 24, 0),
     [P_SLEN] = PD("LENGTH", F_STEPS, 1, NSTEP, 16),
@@ -195,6 +195,33 @@ static const param_desc_t TP[P_COUNT] = {
     [SN_G_ACCENT] = PD("ACCENT", F_PCT, 0, 100, 30),
     [SN_G_KIND] = PE("GENERATE", SN_GEN_KIND, 2),
     [SN_G_LIVE] = PE("EVOLVE", SN_LIVE, 0),
+    [SN_DTIME] = PD("TIME", F_INT, 1, 100, 25),
+    [SN_DSYNC] = PE("SYNC", N_LSYNC, 0),
+    [SN_DFB] = PD("FEEDBACK", F_PCT, 0, 120, 60),
+    [SN_DCOLOR] = PD("TONE", F_PCT, 0, 127, 80),
+    [SN_DWIDTH] = PD("WIDTH", F_PCT, 0, 127, 80),
+    [SN_RTYPE] = PE("MODEL", SN_RMODELS, 1),
+    [SN_RSIZE] = PD("DECAY", F_PCT, 0, 127, 75),
+    [SN_RDAMP] = PD("DAMP", F_PCT, 0, 127, 60),
+    [SN_RPRE] = PD("PREDELAY", F_INT, 0, 40, 12),
+    [SN_CRATE] = PD("RATE", F_LFOHZ, 0, 127, 45),
+    [SN_CDEPTH] = PD("DEPTH", F_PCT, 0, 127, 60),
+    [SN_CFB] = PD("FEEDBACK", F_PCT, 0, 100, 20),
+    [SN_TMIX] = PD("MIX", F_PCT, 0, 127, 0),
+    [SN_TDRIVE] = PD("DRIVE", F_PCT, 0, 127, 40),
+    [SN_TTONE] = PD("TONE", F_PCT, 0, 127, 100),
+    [SN_TWOW] = PD("WOW", F_PCT, 0, 127, 20),
+    [SN_TFLUT] = PD("FLUTTER", F_PCT, 0, 127, 10),
+    [SN_BMIX] = PD("MIX", F_PCT, 0, 127, 0),
+    [SN_BBITS] = PD("BITS", F_INT, 2, 16, 12),
+    [SN_BRATE] = PD("HOLD", F_INT, 1, 64, 1),
+    [SN_BTONE] = PD("TONE", F_PCT, 0, 127, 127),
+    [SN_G_STYLE] = PE("STYLE", SN_STYLES, 1),
+    [SN_G_COMPLEX] = PD("COMPLEX", F_PCT, 0, 100, 30),
+    [SN_G_HUMAN] = PD("HUMAN", F_PCT, 0, 100, 10),
+    [SN_G_ROTATE] = PD("ROTATE", F_INT, 0, 15, 0),
+    [SN_G_VARIANT] = PD("VARIATION", F_PCT, 0, 127, 55),
+    [SN_FX_BYPASS] = PE("BYPASS", N_ONOFF, 0),
 #else
 #define LANE(k, l) [P_LN0 + (k)] = PD(l, F_PCT, 0, 127, 127)
     LANE(0, "KICK"), LANE(1, "SNARE"), LANE(2, "CLAP"), LANE(3, "CL HAT"),
@@ -351,7 +378,7 @@ static int32_t param_fit(const param_desc_t *d, int32_t v)
 static int param_kept(uint32_t i)
 {
 #if FELUCCA_SNOW
-    if ((i>=SN_G_DENS && i<=SN_G_LIVE) || i==SN_G_BASE) return 1;
+    if ((i>=SN_G_DENS && i<=SN_G_LIVE) || i==SN_G_BASE || (i>=SN_G_STYLE && i<=SN_G_VARIANT)) return 1;
 #endif
     return i == P_LEVEL || i == P_PAN || i == P_MUTE || (i >= P_AMODE && i <= P_SGATE) ||
            (i >= P_SLCR && i <= P_SLDEPTH) || i == P_CHRD || i == P_VOIC || i == P_DIR ||   /* ((Skiff) DIR: the pattern's; */
@@ -408,6 +435,9 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
 {
     *unit = "";
     fmt_named = d->fmt == F_ENUM;
+#if FELUCCA_SNOW
+    if(d==&TP[SN_DTIME] || d==&TP[SN_RPRE]) {fmt_int(val,v*(d==&TP[SN_DTIME]?10:1));*unit="ms";return;}
+#endif
     switch (d->fmt) {
     case F_PCT:                                     /* a 0..100 range (SWG) is its value, others a share of 127 */
         fmt_int(val, d->max == 100 ? v : (v * 100 + 63) / 127);
@@ -572,6 +602,16 @@ static const page_t PAGES[] = {
     {"MOD", FAM_LFO, SC_TRACK, GR_MOD, {0xFF, P_M1SRC, P_M1DST, P_M1AMT}},   /* KNOB 1: the route (mod_ui_route; (2.0,
                                                                          * D 1A) LFO DEST and ENV DEST are its first 7) */
     {"FX", FAM_FX, SC_TRACK, GR_FX, {P_DIST, P_CHOR, P_DLY, P_REV}},
+#if FELUCCA_SNOW
+    {"CH DELAY",FAM_FX,SC_TRACK,GR_NONE,{P_DLY,SN_DTIME,SN_DSYNC,SN_DFB}},
+    {"DELAY TONE",FAM_FX,SC_TRACK,GR_NONE,{SN_DCOLOR,SN_DWIDTH,SN_FX_BYPASS,P_DLY}},
+    {"CH REVERB",FAM_FX,SC_TRACK,GR_NONE,{P_REV,SN_RTYPE,SN_RSIZE,SN_RDAMP}},
+    {"REV PRE",FAM_FX,SC_TRACK,GR_NONE,{SN_RPRE,P_REV,SN_RSIZE,SN_RDAMP}},
+    {"CH CHORUS",FAM_FX,SC_TRACK,GR_NONE,{P_CHOR,SN_CRATE,SN_CDEPTH,SN_CFB}},
+    {"TAPE",FAM_FX,SC_TRACK,GR_NONE,{SN_TMIX,SN_TDRIVE,SN_TTONE,SN_TWOW}},
+    {"TAPE MOTION",FAM_FX,SC_TRACK,GR_NONE,{SN_TFLUT,SN_TWOW,SN_TDRIVE,SN_TMIX}},
+    {"BITCRUSH",FAM_FX,SC_TRACK,GR_NONE,{SN_BMIX,SN_BBITS,SN_BRATE,SN_BTONE}},
+#endif
     {"DRIVE", FAM_FX, SC_TRACK, GR_DRIVE, {P_DIST, P_DTYPE, P_DTONE, 0xFF}},   /* (Skiff phase 9) DIST's TYPE, TONE */
     {"INSERT", FAM_FX, SC_TRACK, GR_INS, {P_ITYPE, P_IA, P_IB, P_IC}},   /* (1.3, from Felucca 1.5) the track's INSERT */
     {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IMIX, 0xFF, 0xFF, 0xFF}},  /* .. its dry / wet */
@@ -609,6 +649,14 @@ static const page_t PAGES[] = {
     {"ENV 2",FAM_EDIT,SC_TRACK,GR_ADSR,{P_EG2_ATK,P_EG2_DEC,P_EG2_SUS,P_EG2_REL}},
     {"ENV ROUTE",FAM_EDIT,SC_TRACK,GR_NONE,{P_ED_PIT,P_ED_FLT,P_ED_SHP,P_LD_AMP}},
     {"INSERT FX",FAM_EDIT,SC_TRACK,GR_INS,{P_ITYPE,P_IA,P_IB,P_IC}},
+    {"CH DELAY",FAM_EDIT,SC_TRACK,GR_NONE,{P_DLY,SN_DTIME,SN_DSYNC,SN_DFB}},
+    {"DELAY TONE",FAM_EDIT,SC_TRACK,GR_NONE,{SN_DCOLOR,SN_DWIDTH,SN_FX_BYPASS,P_DLY}},
+    {"CH REVERB",FAM_EDIT,SC_TRACK,GR_NONE,{P_REV,SN_RTYPE,SN_RSIZE,SN_RDAMP}},
+    {"REV PRE",FAM_EDIT,SC_TRACK,GR_NONE,{SN_RPRE,P_REV,SN_RSIZE,SN_RDAMP}},
+    {"CH CHORUS",FAM_EDIT,SC_TRACK,GR_NONE,{P_CHOR,SN_CRATE,SN_CDEPTH,SN_CFB}},
+    {"TAPE",FAM_EDIT,SC_TRACK,GR_NONE,{SN_TMIX,SN_TDRIVE,SN_TTONE,SN_TWOW}},
+    {"TAPE MOTION",FAM_EDIT,SC_TRACK,GR_NONE,{SN_TFLUT,SN_TWOW,SN_TDRIVE,SN_TMIX}},
+    {"BITCRUSH",FAM_EDIT,SC_TRACK,GR_NONE,{SN_BMIX,SN_BBITS,SN_BRATE,SN_BTONE}},
     {"FX MIX",FAM_EDIT,SC_TRACK,GR_NONE,{P_IMIX,P_DIST,P_DTYPE,P_DTONE}},
 #else
     {"OP1 ENV", FAM_EDIT, SC_TRACK, GR_ADSR, {P_FM1_ATK, P_FM1_DEC, P_FM1_SUS, P_FM1_REL}},
@@ -641,6 +689,8 @@ static const page_t PAGES[] = {
     {"FEEL", FAM_SEQ, SC_STEP, GR_FEEL, {0xFF, 0xFF, 0xFF, 0xFF}},
     {"PATTERN", FAM_SEQ, SC_TRACK, GR_STEPS, {P_SLEN, P_SDIV, P_SSWING, P_SGATE}},   /* (2.0) PRESETS: the track's DIR */
 #if FELUCCA_SNOW
+    {"GEN STYLE",FAM_SEQ,SC_TRACK,GR_NONE,{SN_G_STYLE,SN_G_COMPLEX,SN_G_HUMAN,SN_G_VARIANT}},
+    {"GEN ROTATE",FAM_SEQ,SC_TRACK,GR_NONE,{SN_G_ROTATE,SN_G_DENS,SN_G_SYNC,SN_G_SEED}},
     {"GEN RHYTHM",FAM_SEQ,SC_TRACK,GR_NONE,{SN_G_DENS,SN_G_SYNC,SN_G_SEED,SN_G_KIND}},
     {"GEN MELODY",FAM_SEQ,SC_TRACK,GR_NONE,{SN_G_BASE,SN_G_SPAN,SN_G_CONTOUR,SN_G_ACCENT}},
     {"GEN LIVE",FAM_SEQ,SC_TRACK,GR_NONE,{SN_G_LIVE,P_SLEN,P_SCALE,P_ROOT}},

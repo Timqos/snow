@@ -59,7 +59,11 @@ static void entry_ui(uint32_t e);
 #if FELUCCA_SNOW
 static void snow_pattern_knob(uint32_t channel,int32_t steps);
 static uint32_t snow_pattern_current(uint32_t channel);
+static int snow_pattern_used(uint32_t channel,uint32_t slot);
+static int snow_pattern_select(uint32_t channel,uint32_t slot);
+static uint8_t snow_pattern_bank,snow_pattern_half;
 static int snow_generate(uint32_t channel,int vary);
+static int snow_generate_scene(uint32_t style,int vary,int set_tempo);
 static void snow_sequence_poll(void);
 #endif
 static uint32_t pool_len(uint32_t id);         /* (Skiff phase 5) SAVE > PATTERNS, the pool view (bank.c) */
@@ -640,6 +644,9 @@ static int page_visible(uint32_t i)
     const engine_t *e = ENGINES[TSEL->eng_req % NENGINES];
     const sheet_t *sh = sheet_of(PAGES[i].graph);
     uint32_t id = PAGES[i].id[0];
+#if FELUCCA_SNOW
+    if(PAGES[i].fam==FAM_GLO && (PAGES[i].graph==GR_DELAY || PAGES[i].graph==GR_REVERB || PAGES[i].graph==GR_CHORUS))return 0;
+#endif
     if (sh)
         return TSEL->eng_req % NENGINES == sh->eng;
     if (PAGES[i].graph == GR_LANES)
@@ -1968,7 +1975,11 @@ static void preset_fill(int16_t *p, const engine_t *e, uint32_t pi)
         for (i = 0; i < NELEM(pr->more) && pr->more[i].id; i++)   /* ((Skiff) its LFO, GLIDE, ..: core.h) */
             p[pr->more[i].id] = pr->more[i].v;
 #if FELUCCA_SNOW
-        if (e->render == snow_render) snow_fill(p, pi);
+        if (e->render == snow_render) {
+            uint32_t role=0;
+            while(role<NTRK && e!=&SNOW_ENG[role])role++;
+            if(role<NTRK)snow_fill(p,role,pi);
+        }
 #endif
     }
 }

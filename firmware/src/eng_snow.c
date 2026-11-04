@@ -1,8 +1,10 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Snow 0.2: one open synthesis architecture on every channel. */
+ * Snow 0.3: fixed instrument roles, with the complete open synthesis surface. */
 #include "snow_params.h"
+#include "snow_styles.h"
 static const char *const SN_ALGS[] = {"FM PAIR","FM CHAIN","FM PAR","RING","ADDITIVE","FOLD"};
 static const char *const SN_WAVES[] = {"SINE","TRI","SAW","SQUARE","PULSE","ORGAN"};
+static const char *const SN_RMODELS[] = {"ROOM","HALL","PLATE"};
 static const char *const SN_MODES[] = {"HIT","GATED"};
 static const char *const SN_FILTERS[] = {"OFF","LP","HP","BP"};
 static const char *const SN_FB_NAMES[] = {"MOD","CARRIER","CROSS"};
@@ -142,66 +144,21 @@ static void snow_render(track_t *t,voice_t *v,int32_t *out,uint32_t n,const vmod
     v->ph[0]=a;v->ph[1]=b;v->ph[2]=c;
     v->s[3]=prev;v->s[4]=rng;v->s[5]=lo;v->s[6]=bp;v->s[7]=index;
 }
-static void snow_fill(int16_t *p,uint32_t preset)
+#include "snow_presets.h"
+static void snow_fill(int16_t *p,uint32_t role,uint32_t preset)
 {
-    uint32_t profile=(preset%18u)/3u,variation=preset%3u;
-    for(uint32_t k=SN_ALG;k<=SN_KEYTRACK;k++)p[k]=0;
-    p[SN_RATIO]=32;p[SN_RATIO3]=8;p[SN_PW]=64;p[SN_KEYTRACK]=127;
-    p[SN_MODE]=1;p[SN_FILTER]=1;p[SN_PDEC]=28;p[SN_RESO]=12;
-    p[P_E1]=64;p[P_E2]=64;p[P_E3]=64;p[P_E4]=0;
-    p[P_ATK]=0;p[P_REL]=45;p[P_SUS]=96;p[P_CHRD]=profile==5u?3:0;
-    if(profile<4) {
-        p[SN_MODE]=0;p[P_SUS]=0;p[SN_KEYTRACK]=0;p[SN_FMDEC]=50;
-        p[P_VOICE]=V_MONO;
-    }
-    if(profile==0) {
-        p[SN_TUNE]=-28;p[SN_RATIO]=16;p[SN_PAMT]=variation==1?18:12;p[SN_PDEC]=variation==2?35:28;
-        p[P_DEC]=variation==2?93:variation==1?68:76;
-        p[P_E0]=variation==1?56:variation==2?35:12;p[P_E6]=110;
-    }else if(profile==1) {
-        p[SN_TUNE]=-10;p[SN_NOISE]=variation==1?60:100;p[SN_PAMT]=3;p[P_DEC]=57;
-        p[SN_FILTER]=2;p[P_E6]=35;p[SN_RATIO]=48;
-    }else if(profile==2) {
-        p[SN_ALG]=3;p[SN_TUNE]=24;p[SN_RATIO]=37;p[SN_RATIO3]=53;p[SN_SUB]=32;
-        p[SN_NOISE]=30;p[SN_FILTER]=2;p[P_E6]=75;p[P_DEC]=variation==1?82:47;
-    }else if(profile==3) {
-        p[SN_ALG]=variation?1:2;p[SN_RATIO]=variation==1?23:57;p[SN_RATIO3]=29;
-        p[SN_PAMT]=variation==1?8:0;p[P_DEC]=variation==1?62:90;p[SN_FMDEC]=70;
-    }else if(profile==4) {
-        p[SN_TUNE]=-12;p[SN_SUB]=25;p[P_VOICE]=V_MONO;p[P_DEC]=72;
-    }else {p[P_DEC]=85;p[P_CHRD]=3;p[P_VOICE]=V_POLY;}
+    role%=NTRK;preset%=10u;
+    for(uint32_t k=0;k<20u;k++)p[SN_ALG+k]=SNOW_DETAIL[role][preset][k];
+    p[P_CHRD]=SNOW_CHORD[role][preset];
+    if(role<5u)p[P_VOICE]=V_MONO;
 }
-#define SNOW_PATCH(n,t,s,w,d,mx,fb,cu,dr,su,tag) \
-    {n,{t,s,w,d,mx,fb,cu,dr},{0,d,su,40},0,0,FX(0,0,0,0),TAG(tag)}
-static const preset_t SNOW_PATCHES[]={
-    SNOW_PATCH("ROUND KICK",20,0,88,58,0,0,115,14,0,PT_DRUM),
-    SNOW_PATCH("HARD KICK",80,8,110,45,0,38,122,60,0,PT_DRUM),
-    SNOW_PATCH("FM BOOM",96,33,70,90,0,52,108,35,0,PT_DRUM),
-    SNOW_PATCH("SNAPPY",70,24,40,40,90,20,105,18,0,PT_DRUM),
-    SNOW_PATCH("METAL SNARE",115,65,25,60,48,60,115,35,0,PT_DRUM),
-    SNOW_PATCH("SOFT SNARE",40,8,15,35,115,8,90,5,0,PT_DRUM),
-    SNOW_PATCH("CLOSED HAT",105,81,8,30,50,40,35,8,0,PT_DRUM),
-    SNOW_PATCH("OPEN HAT",115,87,0,90,80,55,22,18,0,PT_DRUM),
-    SNOW_PATCH("TINY METAL",65,44,25,12,60,65,50,30,0,PT_DRUM),
-    SNOW_PATCH("FM BELL",95,48,30,80,80,30,115,8,0,PT_DRUM),
-    SNOW_PATCH("WOOD HIT",55,20,85,35,40,65,90,20,0,PT_DRUM),
-    SNOW_PATCH("ALIEN PERC",120,110,110,65,120,100,120,40,0,PT_FX),
-    SNOW_PATCH("DEEP BASS",45,8,15,75,90,20,85,18,85,PT_BASS),
-    SNOW_PATCH("RUBBER BASS",95,24,65,45,65,65,105,40,65,PT_BASS),
-    SNOW_PATCH("HOLLOW BASS",80,40,0,85,100,35,115,8,100,PT_BASS),
-    SNOW_PATCH("GLASS CHORD",75,24,4,90,30,15,110,5,100,PT_PAD),
-    SNOW_PATCH("SOFT CHORD",35,8,8,100,60,5,90,0,110,PT_PAD),
-    SNOW_PATCH("METAL CHORD",110,48,30,70,80,65,118,25,80,PT_KEYS)
-};
-
-#undef SNOW_PATCH
-#define SNOW_MACHINE { .name="SYNTH",.page_title={"MACROS","FM DETAIL"}, \
+#define SNOW_MACHINE(role,title) { .name=title,.page_title={"MACROS","FM DETAIL"}, \
  .edit={{"TONE",0,0,127,40,F_PCT,0},{"SHAPE",0,0,127,64,F_PCT,0}, \
  {"SWEEP",0,0,127,64,F_PCT,0},{"DECAY",0,0,127,64,F_PCT,0}, \
  {"MIX",0,0,127,0,F_PCT,0},{"FEEDBACK",0,0,127,0,F_PCT,0}, \
  {"CUTOFF",0,0,127,110,F_CUTOFF,0},{"DRIVE",0,0,127,0,F_PCT,0}}, \
- .presets=SNOW_PATCHES,.npresets=18,.knob={P_E0,P_E1,P_E2,P_E3}, \
+ .presets=SNOW_PATCHES[role],.npresets=10,.knob={P_E0,P_E1,P_E2,P_E3}, \
  .poly=4,.ownenv=1,.keep=0xe0,.note_on=snow_note_on,.render=snow_render, \
  .amp=snow_amp,.done=snow_done,.block=snow_block }
-static const engine_t SNOW_ENG[6]={SNOW_MACHINE,SNOW_MACHINE,SNOW_MACHINE,SNOW_MACHINE,SNOW_MACHINE,SNOW_MACHINE};
+static const engine_t SNOW_ENG[NTRK]={SNOW_MACHINE(0,"KICK"),SNOW_MACHINE(1,"SNARE"),SNOW_MACHINE(2,"HAT"),SNOW_MACHINE(3,"PERC"),SNOW_MACHINE(4,"BASS"),SNOW_MACHINE(5,"CHORD")};
 #undef SNOW_MACHINE

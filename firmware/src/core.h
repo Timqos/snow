@@ -128,6 +128,15 @@ enum {                          /* per-track parameters */
                                                 * lpan_render): stored ids 135..142, after the engine values' (sid_p) */
     P_FOLLOW, P_FMODE, P_FNOTE,                /* (2.1) chord follow (follow.c): the track whose chords it follows, how,
                                                 * by which of their notes; stored ids 143..145 */
+#if FELUCCA_SNOW
+    SN_DTIME, SN_DSYNC, SN_DFB, SN_DCOLOR, SN_DWIDTH,
+    SN_RTYPE, SN_RSIZE, SN_RDAMP, SN_RPRE,
+    SN_CRATE, SN_CDEPTH, SN_CFB,
+    SN_TMIX, SN_TDRIVE, SN_TTONE, SN_TWOW, SN_TFLUT,
+    SN_BMIX, SN_BBITS, SN_BRATE, SN_BTONE,
+    SN_G_STYLE, SN_G_COMPLEX, SN_G_HUMAN, SN_G_ROTATE, SN_G_VARIANT,
+    SN_FX_BYPASS,
+#endif
     P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7,
     P_COUNT
 };

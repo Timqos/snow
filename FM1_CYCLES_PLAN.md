@@ -1,34 +1,30 @@
-# Snow / FM-1 — current project brief
+# Snow / FM-1 — current brief
 
-A sample-free, six-channel groovebox on Skiff/Felucca. The user's feedback
-on Snow 0.1 supersedes the former fixed KICK/SNARE/HAT/PERC/BASS/CHORD roles
-and the former exclusion of generative sequencing.
+Latest user clarification after Snow 0.2: keep its deep synthesis controls,
+but **fix channel identities and factory libraries** to KICK, SNARE, HAT,
+PERC, BASS, CHORD. Ten presets of its own instrument per channel, 60 total.
+Do not switch a channel's role/library to another instrument. Manual waveform,
+algorithm, envelope and modulation edits remain free to radically transform
+the sound; the role does not restrict these approved controls.
 
-Every channel is a complete, freely configurable synthesizer: algorithms,
-oscillator waveforms, ratios, feedback, noise, tuning, full ADSR, separate
-pitch/FM envelopes, filters, two independent LFOs and modulation. Kick,
-snare, hat, bass and FX are starting sounds available on **any** channel.
-Retain the expressive FM synth character. Give kicks a usable low-frequency
-body with an independently controlled transient, instead of a mandatory long
-laser sweep. EDIT must expose extensive pages of actual sound parameters.
+Provide genuinely independent per-channel delay, reverb, chorus and their
+settings/state/tails, plus Tape and Bitcrush with dedicated controls. Keep
+existing synth, filters, drives, inserts, two LFOs, locks and live RAM reload.
 
-Develop original rhythm and melody generation: seed/variation, density,
-syncopation, accent, scale, span, contour and optional live evolution.
-Tessera is a workflow reference, not code or algorithm to clone. Each knob
-on the pattern pages selects its channel's pattern independently; two pages
-cover six channels with four physical knobs. Preserve locks, per-track
-lengths, probability, ratchets, microtiming, swing, mute/solo and quantized
-pattern launching.
+Holding SEQ opens a visible pattern grid. K1–K4 independently select their
+channels' patterns; a second page covers channels 5–6. Eight visible slots,
+quantized launching, and clear current/queued states. Tessera is a workflow
+reference; don't copy its generators or sequencer implementation.
 
-Control All uses a channel mask and preserves locks. RAM Temp Save/Reload
-returns all or one channel while playback continues; permanent project,
-sound and pattern storage remains separate. Aim for independent per-channel
-FX; shared sends do not satisfy the full FX goal. Benchmark hardware limits.
+Generate varied rhythms/melodies **for the instrument and selected style**:
+IDM, electronica, breakbeat, drum & bass, deep house, ambient and other styles.
+Use seed, density, syncopation, complexity, variation, accents, humanization,
+scale and contour. Support both one channel and a coordinated ensemble.
+Preserve locks and independent pattern editing.
 
-Use GitHub source, verified cloud toolchains and GitHub Pages for testing.
-No tools need installing on the user's Mac. Work on a branch/PR, retain
-licenses, build a real .fwsc and test the firmware's C code through WASM.
-Do not flash hardware or call it stable without physical FM-1 validation.
+Develop in a branch/PR, build a genuine .fwsc in the cloud, test real C via
+WASM and publish on GitHub Pages. No tools required on the user's Mac and
+no hardware flashing. Retain upstream licenses. Physical FM-1 testing is
+required before claiming hardware stability.
 
-Current capabilities and outstanding work: [docs/SNOW_PREVIEW.md](docs/SNOW_PREVIEW.md).
-Authoritative detailed goals: [docs/SNOW_SPEC.md](docs/SNOW_SPEC.md).
+Current implementation and limits: [docs/SNOW_PREVIEW.md](docs/SNOW_PREVIEW.md).

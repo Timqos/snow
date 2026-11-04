@@ -31,7 +31,7 @@ const alg=find('OSCILLATORS / ALGORITHM','ALGORITHM'),wave=find('OSCILLATORS / A
 const attack=find('AMP ADSR','ATTACK'),density=find('GENERATIVE SEQUENCER','DENSITY');
 assert(alg>=0&&wave>=0&&attack>=0&&density>=0);
 assert.equal(str(x.web_snow_param_enum(0,alg,5)),'FOLD');
-assert.equal(x.web_snow_preset(0,8),0); // A hat on the first channel, not a fixed kick.
+assert.equal(x.web_snow_preset(0,8),0); // Instrument preset 9 remains a kick on channel 1.
 assert.equal(x.web_snow_set(0,alg,99),0);assert.equal(x.web_snow_param_value(0,alg),5);
 x.web_snow_set(0,wave,2);x.web_snow_set(0,attack,75);
 assert.equal(x.web_snow_param_value(0,wave),2);assert.equal(x.web_snow_param_value(0,attack),75);
@@ -47,7 +47,7 @@ await import('../web/emu/worklet.js');
 const worklet=new Processor();
 await worklet.onMessage({type:'load',wasm:bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)});
 const ready=worklet.messages.find(m=>m.type==='ready');
-assert.equal(ready.snowSchema.params.length,count);assert.equal(ready.snowSchema.presets.length,18);
+assert.equal(ready.snowSchema.params.length,count);assert.equal(ready.snowSchema.presets.length,10);
 await worklet.onMessage({type:'snow-track',track:2});
 await worklet.onMessage({type:'snow-set',track:2,index:alg,value:3});
 assert.equal(worklet.ex.web_snow_param_value(2,alg),3);
@@ -56,4 +56,27 @@ await worklet.onMessage({type:'snow-pattern',track:2,slot:2});
 worklet.publish();const frame=worklet.messages.findLast(m=>m.type==='frame');
 assert.equal(frame.snow.selected,2);assert.equal(frame.snow.patterns[2],2);assert.equal(frame.snow.values[alg],3);
 assert.equal(frame.snow.text.length,count);
-console.log('SNOW 0.2 WASM + WORKLET PASSED:',count,'editable parameters, algorithms, waveforms, ADSR, generation, independent patterns and control messages');
+console.log('SNOW 0.3 WASM + WORKLET PASSED:',count,'editable parameters, algorithms, waveforms, ADSR, generation, independent patterns and control messages');
+
+assert.equal(str(x.web_snow_role(0)),'KICK');assert.equal(str(x.web_snow_preset_name(0,8)),'AMBIENT LOW');
+assert.equal(str(x.web_snow_preset_name(1,8)),'BRUSH');assert.equal(x.web_snow_preset(0,10),1);
+const select=worklet.messages.filter(m=>m.type==='snow-schema').at(-1);
+await worklet.onMessage({type:'snow-schema'});const schema=worklet.messages.at(-1).schema;
+assert.equal(schema.role,'HAT');assert.equal(schema.presets.length,10);assert.equal(schema.styles.length,20);
+for(const group of ['CHANNEL DELAY','CHANNEL REVERB','CHANNEL CHORUS','TAPE','BITCRUSH'])assert(schema.params.some(p=>p.group===group));
+await worklet.onMessage({type:'snow-scene',style:3,vary:true,tempo:true});assert.equal(worklet.ex.web_snow_tempo_get(),172);
+worklet.publish();const scene=worklet.messages.at(-1).snow;assert.equal(scene.used.length,6);assert.equal(scene.active.length,6);
+console.log('SNOW 0.3 ROLES / FX / STYLES PASSED: 60 role-specific presets, per-channel FX controls, 20 styles and pattern grid metadata');
+// Simultaneous racks run in the same firmware audio path as the browser and device.
+const z=await boot();render(z,1000);z.web_snow_demo();
+function parameter(group,name){return Array.from({length:z.web_snow_param_count()},(_,i)=>i).find(i=>{
+ const mem=new Uint8Array(z.memory.buffer);const read=p=>{let e=p;while(mem[e])e++;return new TextDecoder().decode(mem.subarray(p,e));};
+ return read(z.web_snow_param_group(i))===group&&read(z.web_snow_param_name(0,i))===name;
+});}
+const rack=[['CHANNEL DELAY','DELAY',85],['CHANNEL DELAY','TIME',73],['CHANNEL DELAY','FEEDBACK',110],
+ ['CHANNEL REVERB','REVERB',90],['CHANNEL REVERB','DECAY',115],['CHANNEL CHORUS','CHORUS',65],
+ ['TAPE','MIX',80],['TAPE','WOW',100],['BITCRUSH','MIX',35],['BITCRUSH','BITS',7],['BITCRUSH','HOLD',5]];
+for(let ch=0;ch<6;ch++)for(const [group,name,value] of rack){const i=parameter(group,name);assert(i>=0,`${group}/${name}`);assert.equal(z.web_snow_set(ch,i,value),0);}
+z.web_buttons(1<<10);render(z,70);z.web_buttons(0);render(z,70);
+const racks=render(z,8000);assert(racks.peak>0.02&&racks.peak<1);
+console.log('SIX CONCURRENT FX RACKS PASSED: finite bounded audio, peak',racks.peak);
