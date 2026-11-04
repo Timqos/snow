@@ -497,6 +497,13 @@ static void trk_note_off(track_t *t, uint32_t note)
     t->xp_n = (uint8_t)k;
     (void)mo_note(t, note, 0, 0);                      /* ((2.2) NOTES OUT: its note-off, if it went out) */
     mono_remove(t, note);                              /* a mode change must not retain a released key */
+#if FELUCCA_SNOW
+    if(t->engine>=ENGI_SNOW && !t->p[SN_MODE]) {
+        for(i=0;i<NVOICE;i++)if(t->v[i].note==note)t->v[i].gate=0;
+        if(t->mono_note==note)t->mono_note=0;
+        return;
+    }
+#endif
     if (mode != V_POLY) {
         uint32_t nv = mode == V_UNISON ? trk_nvoice(t) : 1u;
         if (t->mono_note == note) {

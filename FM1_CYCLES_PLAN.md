@@ -1,32 +1,34 @@
-# FM-1 Cycles — project brief
+# Snow / FM-1 — current project brief
 
-A sample-free, six-track FM groovebox for M-VAVE FM-1, using the open-source Skiff codebase as a starting point.
+A sample-free, six-channel groovebox on Skiff/Felucca. The user's feedback
+on Snow 0.1 supersedes the former fixed KICK/SNARE/HAT/PERC/BASS/CHORD roles
+and the former exclusion of generative sequencing.
 
-## Fixed tracks
-KICK / SNARE / HAT / PERC / BASS / CHORD. Each needs rich, editable FM synthesis (pages of four parameters), and two independently assignable LFOs.
+Every channel is a complete, freely configurable synthesizer: algorithms,
+oscillator waveforms, ratios, feedback, noise, tuning, full ADSR, separate
+pitch/FM envelopes, filters, two independent LFOs and modulation. Kick,
+snare, hat, bass and FX are starting sounds available on **any** channel.
+Retain the expressive FM synth character. Give kicks a usable low-frequency
+body with an independently controlled transient, instead of a mandatory long
+laser sweep. EDIT must expose extensive pages of actual sound parameters.
 
-## Essential workflow
-- 16–64-step patterns, per-track lengths, full step parameter locks.
-- Control All: adjust compatible sound macros across six tracks simultaneously; allow excluding tracks. Do not destroy recorded parameter locks.
-- Temporary Save / Reload for instantaneous return to a performance snapshot while playback continues; separate from permanent project saves.
-- Probability, ratchet, microtiming, swing, mute/solo.
-- Project/bank/pattern management via SAVE, borrowing the *interaction principles* of Tessera.
-- Crisp pixel-styled high-contrast interface inspired by Digitakt/Digitone, mapped to four hardware knobs.
+Develop original rhythm and melody generation: seed/variation, density,
+syncopation, accent, scale, span, contour and optional live evolution.
+Tessera is a workflow reference, not code or algorithm to clone. Each knob
+on the pattern pages selects its channel's pattern independently; two pages
+cover six channels with four physical knobs. Preserve locks, per-track
+lengths, probability, ratchets, microtiming, swing, mute/solo and quantized
+pattern launching.
 
-## Per-track effects
-Independent filter, drive, chorus, delay, reverb and other appropriate effects with their own track settings, bypass and wet/dry. Do not silently substitute shared-send-only effects. Benchmark real hardware limits: six simultaneous independent reverbs may not be feasible.
+Control All uses a channel mask and preserves locks. RAM Temp Save/Reload
+returns all or one channel while playback continues; permanent project,
+sound and pattern storage remains separate. Aim for independent per-channel
+FX; shared sends do not satisfy the full FX goal. Benchmark hardware limits.
 
-## Quality requirements
-Sound quality and underrun-free playback first. No sample playback, no unnecessary generative MIDI engines. Benchmark CPU and memory. Browser emulator tests are useful but cannot establish hardware audio reliability. Preserve applicable upstream GPL/license notices.
+Use GitHub source, verified cloud toolchains and GitHub Pages for testing.
+No tools need installing on the user's Mac. Work on a branch/PR, retain
+licenses, build a real .fwsc and test the firmware's C code through WASM.
+Do not flash hardware or call it stable without physical FM-1 validation.
 
-## No-local-install development workflow
-GitHub source + cloud CI build using pinned, verified JieLi SDK/toolchain + browser emulator on GitHub Pages. Do not require Docker or other toolchains on the user's Mac.
-
-## Milestone 1 (before changing synthesis)
-1. Audit Skiff audio/voice code, six-track sequencer, parameter locks, web emulator, and build dependencies.
-2. Establish a reproducible cloud build of **unchanged** firmware yielding .fwsc, or report specific blocking dependencies.
-3. Run existing tests and create a browser preview.
-4. Work in a separate development branch/PR. Do not flash the hardware.
-5. Propose implementation phases and resource budgets for the six new engines and effects.
-
-No first firmware is considered ready until build and emulator checks pass; physical FM-1 testing is required before calling it stable.
+Current capabilities and outstanding work: [docs/SNOW_PREVIEW.md](docs/SNOW_PREVIEW.md).
+Authoritative detailed goals: [docs/SNOW_SPEC.md](docs/SNOW_SPEC.md).

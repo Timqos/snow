@@ -290,7 +290,7 @@ typedef struct {
     int32_t gstep;               /* glide TIME mode: 1/16 st per control tick, 0 = RATE mode */
     int32_t fine;                /* unison detune: phase increment * (1 + fine / 4096) */
     uint32_t ph[3];
-    int32_t s[8];                /* engine state (filters, envs) */
+    int32_t s[FELUCCA_SNOW ? 10 : 8]; /* Snow: separate pitch and FM envelopes */
     uint32_t age;
     uint8_t mvel;                /* mod.c: the note-on velocity (before UNISON scaling) and RAND of the note */
     uint8_t side;                /* (1.3) SPREAD: 0 the left of PAN, 1 the right (voice.c voice_start, fx.c mix_spread) */

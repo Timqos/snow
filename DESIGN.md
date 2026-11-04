@@ -525,12 +525,18 @@ asked first, as on the device. Nothing of these is pushed: the editor reads what
 - the 20 MHz LCD clock, `LCD_BAUD=2`, to try on hardware.
 # Snow prototype variant
 
-With `FELUCCA_SNOW=1`, tracks 1–6 are fixed to KICK / SNARE / HAT / PERC / BASS /
-CHORD. The four HOME and GLO-held knobs are TONE / SHAPE / SWEEP / DECAY;
-GLO applies additive offsets over the stored sound and step locks. GLO+SAVE
-captures a RAM-only musical snapshot, GLO+HOME restores it while the transport
-keeps its position, GLO+OCT− toggles the selected track in Control All, and
-GLO+OCT+ reloads that track alone. The ordinary SAVE/project workflow remains.
-The complete prototype contract and outstanding work are in
-[docs/SNOW_PREVIEW.md](docs/SNOW_PREVIEW.md). The rules below remain the baseline
-Skiff contract when `FELUCCA_SNOW=0`.
+With `FELUCCA_SNOW=1`, all six channels use the same open synth architecture.
+Kick/snare/hat/bass/chord presets are available on any channel. EDIT exposes
+algorithms, three oscillator waveforms/ratios, ADSR, pitch/FM envelopes,
+filter, independent LFOs and voice controls. HOME and GLO-held knobs are
+TONE / SHAPE / SWEEP / DECAY; GLO adds offsets over sound and step locks.
+GLO+SAVE captures a RAM snapshot, GLO+HOME reloads without moving transport,
+GLO+OCT− toggles the channel mask, GLO+OCT+ reloads that channel.
+SEQ's GEN pages configure Snow's original weighted-grid rhythm and melodic
+contours; OCT+ generates a variation. SAVE's two PATTERNS pages assign each
+knob to one channel's A–P pattern, using the native bank/quantized launcher.
+Snow reuses retired DIGITAL/kit parameter IDs without changing P_COUNT or
+persisted IDs; its browser storage namespace is separate from older builds.
+The implementation and remaining work are in
+[docs/SNOW_PREVIEW.md](docs/SNOW_PREVIEW.md). The preceding rules remain the
+baseline Skiff contract when `FELUCCA_SNOW=0`.

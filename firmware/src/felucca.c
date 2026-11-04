@@ -142,6 +142,9 @@ static inline __attribute__((always_inline)) void *audio_far(void *p) { void *vo
 #include "upreset.c"             /* user presets (RAM mirror; flash with FELUCCA_FLASH) */
 #include "project.c"
 #include "bank.c"                /* Skiff: the pattern bank (SAVE > PATTERNS) */
+#if FELUCCA_SNOW
+#include "snow_sequence.c"
+#endif
 #if FELUCCA_OTA
 #include "ota.c"
 #include "ota_hw.c"

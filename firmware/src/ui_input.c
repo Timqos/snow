@@ -1501,6 +1501,9 @@ static void edit_param(uint32_t slot, int32_t steps)
     const page_t *pg = cur_page();
     const param_desc_t *d;
     int32_t v;
+#if FELUCCA_SNOW
+    if(pg->graph==GR_SNOW_PAT){snow_pattern_knob(pg->id[slot],steps);return;}
+#endif
     if (pg->graph == GR_FEEL) {                           /* (Skiff 2.0) FEEL: CHANCE RATCHET NUDGE TYPE of the selection */
         follow_hold();                                    /* ((1.3) the edited steps stay on the screen) */
         feel_turn(TSEL, slot, steps);
@@ -2098,6 +2101,12 @@ static void ui_input(void)
     static uint8_t home_long;                           /* Skiff: HOME held past 0.7 s, the menu closed: MENU when let go */
 #if FELUCCA_SNOW
     if (snow_buttons(pressed)) return;
+    snow_sequence_poll();
+    if(!ui.home && !ui.menu && !ui.confirm && cur_page()->fam==FAM_SEQ &&
+       (cur_page()->id[0]==SN_G_DENS || cur_page()->id[0]==SN_G_BASE || cur_page()->id[0]==SN_G_LIVE) &&
+       ((pressed>>panel.btn[B_OCTUP])&1u)) {
+        (void)snow_generate(song.sel,1);ui_message("GENERATED: OCT+ AGAIN");return;
+    }
 #endif
     fm6_poll();                                         /* FM6: PTCH turned -> its patch */
     unit_g_poll();                                      /* ((Skiff U3, R8) the unit's CLOCK MIDI IN TUNE) */

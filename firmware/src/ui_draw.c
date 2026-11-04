@@ -922,6 +922,18 @@ static void draw_columns(void)
         sheet_of(cur_page()->graph)->cards();
         return;
     }
+#if FELUCCA_SNOW
+    if(cur_page()->graph==GR_SNOW_PAT) {
+        for(uint32_t c=0;c<4u;c++) {
+            uint32_t k=cur_page()->id[c];char label[8]={'C','H',(char)('1'+k),0};
+            if(k>=NTRK){draw_column(c,"--","--","",VR_DIM,-1,ICON_NONE);continue;}
+            uint32_t entry=snow_pattern_current(k);
+            char pattern[3]={(char)('A'+entry),0};
+            draw_column(c,label,pattern,"PATTERN",VR_LIVE,-1,ICON_AUTO);
+        }
+        return;
+    }
+#endif
     if (cur_page()->graph == GR_SONG) {                  /* (Skiff phase 5) ENTRY PATTERN REPS SONG (ui_input.c song_knob):
                                                          * the selected track's entry picked; its pattern (KNOB 2's pick
                                                          * while there is one), its repeats; SONG */

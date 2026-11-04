@@ -195,6 +195,9 @@ static void fl_plain_window_init(void) {}
 #include "../../firmware/src/upreset.c"
 #include "../../firmware/src/project.c"
 #include "../../firmware/src/bank.c"           /* (Skiff: the patterns; phase 5: a project names them) */
+#if FELUCCA_SNOW
+#include "../../firmware/src/snow_sequence.c"
+#endif
 
 /* ------------------------------------------------- main.c and its HAL --- */
 #if FELUCCA_CPU2
@@ -563,7 +566,8 @@ EXPORT void web_snow_demo(void)
     seq_stop();
     for (k = 0; k < NTRK; k++) {
         motion_reset(&trk[k]);
-        apply_preset_to(&trk[k], 0);
+        apply_preset_to(&trk[k], TRK_DEF[k][1]);
+        trk[k].p[SN_G_LIVE] = 0;
         trk[k].p[P_SLEN] = 16;
         trk[k].p[P_SDIV] = 2;
         trk[k].p[P_SGATE] = k == 5u ? 127 : 75;
@@ -599,5 +603,77 @@ EXPORT void web_snow_control(uint32_t knob, int32_t delta) { snow_control_all(kn
 EXPORT void web_snow_mask(uint32_t mask) { snow_mask = (uint8_t)(mask & 63u); }
 EXPORT uint32_t web_snow_mask_get(void) { return snow_mask; }
 EXPORT uint32_t web_snow_selected(void) { return song.sel; }
+/* The browser designer edits the same parameters as the hardware EDIT pages. */
+static const struct { uint16_t id; uint8_t group; } web_snow_params[] = {
+#define W(id,group) {id,group}
+    W(P_E0,0),W(P_E1,0),W(P_E2,0),W(P_E3,0),W(P_E4,0),W(P_E5,0),W(P_E6,0),W(P_E7,0),
+    W(SN_ALG,1),W(SN_WAVE1,1),W(SN_WAVE2,1),W(SN_WAVE3,1),W(SN_RATIO,1),W(SN_RATIO3,1),
+    W(SN_PW,1),W(SN_MIX,1),W(SN_SUB,1),W(SN_NOISE,1),W(SN_FB_ROUTE,1),
+    W(SN_TUNE,2),W(SN_FINE,2),W(SN_KEYTRACK,2),W(SN_PAMT,2),W(SN_PDEC,2),W(SN_FMDEC,2),
+    W(SN_MODE,3),W(P_ATK,3),W(P_DEC,3),W(P_SUS,3),W(P_REL,3),
+    W(SN_FILTER,4),W(SN_RESO,4),W(P_ED_FLT,4),W(P_ED_PIT,4),W(P_ED_SHP,4),
+    W(P_EG2_ATK,5),W(P_EG2_DEC,5),W(P_EG2_SUS,5),W(P_EG2_REL,5),
+    W(P_LRATE,6),W(P_LWAVE,6),W(P_LSYNC,6),W(P_LTRIG,6),W(P_LPHASE,6),W(P_LFADE,6),W(P_LPOL,6),
+    W(P_LD_PIT,6),W(P_LD_FLT,6),W(P_LD_SHP,6),W(P_LD_AMP,6),
+    W(SN_L2_RATE,7),W(SN_L2_WAVE,7),W(SN_L2_DEPTH,7),W(SN_L2_DEST,7),
+    W(SN_L2_SYNC,7),W(SN_L2_PHASE,7),W(SN_L2_TRIG,7),W(SN_L2_FADE,7),
+    W(P_M1SRC,8),W(P_M1DST,8),W(P_M1AMT,8),W(P_M2SRC,8),W(P_M2DST,8),W(P_M2AMT,8),
+    W(P_M3SRC,8),W(P_M3DST,8),W(P_M3AMT,8),W(P_M4SRC,8),W(P_M4DST,8),W(P_M4AMT,8),
+    W(P_VOICE,9),W(P_GLIDE,9),W(P_GLMODE,9),W(P_DETUNE,9),W(P_CHRD,9),W(P_VOIC,9),
+    W(P_LEVEL,9),W(P_PAN,9),W(P_SPRD,9),W(P_MUTE,9),
+    W(P_DIST,10),W(P_DTYPE,10),W(P_DTONE,10),W(P_ITYPE,10),W(P_IA,10),W(P_IB,10),W(P_IC,10),W(P_IMIX,10),
+    W(P_CHOR,10),W(P_DLY,10),W(P_REV,10),W(P_DKSRC,10),W(P_DKAMT,10),W(P_DKREL,10),
+    W(SN_G_KIND,11),W(SN_G_DENS,11),W(SN_G_SYNC,11),W(SN_G_SEED,11),W(SN_G_BASE,11),W(SN_G_SPAN,11),
+    W(SN_G_CONTOUR,11),W(SN_G_ACCENT,11),W(SN_G_LIVE,11),W(P_SCALE,11),W(P_ROOT,11),
+    W(P_SLEN,12),W(P_SDIV,12),W(P_SSWING,12),W(P_SGATE,12),W(P_DIR,12)
+#undef W
+};
+static const char *const web_snow_groups[]={"MACROS","OSCILLATORS / ALGORITHM","TUNING / PITCH / FM ENVELOPE",
+    "AMP ADSR","FILTER / ENV ROUTING","ENVELOPE 2","LFO 1","LFO 2","MOD MATRIX","VOICE / MIX",
+    "INSERT / SEND FX","GENERATIVE SEQUENCER","SEQUENCE"};
+EXPORT uint32_t web_snow_param_count(void) { return NELEM(web_snow_params); }
+EXPORT uint32_t web_snow_param_id(uint32_t i) { return i<NELEM(web_snow_params)?web_snow_params[i].id:P_COUNT; }
+EXPORT const char *web_snow_param_group(uint32_t i) { return i<NELEM(web_snow_params)?web_snow_groups[web_snow_params[i].group]:""; }
+EXPORT const char *web_snow_param_name(uint32_t channel,uint32_t i) { return channel<NTRK && i<NELEM(web_snow_params)?track_desc(&trk[channel],web_snow_params[i].id)->label:""; }
+EXPORT int32_t web_snow_param_min(uint32_t channel,uint32_t i) { return channel<NTRK && i<NELEM(web_snow_params)?track_desc(&trk[channel],web_snow_params[i].id)->min:0; }
+EXPORT int32_t web_snow_param_max(uint32_t channel,uint32_t i) { return channel<NTRK && i<NELEM(web_snow_params)?track_desc(&trk[channel],web_snow_params[i].id)->max:0; }
+EXPORT const char *web_snow_param_enum(uint32_t channel,uint32_t i,int32_t v)
+{
+    if(channel>=NTRK || i>=NELEM(web_snow_params))return 0;
+    const param_desc_t *d=track_desc(&trk[channel],web_snow_params[i].id);
+    return d->names && v>=d->min && v<=d->max?d->names[v-d->min]:0;
+}
+EXPORT int32_t web_snow_param_value(uint32_t channel,uint32_t i)
+{ return channel<NTRK && i<NELEM(web_snow_params)?trk[channel].p[web_snow_params[i].id]:0; }
+EXPORT const char *web_snow_param_text(uint32_t channel,uint32_t i)
+{
+    static char text[48];const char *unit=0;
+    if(channel>=NTRK || i>=NELEM(web_snow_params))return "";
+    uint32_t id=web_snow_params[i].id;
+    param_format(track_desc(&trk[channel],id),trk[channel].p[id],text,&unit);
+    /* Value and unit are separate in the hardware UI. */
+    if(unit && str_len(text)+str_len(unit)+1u<sizeof text){
+        uint32_t n=str_len(text);text[n++]=' ';str_cpy(text+n,unit,sizeof text-n);
+    }
+    return text;
+}
+EXPORT uint32_t web_snow_set(uint32_t channel,uint32_t i,int32_t value)
+{
+    if(channel>=NTRK || i>=NELEM(web_snow_params))return 1;
+    track_t *t=&trk[channel];uint32_t id=web_snow_params[i].id;
+    uint32_t guard=motion_guard();
+    t->p[id]=(int16_t)param_fit(track_desc(t,id),value);
+    motion_capture(t,id,t->p[id]);motion_unguard(guard);ui.force=1;
+    return 0;
+}
+EXPORT uint32_t web_snow_generate(uint32_t channel,uint32_t vary) { return (uint32_t)snow_generate(channel,vary!=0); }
+EXPORT uint32_t web_snow_pattern(uint32_t channel,uint32_t slot) { return (uint32_t)snow_pattern_select(channel,slot); }
+EXPORT uint32_t web_snow_pattern_get(uint32_t channel) { return snow_pattern_current(channel); }
+EXPORT uint32_t web_snow_preset(uint32_t channel,uint32_t preset)
+{
+    if(channel>=NTRK || preset>=18u)return 1;
+    apply_preset_to(&trk[channel],preset);ui.force=1;return 0;
+}
+EXPORT const char *web_snow_preset_name(uint32_t preset) { return preset<18u?SNOW_PATCHES[preset].name:""; }
 #endif
 EXPORT uint32_t web_sample_rate(void) { return FS; }

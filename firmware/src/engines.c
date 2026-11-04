@@ -187,7 +187,7 @@ static uint32_t eng_step_for(uint32_t k, uint32_t e, int32_t dir)   /* eng_step 
 /* the parts at power-on (engine, preset; the sequencers empty): bass, pad, lead, drums, (phase 6) a sample sound
  * and a second kit: ANALOG ACID, FM6 PAD (was DIGITAL PAD), LOFI PULSE LD, DRUM KIT, PIANO, DRUM KIT */
 #if FELUCCA_SNOW
-static const uint8_t TRK_DEF[NPART][2] = {{15, 0}, {16, 0}, {17, 0}, {18, 0}, {19, 0}, {20, 0}};
+static const uint8_t TRK_DEF[NPART][2] = {{15, 0}, {16, 3}, {17, 6}, {18, 9}, {19, 12}, {20, 15}};
 #else
 static const uint8_t TRK_DEF[NPART][2] = {{0, 4}, {ENGI_FM6, 4}, {3, 0}, {ENGI_DRUM, 0}, {ENGI_SAMPLE, 0}, {ENGI_DRUM, 0}};
 #endif

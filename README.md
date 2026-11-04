@@ -1,8 +1,9 @@
-> **Snow / FM-1:** this fork is the starting point for a six-machine FM groovebox.
-> Snow 0.1 adds six fixed FM machines, Control All and RAM Save/Reload; the default build retains Skiff.
-> See the [prototype guide](docs/SNOW_PREVIEW.md), [agreed Snow specification](docs/SNOW_SPEC.md)
-> and [cloud build and simulator instructions](docs/CLOUD_BUILD.md).
-> [**Try Snow 0.1**](https://timqos.github.io/snow/snow/) · [Compare the Skiff baseline](https://timqos.github.io/snow/try/).
+> **Snow / FM-1:** six universal synthesis channels, inspired by Model:Cycles immediacy.
+> Snow 0.2 adds selectable algorithms/waveforms, full ADSR, two independent LFOs,
+> original rhythm/melody generation and independent channel patterns. The default build retains Skiff.
+> See the [prototype guide](docs/SNOW_PREVIEW.md), [current specification](docs/SNOW_SPEC.md)
+> and [cloud build instructions](docs/CLOUD_BUILD.md).
+> [**Try Snow 0.2**](https://timqos.github.io/snow/snow/) · [Skiff baseline](https://timqos.github.io/snow/try/).
 
 <p align="center">
   <picture>

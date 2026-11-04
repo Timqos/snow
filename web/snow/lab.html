@@ -1,0 +1,13 @@
+<section id="snow-lab" aria-label="Snow sound laboratory">
+  <header class="lab-heading"><div><span class="lab-eyebrow">SNOW / FM-1 · 0.2</span><h1>Шість каналів. Будь-який звук.</h1></div><button id="snow-power">Увімкнути звук</button></header>
+  <p class="lab-intro">На кожному каналі — всі алгоритми, хвилі й огинаючі. Стартові звуки можна повністю перебудувати: кік → снейр → хет → синтезатор → FX.</p>
+  <div class="lab-actions"><button id="snow-demo" disabled>Завантажити демо</button><button id="snow-play" disabled>PLAY / STOP</button><button id="snow-save" disabled>Temp Save</button><button id="snow-reload" disabled>Reload all</button><button id="snow-reload-track" disabled>Reload channel</button></div>
+  <p class="lab-hint">Увімкни звук → завантаж демо → натисни PLAY на панелі нижче. Демо замінює поточні кроки всіх каналів.</p>
+  <div id="snow-channels" class="lab-channels"></div>
+  <div class="lab-sound"><strong id="snow-selection">CH 1 / SOUND DESIGN</strong><label>Стартовий звук <select id="snow-preset" disabled><option value="">Обрати звук…</option></select></label></div>
+  <div class="lab-actions"><button id="snow-generate" disabled>Генерувати з seed</button><button id="snow-vary" disabled>Нова варіація</button><span id="snow-notice" role="status" aria-live="polite"></span></div>
+  <p class="lab-hint">Генерація змінює обраний канал. У GENERATIVE SEQUENCER нижче: ритм / мелодія / разом, density, syncopation, seed, contour, scale та автоматичне EVOLVE. Новий слот патерна спочатку порожній.</p>
+  <div id="snow-designer"><p class="lab-hint">Увімкни звук, щоб відкрити параметри синтезу.</p></div>
+  <p class="lab-hint">PATTERN A–P перемикається незалежно для кожного каналу; під час гри діє квантування запуску. На пристрої: SAVE → PATTERNS 1–4 / 5–6, кожна ручка керує своїм каналом. SEQ → GEN… → OCT+ створює варіацію. EDIT → сторінки параметрів.</p>
+  <details class="lab-help"><summary>Control All, збереження та керування</summary><p>Позначки ALL визначають канали для Control All. Утримуй GLO та крути K1–K4; Shift-клік фіксує GLO. GLO + SAVE — Temp Save, GLO + HOME — Reload, GLO + OCT− — маска каналу, GLO + OCT+ — Reload одного каналу. Ручки панелі тягни вгору й униз. Temp Save зберігає стан у RAM до перезавантаження; звичайний SAVE зберігає проєкт.</p><p>Патерни зберігають ноти й locks; звук задається окремо для каналу. Канали мають власні filter, drive та insert. Chorus/delay/reverb поки використовують спільні sends. Це прототип; перевірка на фізичному FM-1 ще попереду. <a href="../try/">Базовий Skiff</a> · <a href="../SNOW_PREVIEW.md">Можливості й перевірки</a>.</p></details>
+</section>

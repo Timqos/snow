@@ -56,6 +56,12 @@ static uint32_t pool_alloc_after(uint32_t orig);   /* ((2.0, #34) a copy's numbe
 static uint32_t bank_cur(uint32_t k);
 static uint32_t bank_gen(void);
 static void entry_ui(uint32_t e);
+#if FELUCCA_SNOW
+static void snow_pattern_knob(uint32_t channel,int32_t steps);
+static uint32_t snow_pattern_current(uint32_t channel);
+static int snow_generate(uint32_t channel,int vary);
+static void snow_sequence_poll(void);
+#endif
 static uint32_t pool_len(uint32_t id);         /* (Skiff phase 5) SAVE > PATTERNS, the pool view (bank.c) */
 static uint32_t pool_refs(uint32_t id);
 static void pool_clear(uint32_t id);
@@ -645,7 +651,7 @@ static int page_visible(uint32_t i)
     if (e->oneshot && (PAGES[i].fam == FAM_SCL || id == P_ATK || id == P_EG2_ATK || id == P_VOICE ||
                        id == P_ALLOC))
         return 0;
-    if (e->ownenv && (id == P_ATK || id == P_EG2_ATK))   /* ((Skiff phase 9) ENV 2: where ENV is; (2.0) MOD dims the
+    if (e->ownenv && !FELUCCA_SNOW && (id == P_ATK || id == P_EG2_ATK))   /* ((Skiff phase 9) ENV 2: where ENV is; (2.0) MOD dims the
                                                           * ENV's routes) */
         return 0;
 #if FELUCCA_SLICE
@@ -655,7 +661,7 @@ static int page_visible(uint32_t i)
     if (PAGES[i].graph == GR_SLICES)
         return 0;
 #endif
-    return !(PAGES[i].fam == FAM_EDIT && PAGES[i].id[0] >= P_FM1_ATK &&
+    return FELUCCA_SNOW || !(PAGES[i].fam == FAM_EDIT && PAGES[i].id[0] >= P_FM1_ATK &&
              PAGES[i].id[0] <= P_FM4_LEVEL) || (FELUCCA_FM4 && TSEL->eng_req % NENGINES == ENGI_DIGITAL);
 }
 
@@ -1961,6 +1967,9 @@ static void preset_fill(int16_t *p, const engine_t *e, uint32_t pi)
             p[P_DIST + i] = (int16_t)(pr->fx[i] ? pr->fx[i] - 1 : FX_DEF[i]);
         for (i = 0; i < NELEM(pr->more) && pr->more[i].id; i++)   /* ((Skiff) its LFO, GLIDE, ..: core.h) */
             p[pr->more[i].id] = pr->more[i].v;
+#if FELUCCA_SNOW
+        if (e->render == snow_render) snow_fill(p, pi);
+#endif
     }
 }
 /* preset pi of the engine the track asked for: the sound only (not the steps, not param_kept) */

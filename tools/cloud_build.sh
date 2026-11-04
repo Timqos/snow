@@ -11,7 +11,7 @@ sh build.sh 2>&1 | tee build/firmware-build.log
 # The upstream suite builds and tests both WebAssembly modules as well.
 sh tests/run_tests.sh 2>&1 | tee build/host-tests.log
 python3 tools/cloud_site.py
-# Keep the checked baseline on /try/; publish the new machines separately on /snow/.
+# Keep the checked baseline on /try/; publish the Snow synthesis laboratory separately on /snow/.
 FELUCCA_SNOW=1 sh build.sh 2>&1 | tee build/snow-build.log
 python3 tools/snow_preview.py 2>&1 | tee build/snow-tests.log
 mkdir -p build/site/snow

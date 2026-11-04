@@ -153,6 +153,28 @@ static const param_desc_t TP[P_COUNT] = {
 /* the OP ENV / OP LEVEL values of DIGITAL (ids 61..80): with FELUCCA_FM4 its operator envelopes; without it
  * inert, on no page and in no editor layout, read only when a DIGITAL sound converts (fm4_convert.c). Their labels
  * stay: the editor's library files key parameters by label ("ATK#2" ..), so an old file's values still find them */
+#if FELUCCA_SNOW
+    [SN_ALG] = PE("ALGORITHM", SN_ALGS, 0),
+    [SN_WAVE1] = PE("WAVE 1", SN_WAVES, 0),
+    [SN_WAVE2] = PE("WAVE 2", SN_WAVES, 0),
+    [SN_RATIO] = PD("RATIO 2", F_INT, 1, 127, 32),
+    [SN_NOISE] = PD("NOISE", F_PCT, 0, 127, 0),
+    [SN_TUNE] = PD("TUNE", F_SEMI, -48, 48, 0),
+    [SN_FINE] = PD("FINE", F_INT, -64, 63, 0),
+    [SN_MODE] = PE("ENV MODE", SN_MODES, 1),
+    [SN_PDEC] = PD("PIT DECAY", F_TIME, 0, 127, 28),
+    [SN_PAMT] = PD("PIT AMT", F_SEMI, -48, 48, 0),
+    [SN_FILTER] = PE("FILTER", SN_FILTERS, 1),
+    [SN_RESO] = PD("RESONANCE", F_PCT, 0, 120, 12),
+    [SN_PW] = PD("PULSE W", F_PCT, 1, 126, 64),
+    [SN_SUB] = PD("OSC 3 LVL", F_PCT, 0, 127, 0),
+    [SN_MIX] = PD("BALANCE", F_PCT, 0, 127, 0),
+    [SN_WAVE3] = PE("WAVE 3", SN_WAVES, 0),
+    [SN_RATIO3] = PD("RATIO 3", F_INT, 1, 127, 8),
+    [SN_FMDEC] = PD("FM DECAY", F_TIME, 0, 127, 0),
+    [SN_FB_ROUTE] = PE("FB ROUTE", SN_FB_NAMES, 0),
+    [SN_KEYTRACK] = PD("KEYTRACK", F_PCT, 0, 127, 127),
+#else
 #define FMOP(k) [P_FM##k##_ATK] = PD("ATK", F_TIME, 0, 127, 0), \
                 [P_FM##k##_DEC] = PD("DEC", F_TIME, 0, 127, 0), \
                 [P_FM##k##_SUS] = PD("SUS", F_PCT, 0, 127, 127), \
@@ -160,13 +182,25 @@ static const param_desc_t TP[P_COUNT] = {
                 [P_FM##k##_LEVEL] = PD("LVL", F_PCT, 0, 127, 127)
     FMOP(1), FMOP(2), FMOP(3), FMOP(4),
 #undef FMOP
+#endif
     [P_CHRD] = PE("CHORD", N_CHRD, 0),
     [P_VOIC] = PE("VOICING", N_VOIC, 0),
 /* the DRUM engine's lane levels (eng_drum.c, #97): 100 % = the kit as designed (the sound before 1.1) */
+#if FELUCCA_SNOW
+    [SN_G_DENS] = PD("DENSITY", F_INT, 0, 100, 50),
+    [SN_G_SYNC] = PD("SYNCOPATE", F_PCT, 0, 100, 30),
+    [SN_G_SEED] = PD("SEED", F_INT, 0, 127, 1),
+    [SN_G_SPAN] = PD("SPAN", F_INT, 1, 24, 7),
+    [SN_G_CONTOUR] = PE("CONTOUR", SN_CONTOUR, 0),
+    [SN_G_ACCENT] = PD("ACCENT", F_PCT, 0, 100, 30),
+    [SN_G_KIND] = PE("GENERATE", SN_GEN_KIND, 2),
+    [SN_G_LIVE] = PE("EVOLVE", SN_LIVE, 0),
+#else
 #define LANE(k, l) [P_LN0 + (k)] = PD(l, F_PCT, 0, 127, 127)
     LANE(0, "KICK"), LANE(1, "SNARE"), LANE(2, "CLAP"), LANE(3, "CL HAT"),
     LANE(4, "OP HAT"), LANE(5, "TOM"), LANE(6, "RIM"), LANE(7, "BELL"),
 #undef LANE
+#endif
     [P_DIR] = PE("DIR", N_DIR, 0),                 /* (Skiff) the play direction */
     [P_DKSRC] = PE("BY", N_DKSRC, 0),              /* (Skiff) ducking (duck.c): under that track's hits, */
     [P_DKAMT] = PD("DEPTH", F_PCT, 0, 127, 96),    /* this far down (100 %: silent), */
@@ -189,13 +223,24 @@ static const param_desc_t TP[P_COUNT] = {
     [P_ESYNC] = PE("ENV SYNC", N_ONOFF, 0),        /* (1.3) ENV SYNC: OFF, ATK DEC REL in ms, as before ((2.0) on LFO 2:
                                                     * its whole name) */
 /* (Skiff phase 9) the DRUM engine's lanes, each moved from its design (eng_drum.c drum_render): 64 = as designed */
-#define LANE2(k) [P_LTUNE0 + (k)] = PD("TUNE", F_ST16, 0, 127, 64), [P_LDECAY0 + (k)] = PD("DECAY", F_BIPCT, -64, 63, 0)
+#define LANE2(k) [P_LTUNE0 + (k)] = PD(FELUCCA_SNOW && (k)==0 ? "BASE NOTE" : "TUNE", FELUCCA_SNOW && (k)==0 ? F_NOTE : F_ST16, 0, 127, FELUCCA_SNOW && (k)==0 ? 60 : 64), [P_LDECAY0 + (k)] = PD("DECAY", F_BIPCT, -64, 63, 0)
     LANE2(0), LANE2(1), LANE2(2), LANE2(3), LANE2(4), LANE2(5), LANE2(6), LANE2(7),
 #undef LANE2
 /* (2.0, #36) DRUM's and DRUM-X's lanes, each panned as the track's PAN (voice.c lpan_render): C as before */
+#if FELUCCA_SNOW
+    [SN_L2_RATE] = PD("RATE 2", F_LFOHZ, 0, 127, 55),
+    [SN_L2_WAVE] = PE("WAVE 2", N_LWAVE, 0),
+    [SN_L2_DEPTH] = PD("DEPTH 2", F_BIPCT, -64, 63, 0),
+    [SN_L2_DEST] = PE("DEST 2", SN_L2_DST, 0),
+    [SN_L2_SYNC] = PE("SYNC 2", N_LSYNC, 0),
+    [SN_L2_PHASE] = PD("PHASE 2", F_INT, 0, 127, 0),
+    [SN_L2_TRIG] = PE("TRIG 2", N_LTRIG, 1),
+    [SN_L2_FADE] = PD("FADE 2", F_TIME, 0, 127, 0),
+#else
 #define LANE3(k) [P_LPAN0 + (k)] = PD("PAN", F_BIPCT, -64, 63, 0)
     LANE3(0), LANE3(1), LANE3(2), LANE3(3), LANE3(4), LANE3(5), LANE3(6), LANE3(7),
 #undef LANE3
+#endif
     [P_FOLLOW] = PE("FOLLOW", N_DKSRC, 0),         /* (2.1) chord follow (follow.c): OFF, as before */
     [P_FMODE] = PE("MODE", N_FMODE, 0),
     [P_FNOTE] = PE("NOTE", N_FNOTE, 0),
@@ -256,6 +301,9 @@ static const param_desc_t *track_desc(const track_t *t, uint32_t id)
         return ins_desc(t->p[P_ITYPE], id - P_IA);
     if (t->p[P_ESYNC] && (id == P_ATK || id == P_DEC || id == P_REL))   /* ((1.3) ENV SYNC: note values) */
         return &ESYNC_DESC[id == P_ATK ? 0 : id == P_DEC ? 1 : 2];
+#if FELUCCA_SNOW
+    if (id == SN_G_BASE) { static const param_desc_t d={"BASE NOTE",0,0,127,60,F_NOTE,0}; return &d; }
+#endif
     if (id >= P_E0 && id <= P_E7) {                   /* the engine asked for (t->engine follows after a fade) */
         const engine_t *e = ENGINES[eng_idx(t->eng_req)];
         const param_desc_t *d = e->desc ? e->desc(t, id - P_E0) : 0;   /* a mode-dependent label / names */
@@ -302,6 +350,9 @@ static int32_t param_fit(const param_desc_t *d, int32_t v)
  * (LEN, DIV, SWING, GATE) and the SLICER insert, which chops whatever the track plays in time with its sequencer */
 static int param_kept(uint32_t i)
 {
+#if FELUCCA_SNOW
+    if ((i>=SN_G_DENS && i<=SN_G_LIVE) || i==SN_G_BASE) return 1;
+#endif
     return i == P_LEVEL || i == P_PAN || i == P_MUTE || (i >= P_AMODE && i <= P_SGATE) ||
            (i >= P_SLCR && i <= P_SLDEPTH) || i == P_CHRD || i == P_VOIC || i == P_DIR ||   /* ((Skiff) DIR: the pattern's; */
            (i >= P_DKSRC && i <= P_DKREL) ||         /* the ducking: the mix's; */
@@ -500,7 +551,7 @@ enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_
        GR_INS,                     /* (Skiff 1.3) FX > INSERT: its TYPE's transfer or sweep (ui_pgraph.c graph_insert) */
        GR_SMIX,                    /* (Skiff, #21) EDIT > SAMPLES: a user sample's LEVEL, REVERB, DELAY (ui.c smx_zone) */
        GR_LMIX,                    /* (2.0, #36, the user's pick 1A) EDIT > LANE MIX: a kit's lane levels and pans */
-       GR_FOLLOW };                /* (2.1) SCL > FOLLOW: the chord it follows, as CHORD's (ui_graph.c graph_follow) */
+       GR_FOLLOW, GR_SNOW_PAT };                /* (2.1) SCL > FOLLOW: the chord it follows, as CHORD's (ui_graph.c graph_follow) */
 
 typedef struct {
     const char *title;
@@ -516,7 +567,7 @@ static const page_t PAGES[] = {
     {"ENV", FAM_ENV, SC_TRACK, GR_ADSR, {P_ATK, P_DEC, P_SUS, P_REL}},
     {"ENV 2", FAM_ENV, SC_TRACK, GR_ADSR, {P_EG2_ATK, P_EG2_DEC, P_EG2_SUS, P_EG2_REL}},   /* (Skiff phase 9) MOD's ENV2 */
     {"LFO", FAM_LFO, SC_TRACK, GR_LFO, {P_LRATE, P_LWAVE, P_LPHASE, P_LFADE}},
-    {"LFO 2", FAM_LFO, SC_TRACK, GR_LFO, {P_LSYNC, P_LTRIG, P_LPOL, P_ESYNC}},   /* (1.3, #16) SYNC TRIG POLARITY; (2.0)
+    {FELUCCA_SNOW ? "LFO SYNC" : "LFO 2", FAM_LFO, SC_TRACK, GR_LFO, {P_LSYNC, P_LTRIG, P_LPOL, P_ESYNC}},   /* (1.3, #16) SYNC TRIG POLARITY; (2.0)
                                                                                * ENV SYNC, ENV DEST's of before */
     {"MOD", FAM_LFO, SC_TRACK, GR_MOD, {0xFF, P_M1SRC, P_M1DST, P_M1AMT}},   /* KNOB 1: the route (mod_ui_route; (2.0,
                                                                          * D 1A) LFO DEST and ENV DEST are its first 7) */
@@ -543,11 +594,29 @@ static const page_t PAGES[] = {
     {"SAMPLES", FAM_EDIT, SC_GLOBAL, GR_SMIX, {0xFF, 0xFF, 0xFF, 0xFF}},   /* (#21) SAMPLE on a USR set only: KNOB 1 the
                                                                          * sample, 2..4 its LEVEL REVERB DELAY (page_desc;
                                                                          * SC_GLOBAL: no lock, no automation) */
+#if FELUCCA_SNOW
+    {"SYNTH",FAM_EDIT,SC_TRACK,GR_NONE,{SN_ALG,SN_WAVE1,SN_WAVE2,SN_WAVE3}},
+    {"OSCILLATORS",FAM_EDIT,SC_TRACK,GR_NONE,{SN_RATIO,SN_RATIO3,SN_MIX,SN_PW}},
+    {"TUNING",FAM_EDIT,SC_TRACK,GR_NONE,{SN_TUNE,SN_FINE,SN_KEYTRACK,P_GLIDE}},
+    {"AMP ADSR",FAM_EDIT,SC_TRACK,GR_ADSR,{P_ATK,P_DEC,P_SUS,P_REL}},
+    {"PITCH ENV",FAM_EDIT,SC_TRACK,GR_NONE,{SN_PAMT,SN_PDEC,SN_MODE,P_E2}},
+    {"FILTER",FAM_EDIT,SC_TRACK,GR_NONE,{P_E6,SN_RESO,SN_FILTER,P_ED_FLT}},
+    {"COLOUR",FAM_EDIT,SC_TRACK,GR_NONE,{SN_NOISE,SN_SUB,SN_FMDEC,SN_FB_ROUTE}},
+    {"LFO 1",FAM_EDIT,SC_TRACK,GR_LFO,{P_LRATE,P_LWAVE,P_LD_SHP,P_LD_FLT}},
+    {"LFO 1 TIME",FAM_EDIT,SC_TRACK,GR_NONE,{P_LPHASE,P_LFADE,P_LSYNC,P_LTRIG}},
+    {"LFO 2",FAM_EDIT,SC_TRACK,GR_NONE,{SN_L2_RATE,SN_L2_WAVE,SN_L2_DEPTH,SN_L2_DEST}},
+    {"LFO 2 TIME",FAM_EDIT,SC_TRACK,GR_NONE,{SN_L2_PHASE,SN_L2_FADE,SN_L2_SYNC,SN_L2_TRIG}},
+    {"ENV 2",FAM_EDIT,SC_TRACK,GR_ADSR,{P_EG2_ATK,P_EG2_DEC,P_EG2_SUS,P_EG2_REL}},
+    {"ENV ROUTE",FAM_EDIT,SC_TRACK,GR_NONE,{P_ED_PIT,P_ED_FLT,P_ED_SHP,P_LD_AMP}},
+    {"INSERT FX",FAM_EDIT,SC_TRACK,GR_INS,{P_ITYPE,P_IA,P_IB,P_IC}},
+    {"FX MIX",FAM_EDIT,SC_TRACK,GR_NONE,{P_IMIX,P_DIST,P_DTYPE,P_DTONE}},
+#else
     {"OP1 ENV", FAM_EDIT, SC_TRACK, GR_ADSR, {P_FM1_ATK, P_FM1_DEC, P_FM1_SUS, P_FM1_REL}},
     {"OP2 ENV", FAM_EDIT, SC_TRACK, GR_ADSR, {P_FM2_ATK, P_FM2_DEC, P_FM2_SUS, P_FM2_REL}},
     {"OP3 ENV", FAM_EDIT, SC_TRACK, GR_ADSR, {P_FM3_ATK, P_FM3_DEC, P_FM3_SUS, P_FM3_REL}},
     {"OP4 ENV", FAM_EDIT, SC_TRACK, GR_ADSR, {P_FM4_ATK, P_FM4_DEC, P_FM4_SUS, P_FM4_REL}},
     {"OP LEVEL", FAM_EDIT, SC_TRACK, GR_NONE, {P_FM1_LEVEL, P_FM2_LEVEL, P_FM3_LEVEL, P_FM4_LEVEL}},
+#endif
     {"VOICE", FAM_EDIT, SC_TRACK, GR_VOICE, {P_VOICE, P_GLIDE, P_GLMODE, P_PRIO}},
     {"VOICE 2", FAM_EDIT, SC_TRACK, GR_VOICE2, {P_ALLOC, P_DETUNE, P_SPRD, 0xFF}},   /* ((U3, R4) PAN MUTE: MIXER's;
                                                                                      * (1.3) SPREAD) */
@@ -556,6 +625,10 @@ static const page_t PAGES[] = {
     {"REVERB", FAM_GLO, SC_GLOBAL, GR_REVERB, {G_RTYPE, G_RSIZE, G_RDAMP, 0xFF}},   /* TYPE: ROOM / SPRING / HALL */
     {"CHORUS", FAM_GLO, SC_GLOBAL, GR_CHORUS, {G_CRATE, G_CDEPTH, G_CMODE, G_CFDBK}},   /* ((phase 9) MODE, FEEDBACK) */
     {"GLOBAL", FAM_GLO, SC_GLOBAL, GR_GLOBAL, {G_BPM, G_SWING, 0xFF, 0xFF}},   /* ((U3, R8) CLK TUNE: the MENU's) */
+#if FELUCCA_SNOW
+    {"PATTERNS 1-4",FAM_SAVE,SC_GLOBAL,GR_SNOW_PAT,{0,1,2,3}},
+    {"PATTERNS 5-6",FAM_SAVE,SC_GLOBAL,GR_SNOW_PAT,{4,5,0xFF,0xFF}},
+#endif
     {"PRESETS", FAM_SAVE, SC_GLOBAL, GR_BROWSE, {0xFF, 0xFF, 0xFF, 0xFF}},   /* browser: PRESETS knob / KNOB 1 */
     {"USER", FAM_SAVE, SC_GLOBAL, GR_USER, {0xFF, 0xFF, 0xFF, 0xFF}},       /* user presets: SLOT LOAD ERASE SAVE */
     {"PATTERNS", FAM_SAVE, SC_GLOBAL, GR_BANK, {0xFF, 0xFF, 0xFF, 0xFF}},   /* (Skiff phase 5) the pool: PATTERN LEN USED CLEAR */
@@ -567,6 +640,11 @@ static const page_t PAGES[] = {
                                                          * the grid, LANE HIT ACC VELOCITY); PRESETS the step */
     {"FEEL", FAM_SEQ, SC_STEP, GR_FEEL, {0xFF, 0xFF, 0xFF, 0xFF}},
     {"PATTERN", FAM_SEQ, SC_TRACK, GR_STEPS, {P_SLEN, P_SDIV, P_SSWING, P_SGATE}},   /* (2.0) PRESETS: the track's DIR */
+#if FELUCCA_SNOW
+    {"GEN RHYTHM",FAM_SEQ,SC_TRACK,GR_NONE,{SN_G_DENS,SN_G_SYNC,SN_G_SEED,SN_G_KIND}},
+    {"GEN MELODY",FAM_SEQ,SC_TRACK,GR_NONE,{SN_G_BASE,SN_G_SPAN,SN_G_CONTOUR,SN_G_ACCENT}},
+    {"GEN LIVE",FAM_SEQ,SC_TRACK,GR_NONE,{SN_G_LIVE,P_SLEN,P_SCALE,P_ROOT}},
+#endif
     {"AUTOMATION", FAM_SEQ, SC_TRACK, GR_EVENTS, {0xFF, 0xFF, 0xFF, 0xFF}},   /* 1.1.5's AUTO LIST: the locks and events */
     {"SONG", FAM_SEQ, SC_TRACK, GR_SONG, {0xFF, 0xFF, 0xFF, 0xFF}},   /* (Skiff phase 5) the lists (ui_input.c song_knob) */
 };
