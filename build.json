@@ -1,0 +1,9 @@
+{
+  "project": "Snow",
+  "stage": "Skiff baseline",
+  "baseline_version": "2.2",
+  "source_commit": "815358c56ce9307ed1cb4085351cd0fd94c15ee4",
+  "source_dirty": false,
+  "package": "firmware/skiff-2.2.fwsc",
+  "sha256": "1caf971e6eae8f9bb9b1391c98bde62a2b1c49cda2ece7b0c25808db6b7e489e"
+}

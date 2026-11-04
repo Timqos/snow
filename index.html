@@ -1,0 +1,74 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Snow — власна шестидоріжкова FM-прошивка для M-VAVE FM-1. Браузерна лабораторія, збірки й план розробки.">
+  <title>Snow · FM-1</title>
+  <style>
+    @font-face { font-family: Panel; src: url("try/fonts/DotGothic16-subset.woff") format("woff"); font-display: swap; }
+    :root { color-scheme: dark; --bg: #111310; --fg: #e9eadf; --muted: #a3a697; --line: #3d4236; --accent: #ecbd60; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.65 system-ui, sans-serif; }
+    main { max-width: 940px; margin: auto; padding: 56px 24px; }
+    header { display: flex; justify-content: space-between; gap: 20px; align-items: center; border-bottom: 1px solid var(--line); padding-bottom: 18px; }
+    .wordmark { font: 28px Panel, monospace; letter-spacing: .13em; }
+    .status, .eyebrow { color: var(--accent); font: 12px/1.7 monospace; letter-spacing: .08em; }
+    .intro { padding: 56px 0 32px; }
+    h1 { margin: 12px 0 20px; max-width: 750px; font-size: clamp(34px, 6vw, 56px); line-height: 1.15; letter-spacing: -.035em; }
+    p { max-width: 690px; }
+    .muted, footer { color: var(--muted); }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 28px 0; }
+    a { color: inherit; text-underline-offset: 4px; }
+    .button { display: inline-block; border: 1px solid var(--line); padding: 12px 20px; text-decoration: none; font-weight: 600; }
+    .primary { background: var(--accent); color: #15160f; border-color: var(--accent); }
+    a:focus-visible { outline: 3px solid var(--accent); outline-offset: 5px; }
+    .tracks { display: grid; grid-template-columns: repeat(6, 1fr); border: 1px solid var(--line); margin: 28px 0 42px; }
+    .track { padding: 16px 10px; border-right: 1px solid var(--line); font: 18px Panel, monospace; text-align: center; }
+    .track:last-child { border: 0; }
+    h2 { font-size: 21px; margin-top: 30px; }
+    .note { padding: 20px 24px; border-left: 2px solid var(--accent); background: #1a1d17; }
+    .note p { margin: 0; }
+    footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 13px; }
+    footer a { display: inline-block; margin-right: 18px; }
+    code { font-size: 12px; }
+    @media (max-width: 540px) { main { padding: 24px 18px; } header { align-items: start; } .intro { padding-top: 36px; } .tracks { grid-template-columns: repeat(3, 1fr); } .track:nth-child(3) { border-right: 0; } .track:nth-child(-n+3) { border-bottom: 1px solid var(--line); } }
+  </style>
+</head>
+<body>
+<main>
+  <header><span class="wordmark">SNOW</span><span class="status">FM-1 / РОЗРОБКА<br>ЕТАП 01 — БАЗОВА ЗБІРКА</span></header>
+  <section class="intro" aria-labelledby="title">
+    <div class="eyebrow">ШІСТЬ ДОРІЖОК. ВЛАСНИЙ ХАРАКТЕР.</div>
+    <h1 id="title">Майбутня FM-groovebox.<br>Вже можна спробувати основу.</h1>
+    <p class="muted">Розробляємо прошивку для M-VAVE FM-1 з шістьма спеціалізованими FM-інструментами, parameter locks, Control All та миттєвим поверненням до збереженого стану.</p>
+    <div class="actions">
+      <a class="button primary" href="try/">Запустити симулятор →</a>
+      <a class="button" href="https://github.com/Timqos/snow">Код і прогрес</a>
+    </div>
+    <div class="note"><p><strong>Зараз тут базовий Skiff 2.2.</strong> Симулятор запускає його код зі звуком, екраном, кнопками й ручками. Власні FM-движки Snow та нове керування ще розробляються.</p></div>
+  </section>
+  <section aria-labelledby="plan">
+    <h2 id="plan">Наші шість інструментів</h2>
+    <div class="tracks" aria-label="Заплановані FM-інструменти">
+      <span class="track">KICK</span><span class="track">SNARE</span><span class="track">HAT</span><span class="track">PERC</span><span class="track">BASS</span><span class="track">CHORD</span>
+    </div>
+    <p>Без семплів. Глибоке редагування, два LFO на доріжку, окремі ефекти та секвенсор до 64 кроків. <a href="SNOW_SPEC.md">Повна погоджена концепція</a>.</p>
+    <h2>Як спробувати</h2>
+    <p class="muted">Відкрийте симулятор і натисніть <span lang="en">Switch on</span>. Клавіші можна натискати мишею або клавіатурою, ручки — тягнути вгору й униз. Збереження залишаються в цьому браузері. Встановлювати програми на комп’ютер не потрібно.</p>
+    <h2>Збірка для FM-1</h2>
+    <p class="muted">Це збірка вихідної прошивки Skiff для перевірки нашого процесу розробки. Робота в браузері не підтверджує продуктивність на фізичному FM-1.</p>
+    <div class="actions">
+      <a class="button" href="firmware/skiff-2.2.fwsc" download>Завантажити базову .fwsc</a>
+      <a class="button" href="firmware/SHA256SUMS">SHA-256</a>
+    </div>
+  </section>
+  <footer>
+    <p>Основа: <a href="https://github.com/illuminus5/skiff">Skiff / illuminus5</a> та Felucca / Hügelton Instruments. Авторство й ліцензії збережено.</p>
+    <a href="firmware/LICENSE">GPL-3.0</a><a href="firmware/LICENSING.md">Компоненти й автори</a><a href="build.json">Дані збірки</a>
+    <p>Skiff 2.2 · <code>815358c56ce9</code> · Snow не пов’язаний з M-VAVE або Elektron.</p>
+  </footer>
+</main>
+</body>
+</html>
