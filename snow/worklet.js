@@ -71,9 +71,15 @@ if (typeof registerProcessor === "function") {
       else if (m.type === "enc") ex.web_enc(m.role, m.n | 0);
       else if (m.type === "master") ex.web_master(m.value | 0);
       else if (m.type === "midi") ex.web_midi(m.data[0] | 0, m.data[1] | 0, m.data[2] | 0);
-      else if (m.type === "snow-demo" && ex.web_snow_demo) ex.web_snow_demo();
+      else if (m.type === "snow-demo" && ex.web_snow_demo) {
+        ex.web_snow_demo();
+        this.port.postMessage({type:"snow-schema",schema:this.snowSchema()});
+      }
       else if (m.type === "snow-save" && ex.web_snow_save) ex.web_snow_save();
-      else if (m.type === "snow-reload" && ex.web_snow_reload) ex.web_snow_reload(m.mask ?? 63);
+      else if (m.type === "snow-reload" && ex.web_snow_reload) {
+        ex.web_snow_reload(m.mask ?? 63);
+        this.port.postMessage({type:"snow-schema",schema:this.snowSchema()});
+      }
       else if (m.type === "snow-track" && ex.web_snow_select) ex.web_snow_select(m.track >>> 0);
       else if (m.type === "snow-mask" && ex.web_snow_mask) ex.web_snow_mask(m.mask >>> 0);
       else if (m.type === "snow-schema" && ex.web_snow_param_count) this.port.postMessage({type:"snow-schema",schema:this.snowSchema()});

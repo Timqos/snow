@@ -14,9 +14,9 @@
   "snow_build": {
     "stage": "Snow open synthesis prototype",
     "version": "v0.2-snow",
-    "source_commit": "8cc25c78e109a42450c5299e78df4a53d7c44ce6",
+    "source_commit": "2c6f47277d294004901e872ff6540ed12c1d125e",
     "source_dirty": false,
     "package_sha256": "a645c44917213f8c4ff6e2b8957e3af7ce8b77efeedc8562ac03c13eb680df3f"
   },
-  "website_source_commit": "8cc25c78e109a42450c5299e78df4a53d7c44ce6"
+  "website_source_commit": "2c6f47277d294004901e872ff6540ed12c1d125e"
 }

@@ -163,7 +163,7 @@ angle.MASTER = -135 + 270 * masterValue / 1023;
 const knobs = [], buttons = [], keys = [];
 const btnBy = new Map(), keyBy = new Map();                   // pointer / key code -> label bit or key
 const send = (m) => { if (node) node.port.postMessage(m); };
-let snowSelected=0, snowSchema=null, snowControls=[];
+let snowSelected=0, snowSchema=null, snowControls=[], snowDescriptorKey='';
 const snowById=(id)=>document.getElementById(id);
 const snowPost=(type,data={})=>send({type,track:snowSelected,...data});
 for(let k=0;k<6;k++){
@@ -189,7 +189,7 @@ snowById('snow-vary').onclick=()=>{snowPost('snow-generate',{vary:true});snowByI
 snowById('snow-preset').onchange=(e)=>{if(e.target.value!==''){snowPost('snow-preset',{preset:+e.target.value});snowById('snow-notice').textContent=`CH ${snowSelected+1}: ${e.target.selectedOptions[0].textContent}`;e.target.value='';}};
 function snowDesigner(schema){
   if(!schema)return;
-  snowSchema=schema;
+  snowSchema=schema;snowDescriptorKey='';
   const host=snowById('snow-designer');
   const open=new Set([...host.querySelectorAll('details[open]')].map(d=>d.dataset.group));
   const initial=!snowControls.length;host.replaceChildren();snowControls=[];
@@ -215,6 +215,12 @@ function snowDesigner(schema){
 }
 function snowFrame(state){
   if(state.selected!==snowSelected){snowSelected=state.selected;snowPost('snow-schema');}
+  // Insert A/B/C labels and ranges also follow changes made on the hardware panel.
+  if(state.values&&snowSchema){
+    const key=snowSchema.params.map((p,i)=>p.group==='INSERT / SEND FX'&&p.name==='TYPE'?state.values[i]:'').join(',');
+    if(snowDescriptorKey&&key!==snowDescriptorKey)snowPost('snow-schema');
+    snowDescriptorKey=key;
+  }
   snowById('snow-selection').textContent=`CH ${snowSelected+1} / SOUND DESIGN`;
   for(const b of document.querySelectorAll('[data-track]'))b.setAttribute('aria-pressed',String(+b.dataset.track===snowSelected));
   for(const c of document.querySelectorAll('[data-mask]'))c.checked=!!(state.mask&(1<<+c.dataset.mask));
@@ -486,8 +492,8 @@ async function switchOn() {
   try {
     const ac = new AudioContext({ sampleRate: 44100, latencyHint: "interactive" });
     const [wasm] = await Promise.all([
-      fetch("felucca.wasm?v=02").then((r) => { if (!r.ok) throw new Error(`felucca.wasm: ${r.status}`); return r.arrayBuffer(); }),
-      ac.audioWorklet.addModule("worklet.js?v=02")]);
+      fetch("felucca.wasm?v=ab869f82a560").then((r) => { if (!r.ok) throw new Error(`felucca.wasm: ${r.status}`); return r.arrayBuffer(); }),
+      ac.audioWorklet.addModule("worklet.js?v=561c487f62be")]);
     node = new AudioWorkletNode(ac, "felucca", { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
     node.connect(ac.destination);
     let warned = false;
