@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Snow 0.6.1 — six instruments, one Snow identity
+# Snow 0.6.2 — six instruments, one Snow identity
 
-[Open the simulator](https://timqos.github.io/snow/snow/?v=061) ·
+[Open the simulator](https://timqos.github.io/snow/snow/?v=062) ·
 [Install & back up](https://timqos.github.io/snow/snow/install/)
 
 Snow is custom firmware for the M-VAVE FM-1. Its browser simulator runs the
@@ -42,6 +42,25 @@ have listened to every possible sound.
 Notes, rhythm, locks, generator controls, mixer, transport and other channels
 are preserved. Undo restores the preceding sound. User-written automation or
 Control All offsets remain part of the performance and can still alter it.
+
+## Focused LFO and FX randomisation
+
+OCT+ on the first LFO page randomises 35 modulation controls across both LFOs,
+sync/phase/fade/depth and the four MOD slots. LFO 2 and depth pages are available
+inside the LFO menu as well as EDIT. The shared MOD page includes the fixed
+envelope routing amounts; these also receive small bounded values. Amp ADSR,
+oscillators, base tuning, FX settings and sequences are retained.
+
+OCT+ on the first FX page randomises all 40 controls across its pages, including
+Tape/Bitcrush, inserts, slicer and ducking. Sends/feedback are bounded, one gentle
+colour processor is active at a time, and slicer/duck depth cannot fully mute the
+part. A native undo flag restores those two effects along with the sound FX while
+leaving mixer/sequence controls alone.
+
+Both commands use fresh generated combinations, change only the selected channel
+and retain steps/locks and transport. Hold SAVE for undo. OCT+ on later pages,
+held-button layers and modifier combinations retain their usual actions. The
+first-page footer advertises the action and keeps it clear of graph updates.
 
 ## Phrase generation and performance
 

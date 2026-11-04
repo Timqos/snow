@@ -2113,9 +2113,10 @@ static void ui_input(void)
     if (snow_buttons(pressed)) return;
     snow_sequence_poll();
     if(!ui.home&&!ui.menu&&!ui.confirm&&!ui.layer&&!name_on()&&!ui.ly&&!ui.shift&&
-       cur_page()==&PAGES[page_first(FAM_EDIT)]&&!(fm1_in.buttons&~(1u<<panel.btn[B_OCTUP]))&&
+       snow_random_first_page(cur_page())&&!(fm1_in.buttons&~(1u<<panel.btn[B_OCTUP]))&&
        (pressed&(1u<<panel.btn[B_OCTUP]))){
-        (void)snow_random_sound(song.sel);ui_message("RANDOM SOUND");return;
+        uint32_t family=cur_page()->fam;
+        (void)snow_random_section(song.sel,family);ui_message(family==FAM_LFO?"RANDOM LFO":family==FAM_FX?"RANDOM FX":"RANDOM SOUND");return;
     }
 
     if(!ui.home&&!ui.menu&&!ui.confirm&&!ui.layer&&!((fm1_in.buttons>>panel.btn[B_GLO])&1u)&&!((fm1_in.buttons>>panel.btn[B_SEQ])&1u)&&snow_gen_page(cur_page())&&

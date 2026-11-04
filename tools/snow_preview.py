@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "build/snow-preview"
-RELEASE = "0.6.1"
+RELEASE = "0.6.2"
 VERSION = f"v{RELEASE}-snow"
 
 

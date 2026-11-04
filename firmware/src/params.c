@@ -618,6 +618,11 @@ static const page_t PAGES[] = {
                                                                                * ENV SYNC, ENV DEST's of before */
     {"MOD", FAM_LFO, SC_TRACK, GR_MOD, {0xFF, P_M1SRC, P_M1DST, P_M1AMT}},   /* KNOB 1: the route (mod_ui_route; (2.0,
                                                                          * D 1A) LFO DEST and ENV DEST are its first 7) */
+#if FELUCCA_SNOW
+    {"LFO DEPTH",FAM_LFO,SC_TRACK,GR_NONE,{P_LD_PIT,P_LD_FLT,P_LD_SHP,P_LD_AMP}},
+    {"LFO 2",FAM_LFO,SC_TRACK,GR_NONE,{SN_L2_RATE,SN_L2_WAVE,SN_L2_DEPTH,SN_L2_DEST}},
+    {"LFO 2 TIME",FAM_LFO,SC_TRACK,GR_NONE,{SN_L2_PHASE,SN_L2_FADE,SN_L2_SYNC,SN_L2_TRIG}},
+#endif
     {"FX", FAM_FX, SC_TRACK, GR_FX, {P_DIST, P_CHOR, P_DLY, P_REV}},
 #if FELUCCA_SNOW
     {"CH DELAY",FAM_FX,SC_TRACK,GR_NONE,{P_DLY,SN_DTIME,SN_DSYNC,SN_DFB}},

@@ -569,11 +569,14 @@ static uint32_t graph_y(void) { return large_kind() == LK_TALL ? LG_Y_GRAPH : Y_
  * taller (ADSR and LFO grow into it, the fixed layouts sit centred: graph_pad) */
 #define FOOT_LINE 16u
 static uint32_t foot_less(void) { return FOOT_LINE; }
+#if FELUCCA_SNOW
+static int snow_random_first_page(const page_t *p);
+#endif
 static uint32_t graph_h(void)
 {
 #if FELUCCA_SNOW
     const page_t *p=cur_page();
-    if(!ui.home&&!ui.layer&&((p->fam==FAM_SEQ&&p->graph==GR_NONE)||(p->fam==FAM_EDIT&&p->id[0]==P_E0)))
+    if(!ui.home&&!ui.layer&&((p->fam==FAM_SEQ&&p->graph==GR_NONE)||snow_random_first_page(p)))
         return 202u-graph_y(); /* keep the action hints clear of the graph blit */
 #endif
     return (large_kind() == LK_TALL ? LG_H_GRAPH : H_GRAPH) + foot_less();
@@ -735,6 +738,12 @@ static uint32_t page_first(uint32_t fam)
             return i;
     return 0;
 }
+#if FELUCCA_SNOW
+static int snow_random_first_page(const page_t *p)
+{
+    return (p->fam==FAM_EDIT||p->fam==FAM_LFO||p->fam==FAM_FX)&&p==&PAGES[page_first(p->fam)];
+}
+#endif
 /* (Skiff U3, N3, N5) a family's first page the track has; NPAGES: none */
 static uint32_t page_vis_first(uint32_t fam)
 {
@@ -1366,7 +1375,7 @@ static int seq_is_empty(const track_t *t)
  * takes the copy too (UNDO_MOT: SAVE held puts the track's motion back, the sound and the steps stay; motion_undo_take).
  * A sound load keeps the track's motion on the parameters every engine has (load_end, motion.c motion_sound_loaded);
  * a pattern load drops it all (the steps it was on are gone) */
-enum { UNDO_SOUND = 1, UNDO_PAT = 2, UNDO_MOT = 4, UNDO_KIT = 8 };   /* (UNDO_KIT, Skiff phase 7: INIT on DRUM-X,
+enum { UNDO_SOUND = 1, UNDO_PAT = 2, UNDO_MOT = 4, UNDO_KIT = 8, UNDO_FX = 16 };   /* (UNDO_KIT, Skiff phase 7: INIT on DRUM-X,
                                                                      * the project's kit: sound_init) */
 typedef struct {
     uint8_t trk;                 /* track + 1, 0 = nothing to undo */
@@ -1779,7 +1788,11 @@ static int undo_swap(undo_t *c)
         c->preset = pr;
         c->user = u;
         for (i = 0; i < P_COUNT; i++)
-            if (!param_kept(i)) {
+            if (!param_kept(i)
+#if FELUCCA_SNOW
+                || ((c->what & UNDO_FX) && ((i>=P_SLCR&&i<=P_SLDEPTH)||(i>=P_DKSRC&&i<=P_DKREL)))
+#endif
+                ) {
                 int16_t v = t->p[i];
                 t->p[i] = c->p[i];
                 c->p[i] = v;

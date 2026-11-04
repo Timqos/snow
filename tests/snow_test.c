@@ -288,6 +288,45 @@ static void random_sound_tests(void)
     ui.page++;ui.force=1;advance(80);memcpy(before,trk[0].p,sizeof before);tap(B_OCTUP);assert(!memcmp(before,trk[0].p,sizeof before));
     puts("Random EDIT: all exposed parameters, selected channel only, bounds, sequence/locks intact, undo, physical OCT+ passed");
 }
+static void section_random_tests(void)
+{
+    seq_stop();memset(&motion,0,sizeof motion);memset(snow_offset,0,sizeof snow_offset);
+    static const uint32_t families[]={FAM_LFO,FAM_FX};
+    for(uint32_t f=0;f<2;f++)for(uint32_t k=0;k<NTRK;k++){
+        uint32_t family=families[f],mask[(P_COUNT+31u)/32u],count=0;sel_set(k);snow_family_mask(family,mask);
+        int16_t low[P_COUNT],high[P_COUNT];for(uint32_t id=0;id<P_COUNT;id++){low[id]=32767;high[id]=-32768;count+=(mask[id/32u]>>(id%32u))&1u;}
+        assert(count>=30);assert(!((mask[P_LEVEL/32u]>>(P_LEVEL%32u))&1u));assert(!((mask[SN_TUNE/32u]>>(SN_TUNE%32u))&1u));
+        motion_set_lock(&trk[k],5,P_E0,33);motion_set_lock(&trk[k],7,P_LRATE,53);motion_store_t locks=motion;
+        int16_t baseline[NTRK][P_COUNT];step_t steps[NTRK][NSTEP];
+        for(uint32_t t=0;t<NTRK;t++){memcpy(baseline[t],trk[t].p,sizeof baseline[t]);memcpy(steps[t],trk[t].step,sizeof steps[t]);}
+        for(uint32_t n=0;n<96;n++){
+            int16_t before[P_COUNT];memcpy(before,trk[k].p,sizeof before);assert(!snow_random_section(k,family));assert(memcmp(before,trk[k].p,sizeof before));
+            for(uint32_t id=0;id<P_COUNT;id++){
+                if(!((mask[id/32u]>>(id%32u))&1u))assert(trk[k].p[id]==baseline[k][id]);
+                else {const param_desc_t *d=track_desc(&trk[k],id);assert(trk[k].p[id]>=d->min&&trk[k].p[id]<=d->max);
+                    if(trk[k].p[id]<low[id])low[id]=trk[k].p[id];if(trk[k].p[id]>high[id])high[id]=trk[k].p[id];}
+            }
+            for(uint32_t t=0;t<NTRK;t++){assert(!memcmp(steps[t],trk[t].step,sizeof steps[t]));if(t!=k)assert(!memcmp(baseline[t],trk[t].p,sizeof baseline[t]));}
+            assert(!memcmp(&motion,&locks,sizeof locks));
+            if(family==FAM_FX){assert(trk[k].p[P_SLDEPTH]<=42&&trk[k].p[P_DKAMT]<=48);assert(trk[k].p[SN_DFB]<=48&&trk[k].p[SN_CFB]<=12);}
+            else {assert(trk[k].p[P_LD_PIT]>=-2&&trk[k].p[P_LD_PIT]<=2);assert(trk[k].p[SN_L2_DEST]!=9);}
+            int16_t generated[P_COUNT];memcpy(generated,trk[k].p,sizeof generated);undo_step(0);assert(!memcmp(before,trk[k].p,sizeof before));
+            undo_step(1);assert(!memcmp(generated,trk[k].p,sizeof generated));ui.undo_w=0;
+        }
+        for(uint32_t id=0;id<P_COUNT;id++)if((mask[id/32u]>>(id%32u))&1u)assert(id==SN_FX_BYPASS||high[id]>low[id]);
+        printf("Random %s role %u: %u controls, bounds, isolated scope, notes/locks, undo/redo passed\n",family==FAM_LFO?"LFO":"FX",k+1,count);
+        ui.home=ui.menu=ui.confirm=ui.layer=ui.ly=ui.shift=0;ui.page=(uint8_t)page_first(family);ui.force=1;advance(100);
+        int16_t before[P_COUNT];memcpy(before,trk[k].p,sizeof before);int8_t oct=song.octave;tap(B_OCTUP);
+        assert(memcmp(before,trk[k].p,sizeof before)&&song.octave==oct);assert(graph_y()+graph_h()<=202);
+        uint16_t hint[240*8];memcpy(hint,web_fb+206*240,sizeof hint);advance(600);assert(!memcmp(hint,web_fb+206*240,sizeof hint));
+        web_buttons(1u<<B_SAVE);advance(850);web_buttons(0);advance(80);assert(!memcmp(before,trk[k].p,sizeof before));ui.undo_w=0;
+        ui.page++;ui.force=1;advance(80);memcpy(before,trk[k].p,sizeof before);tap(B_OCTUP);assert(!memcmp(before,trk[k].p,sizeof before));
+        memset(&motion,0,sizeof motion);
+    }
+    assert(snow_random_section(NTRK,FAM_LFO)==1&&snow_random_section(0,FAM_SEQ)==1);
+    go_home();advance(80);
+    puts("Section commands: physical OCT+, actual held-SAVE undo, first page only, readable hints passed");
+}
 static int hash_order(const void *a,const void *b){uint64_t x=*(const uint64_t*)a,y=*(const uint64_t*)b;return x<y?-1:x>y;}
 static void smart_diversity_tests(void)
 {
@@ -329,7 +368,7 @@ static void interface_tests(void)
 int main(void)
 {
     setvbuf(stdout,0,_IOLBF,0);web_nor_erase();web_boot();advance(SNOW_BOOT_MS+200u);
-    synth_tests();generation_tests();ornament_tests();patterns_and_snapshot();fx_tests();pattern_controls();interface_tests();icon_position_tests();random_sound_tests();smart_diversity_tests();
+    synth_tests();generation_tests();ornament_tests();patterns_and_snapshot();fx_tests();pattern_controls();interface_tests();icon_position_tests();random_sound_tests();smart_diversity_tests();section_random_tests();
     puts("ALL SNOW 0.6 TESTS PASSED");return 0;
 }
 

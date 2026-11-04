@@ -135,6 +135,7 @@ def main():
               "audit_source_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip()),
               "firmware_version": meta["version"], "firmware_source": meta["source_commit"],
               "snow_sha256": snow["sha256"], "baseline_sha256": base["sha256"],
+              "previous_snow_sha256": digest(a.previous_snow_package.read_bytes()) if a.previous_snow_package else None,
               "bootstrap_head_identical_to_baseline": True, "loader_identical_to_baseline": True,
               "loader_sha256": digest(snow["files"][100]), "critical_sources_unchanged_from": BASE,
               "critical_source_paths": CRITICAL, "checks": checks,

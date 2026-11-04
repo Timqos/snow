@@ -3,19 +3,44 @@
  * are invariants; oscillator/envelope/filter/motion/FX choices are generated
  * from a fresh 32-bit state. No factory preset selection or short patch list.
  * Runs in the main loop; only the bounded commit holds the audio guard. */
-static void snow_edit_mask(uint32_t *mask)
+static void snow_family_mask(uint32_t family,uint32_t *mask)
 {
     memset(mask,0,((P_COUNT+31u)/32u)*sizeof *mask);
-    for(uint32_t i=0;i<NPAGES;i++)if(PAGES[i].fam==FAM_EDIT&&page_visible(i))
+    for(uint32_t i=0;i<NPAGES;i++)if(PAGES[i].fam==family&&page_visible(i))
         for(uint32_t c=0;c<4u;c++){
             uint32_t id=PAGES[i].id[c];if(id<P_COUNT)mask[id/32u]|=1u<<(id%32u);
         }
+    if(family==FAM_LFO){
+        for(uint32_t id=P_LD_PIT;id<=P_LD_AMP;id++)mask[id/32u]|=1u<<(id%32u);
+        for(uint32_t id=P_ED_FLT;id<=P_ED_SHP;id++)mask[id/32u]|=1u<<(id%32u);
+        for(uint32_t id=P_M1SRC;id<=P_M4AMT;id++)mask[id/32u]|=1u<<(id%32u);
+    }
 }
+static void snow_edit_mask(uint32_t *mask){snow_family_mask(FAM_EDIT,mask);}
 static uint32_t snow_sound_state[NTRK];
 static uint32_t ss_rand(uint32_t *s){uint32_t x=*s;x^=x<<13;x^=x>>17;x^=x<<5;return *s=x;}
 static int16_t ss_range(uint32_t *s,int32_t lo,int32_t hi){return (int16_t)(lo+(int32_t)(ss_rand(s)%(uint32_t)(hi-lo+1)));}
 static int ss_chance(uint32_t *s,uint32_t pct){return ss_rand(s)%100u<pct;}
 static int16_t ss_harmonic(uint32_t *s){return (int16_t)(16*ss_range(s,1,4));}
+static void snow_design_fx(uint32_t channel,uint32_t *r,int16_t *p)
+{
+    /* Dry instrument first: bounded sends, one gentle colour processor.
+     * Modulated feedbacks never approach self-oscillation, and crush keeps bits. */
+    int colour=ss_range(r,0,4),space=channel>=4u;
+    p[P_DLY]=ss_range(r,0,space?24:10);p[P_REV]=ss_range(r,0,space?32:17);p[P_CHOR]=ss_range(r,0,space?24:8);
+    p[SN_DTIME]=ss_range(r,12,49);p[SN_DSYNC]=ss_chance(r,60)?ss_range(r,5,9):0;
+    p[SN_DFB]=ss_range(r,12,48);p[SN_DCOLOR]=ss_range(r,53,106);p[SN_DWIDTH]=ss_range(r,30,108);
+    p[SN_RTYPE]=ss_range(r,0,2);p[SN_RSIZE]=ss_range(r,30,78);p[SN_RDAMP]=ss_range(r,56,104);p[SN_RPRE]=ss_range(r,0,18);
+    p[SN_CRATE]=ss_range(r,20,62);p[SN_CDEPTH]=ss_range(r,12,37);p[SN_CFB]=ss_range(r,0,12);
+    p[SN_FX_BYPASS]=0;p[P_DIST]=colour==1?ss_range(r,3,13):0;p[P_DTYPE]=0;p[P_DTONE]=ss_range(r,-16,12);
+    p[SN_TMIX]=colour==2?ss_range(r,10,35):0;p[SN_TDRIVE]=ss_range(r,12,35);p[SN_TTONE]=ss_range(r,85,124);
+    p[SN_TWOW]=ss_range(r,0,9);p[SN_TFLUT]=ss_range(r,0,5);
+    p[SN_BMIX]=colour==3?ss_range(r,4,13):0;p[SN_BBITS]=ss_range(r,12,16);p[SN_BRATE]=ss_range(r,1,2);p[SN_BTONE]=ss_range(r,90,124);
+    static const uint8_t inserts[]={1,6,7,8};
+    p[P_ITYPE]=inserts[ss_rand(r)%NELEM(inserts)];p[P_IMIX]=colour==4?ss_range(r,5,22):0;
+    p[P_IA]=ss_range(r,p[P_ITYPE]==1?8:20,p[P_ITYPE]==1?26:63);
+    p[P_IB]=ss_range(r,p[P_ITYPE]==1?82:12,p[P_ITYPE]==1?119:40);p[P_IC]=ss_range(r,p[P_ITYPE]==1?90:0,p[P_ITYPE]==1?108:14);
+}
 static void snow_design_sound(const track_t *t,uint32_t channel,uint32_t seed,const uint32_t *mask,int16_t *p)
 {
     uint32_t r=seed?seed:0x6d2b79f5u;int melodic=channel>=4u;
@@ -103,37 +128,67 @@ static void snow_design_sound(const track_t *t,uint32_t channel,uint32_t seed,co
     p[SN_L2_RATE]=ss_range(&r,15,76);p[SN_L2_WAVE]=ss_range(&r,0,2);p[SN_L2_SYNC]=ss_chance(&r,35)?ss_range(&r,4,9):0;
     p[SN_L2_PHASE]=ss_range(&r,0,127);p[SN_L2_FADE]=ss_range(&r,0,63);p[SN_L2_TRIG]=ss_range(&r,0,1);
     p[P_EG2_ATK]=ss_range(&r,0,42);p[P_EG2_DEC]=ss_range(&r,40,93);p[P_EG2_SUS]=ss_range(&r,0,86);p[P_EG2_REL]=ss_range(&r,30,77);
-    /* Dry instrument first: bounded sends, one gentle colour processor.
-     * Modulated feedbacks never approach self-oscillation, and crush keeps bits. */
-    int colour=ss_range(&r,0,4),space=channel>=4u;
-    p[P_DLY]=ss_range(&r,0,space?24:10);p[P_REV]=ss_range(&r,0,space?32:17);p[P_CHOR]=ss_range(&r,0,space?24:8);
-    p[SN_DTIME]=ss_range(&r,12,49);p[SN_DSYNC]=ss_chance(&r,60)?ss_range(&r,5,9):0;
-    p[SN_DFB]=ss_range(&r,12,48);p[SN_DCOLOR]=ss_range(&r,53,106);p[SN_DWIDTH]=ss_range(&r,30,108);
-    p[SN_RTYPE]=ss_range(&r,0,2);p[SN_RSIZE]=ss_range(&r,30,78);p[SN_RDAMP]=ss_range(&r,56,104);p[SN_RPRE]=ss_range(&r,0,18);
-    p[SN_CRATE]=ss_range(&r,20,62);p[SN_CDEPTH]=ss_range(&r,12,37);p[SN_CFB]=ss_range(&r,0,12);
-    p[SN_FX_BYPASS]=0;p[P_DIST]=colour==1?ss_range(&r,3,13):0;p[P_DTYPE]=0;p[P_DTONE]=ss_range(&r,-16,12);
-    p[SN_TMIX]=colour==2?ss_range(&r,10,35):0;p[SN_TDRIVE]=ss_range(&r,12,35);p[SN_TTONE]=ss_range(&r,85,124);
-    p[SN_TWOW]=ss_range(&r,0,9);p[SN_TFLUT]=ss_range(&r,0,5);
-    p[SN_BMIX]=colour==3?ss_range(&r,4,13):0;p[SN_BBITS]=ss_range(&r,12,16);p[SN_BRATE]=ss_range(&r,1,2);p[SN_BTONE]=ss_range(&r,90,124);
-    static const uint8_t inserts[]={1,6,7,8};
-    p[P_ITYPE]=inserts[ss_rand(&r)%NELEM(inserts)];p[P_IMIX]=colour==4?ss_range(&r,5,22):0;
-    p[P_IA]=ss_range(&r,p[P_ITYPE]==1?8:20,p[P_ITYPE]==1?26:63);
-    p[P_IB]=ss_range(&r,p[P_ITYPE]==1?82:12,p[P_ITYPE]==1?119:40);p[P_IC]=ss_range(&r,p[P_ITYPE]==1?90:0,p[P_ITYPE]==1?108:14);
+    snow_design_fx(channel,&r,p);
     for(uint32_t id=0;id<P_COUNT;id++)if((mask[id/32u]>>(id%32u))&1u){
         const param_desc_t *d=id>=P_IA&&id<=P_IC?ins_desc(p[P_ITYPE],id-P_IA):track_desc(t,id);
         p[id]=(int16_t)param_fit(d,p[id]);
     }
 
 }
-static int snow_random_sound(uint32_t channel)
+/* A section command changes its own controls, including the four dynamic MOD
+ * slots. Depth budgets keep the existing instrument playable. */
+static void snow_design_lfo(uint32_t channel,uint32_t *r,int16_t *p)
 {
-    if(channel>=NTRK)return 1;
-    uint32_t mask[(P_COUNT+31u)/32u];int16_t next[P_COUNT];track_t *t=&trk[channel];snow_edit_mask(mask);
+    p[P_LRATE]=ss_range(r,15,90);p[P_LWAVE]=ss_range(r,0,4);p[P_LPHASE]=ss_range(r,0,127);
+    p[P_LFADE]=ss_range(r,0,72);p[P_LSYNC]=ss_chance(r,65)?ss_range(r,2,10):0;
+    p[P_LTRIG]=ss_range(r,0,1);p[P_LPOL]=ss_range(r,0,1);p[P_ESYNC]=ss_range(r,0,1);
+    p[P_LD_PIT]=ss_range(r,channel<4?-1:-2,channel<4?1:2);
+    p[P_LD_FLT]=ss_range(r,-18,18);p[P_LD_SHP]=ss_range(r,-14,14);p[P_LD_AMP]=ss_range(r,0,12);
+    p[P_ED_PIT]=ss_range(r,-1,1);p[P_ED_FLT]=ss_range(r,-6,8);p[P_ED_SHP]=ss_range(r,-4,5);
+    static const uint8_t dest2[]={1,2,4,5,7,8};
+    p[SN_L2_RATE]=ss_range(r,12,86);p[SN_L2_WAVE]=ss_range(r,0,4);
+    p[SN_L2_PHASE]=ss_range(r,0,127);p[SN_L2_FADE]=ss_range(r,0,72);
+    p[SN_L2_SYNC]=ss_chance(r,65)?ss_range(r,2,10):0;p[SN_L2_TRIG]=ss_range(r,0,1);
+    p[SN_L2_DEST]=dest2[ss_rand(r)%NELEM(dest2)];p[SN_L2_DEPTH]=ss_range(r,4,channel==0?8:18)*(ss_chance(r,50)?1:-1);
+    static const uint8_t dest[]={MD_CUT,MD_SHP,MD_PAN,MD_E1,MD_E1+4,MD_E1+6};
+    uint32_t active=(uint32_t)ss_range(r,1,4);
+    for(uint32_t i=0;i<4;i++){
+        p[P_M1SRC+i*3u]=ss_chance(r,70)?MS_LFO:ss_chance(r,50)?MS_SH:MS_SLEW;
+        p[P_M1DST+i*3u]=dest[ss_rand(r)%NELEM(dest)];
+        p[P_M1AMT+i*3u]=i<active?ss_range(r,2,7)*(ss_chance(r,50)?1:-1):0;
+    }
+}
+static int snow_random_section(uint32_t channel,uint32_t family)
+{
+    if(channel>=NTRK||(family!=FAM_EDIT&&family!=FAM_LFO&&family!=FAM_FX))return 1;
+    uint32_t mask[(P_COUNT+31u)/32u];int16_t next[P_COUNT];track_t *t=&trk[channel];snow_family_mask(family,mask);
     if(!snow_sound_state[channel])snow_sound_state[channel]=rng()^fm1_ticks()^(channel+1u)*0x9e3779b9u;
     snow_sound_state[channel]+=0x9e3779b9u; /* full 32-bit seed walk, not a preset cycle */
-    snow_design_sound(t,channel,snow_sound_state[channel],mask,next);
-    undo.keep=0;undo_label="RANDOM SOUND";load_begin(t,UNDO_SOUND);
+    if(family==FAM_EDIT)snow_design_sound(t,channel,snow_sound_state[channel],mask,next);
+    else {
+        for(uint32_t id=0;id<P_COUNT;id++)next[id]=motion_base_value(t,id);
+        uint32_t r=snow_sound_state[channel];
+        if(family==FAM_LFO)snow_design_lfo(channel,&r,next);
+        else {
+            snow_design_fx(channel,&r,next);
+            next[P_DLY]=ss_range(&r,4,channel==0?24:42);next[P_REV]=ss_range(&r,4,channel==0?28:48);
+            next[P_CHOR]=ss_range(&r,0,channel<4?20:35);next[P_DTYPE]=ss_range(&r,0,1);
+            next[P_SLCR]=ss_chance(&r,25)?ss_range(&r,1,2):0;
+            next[P_SLPAT]=ss_range(&r,1,16);next[P_SLRATE]=ss_range(&r,0,4);next[P_SLDEPTH]=ss_range(&r,12,42);
+            next[P_DKSRC]=ss_chance(&r,25)?(int16_t)((channel+(uint32_t)ss_range(&r,1,5))%NTRK+1u):0;
+            next[P_DKAMT]=ss_range(&r,12,48);next[P_DKREL]=ss_range(&r,40,84);
+        }
+        for(uint32_t id=0;id<P_COUNT;id++)if((mask[id/32u]>>(id%32u))&1u){
+            const param_desc_t *d=id>=P_IA&&id<=P_IC?ins_desc(next[P_ITYPE],id-P_IA):track_desc(t,id);
+            next[id]=(int16_t)param_fit(d,next[id]);
+        }
+    }
+    undo.keep=0;undo_label=family==FAM_LFO?"RANDOM LFO":family==FAM_FX?"RANDOM FX":"RANDOM SOUND";
+    load_begin(t,UNDO_SOUND|(family==FAM_FX?UNDO_FX:0));
     uint32_t guard=motion_guard();
     for(uint32_t id=0;id<P_COUNT;id++)if((mask[id/32u]>>(id%32u))&1u)t->p[id]=next[id];
-    motion_unguard(guard);load_end(t);snow_touch(t,P_E0,t->p[P_E0]);ui.force=1;return 0;
+    motion_unguard(guard);load_end(t);
+    uint32_t touch=family==FAM_LFO?P_LRATE:family==FAM_FX?P_DLY:P_E0;
+    snow_touch(t,touch,t->p[touch]);ui.force=1;return 0;
 }
+static int snow_random_sound(uint32_t channel){return snow_random_section(channel,FAM_EDIT);}

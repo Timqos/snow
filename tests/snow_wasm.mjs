@@ -121,3 +121,25 @@ assert.equal(lean.fb.length,240*240);assert(lean.leds.length>=8);
 await worklet.onMessage({type:'snow-detail',on:true});worklet.publish();
 assert.equal(worklet.messages.at(-1).snow.values.length,count);
 console.log('DEVICE-ONLY WORKLET PASSED: native screen/LEDs/theme retained, unused editor metadata disabled');
+// The actual printed LFO / FX buttons and OCT+, with all six tracks playing.
+const section=await boot();render(section,1800);section.web_snow_demo();
+const gesture=b=>{section.web_buttons(1<<b);render(section,70);section.web_buttons(0);render(section,70);};
+gesture(10);assert.equal(section.web_playing(),1);
+for(const button of [3,0]){
+ gesture(button);
+ for(let ch=0;ch<6;ch++){
+  section.web_snow_select(ch);
+  for(let press=0;press<8;press++){
+   const other=Array.from({length:6},(_,k)=>Array.from({length:count},(_,i)=>section.web_snow_param_base(k,i)));
+   const grids=Array.from({length:6},(_,k)=>Array.from(new Uint16Array(section.memory.buffer,section.web_snow_grid(k),64)));
+   gesture(13);
+   assert.notDeepEqual(Array.from({length:count},(_,i)=>section.web_snow_param_base(ch,i)),other[ch]);
+   for(let k=0;k<6;k++){
+    if(k!==ch)assert.deepEqual(Array.from({length:count},(_,i)=>section.web_snow_param_base(k,i)),other[k]);
+    assert.deepEqual(Array.from(new Uint16Array(section.memory.buffer,section.web_snow_grid(k),64)),grids[k]);
+   }
+   const audio=render(section,180);assert(audio.peak<1);assert.equal(section.web_playing(),1);
+  }
+ }
+}
+console.log('PHYSICAL LFO / FX RANDOM PASSED: 96 repeated OCT+ gestures during six-track playback, isolated channels, unchanged notes, finite bounded audio');

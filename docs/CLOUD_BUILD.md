@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Snow: хмарна збірка
 
-Поточний Snow: [симулятор 0.6.1](https://timqos.github.io/snow/snow/?v=061).
+Поточний Snow: [симулятор 0.6.2](https://timqos.github.io/snow/snow/?v=062).
 Наприкінці хмарної збірки обовʼязково виконується
 [аудит встановлення й відкату](SNOW_HARDWARE_AUDIT.md): Snow ↔ Skiff,
 захищені області флеш, перерваний запис, заводські V15/V16 та сумісність

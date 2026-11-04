@@ -661,6 +661,9 @@ EXPORT const char *web_snow_param_enum(uint32_t channel,uint32_t i,int32_t v)
 }
 EXPORT int32_t web_snow_param_value(uint32_t channel,uint32_t i)
 { return channel<NTRK && i<NELEM(web_snow_params)?trk[channel].p[web_snow_params[i].id]:0; }
+/* Stable patch value while sequencer locks change the sounding value. */
+EXPORT int32_t web_snow_param_base(uint32_t channel,uint32_t i)
+{ return channel<NTRK && i<NELEM(web_snow_params)?motion_base_value(&trk[channel],web_snow_params[i].id):0; }
 EXPORT const char *web_snow_param_text(uint32_t channel,uint32_t i)
 {
     static char text[48];const char *unit=0;

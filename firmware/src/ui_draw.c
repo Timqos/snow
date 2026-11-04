@@ -616,13 +616,14 @@ static void ret_hints(uint32_t ret, int32_t y)
 static void draw_foot(void)
 {
 #if FELUCCA_SNOW
-    if(!ui.home&&!ui.layer&&!ui.shift&&cur_page()==&PAGES[page_first(FAM_EDIT)]){
+    if(!ui.home&&!ui.layer&&!ui.shift&&snow_random_first_page(cur_page())){
         uint32_t sig=ux.gen*977u+song.sel*31u+TSEL->preset*4099u+TSEL->user*65537u+127u;
         if(ui.force||ui.foot_sig!=sig){ui.foot_sig=sig;cv_oy=0;cv_begin(240,38,T_BG);
-            snow_text(3,4,"OCT+ : RANDOM ALL EDIT",T_THEME,38);
+            uint32_t family=cur_page()->fam;
+            snow_text(3,4,family==FAM_LFO?"OCT+ : RANDOM ALL LFO":family==FAM_FX?"OCT+ : RANDOM ALL FX":"OCT+ : RANDOM ALL EDIT",T_THEME,38);
             snow_text(3,14,"HOLD SAVE : UNDO",T_MID,38);
             char name[24];sound_name(TSEL,name);snow_text(3,28,SN_TARGET_NAMES[song.sel][0],T_THEME,2);snow_text(23,28,name,T_TEXT,26);
-            uint32_t n=0;for(uint32_t p=0;p<NPAGES;p++)n+=PAGES[p].fam==FAM_EDIT&&page_visible(p);
+            uint32_t n=0;for(uint32_t p=0;p<NPAGES;p++)n+=PAGES[p].fam==family&&page_visible(p);
             char page[10]="1/";fmt_int(page+2,(int32_t)n);snow_text(204,28,page,T_MID,5);cv_blit(0,202);}
         return;
     }
