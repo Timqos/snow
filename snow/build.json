@@ -3,5 +3,11 @@
   "version": "v0.6.1-snow",
   "source_commit": "23ea6bdc10da53f0a5c347039ac4d21f216461f1",
   "source_dirty": false,
-  "package_sha256": "f6c7b7ca5bc5e30a6951f6ddf12273a8f016086e0982533b5906bf7e1f8b023b"
+  "package_sha256": "f6c7b7ca5bc5e30a6951f6ddf12273a8f016086e0982533b5906bf7e1f8b023b",
+  "installation_audit": {
+    "report": "update-audit.json",
+    "audit_source_commit": "b74f42ee76f16d2ee8f7258f61974e48ade02327",
+    "software_checks": "passed",
+    "physical_fm1_validation": "pending"
+  }
 }
