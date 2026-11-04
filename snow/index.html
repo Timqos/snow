@@ -6,7 +6,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Snow 0.3 · sound laboratory</title>
+<title>Snow 0.4 · sound laboratory</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 rx=%223%22 fill=%22%23111%22/%3E%3Crect x=%223%22 y=%229%22 width=%223%22 height=%224%22 fill=%22%23ff5a36%22/%3E%3Crect x=%227%22 y=%226%22 width=%223%22 height=%227%22 fill=%22%2322c3b4%22/%3E%3Crect x=%2211%22 y=%223%22 width=%223%22 height=%2210%22 fill=%22%23ffbf00%22/%3E%3C/svg%3E">
 <meta name="description" content="Skiff, the six-track groovebox firmware for the M-VAVE FM-1, running in your browser: the same code the unit runs.">
 <style>
@@ -70,9 +70,9 @@ footer { margin-top: 12px; font-size: 12px; }
 footer nav a { margin: 0 6px; }
 footer small { font-size: 11px; opacity: .8; }
 html,body{background:#10130e;color:#e9eadf;color-scheme:dark}
-#snow-lab{--gold:#ecbd60;--border:#3d4236;max-width:1120px;margin:0 auto 28px;padding:24px;background:#161913;border:1px solid var(--border);color:#e9eadf;font:14px/1.6 system-ui,sans-serif;text-align:left}
+#snow-lab{--gold:var(--snow-accent,#39dbf5);--border:#3d4236;max-width:1120px;margin:0 auto 28px;padding:24px;background:#161913;border:1px solid var(--border);color:#e9eadf;font:14px/1.6 monospace;text-align:left}
 #snow-lab *{box-sizing:border-box}
-#snow-lab h1{font:600 clamp(23px,4vw,34px)/1.2 system-ui;margin:8px 0 0;letter-spacing:-.035em}
+#snow-lab h1{font:600 clamp(23px,4vw,34px)/1.2 monospace;margin:8px 0 0;letter-spacing:-.035em}
 #snow-lab p{max-width:none}
 #snow-lab .lab-heading{display:flex;justify-content:space-between;gap:16px;align-items:center}
 #snow-lab .lab-eyebrow{color:var(--gold);font:12px monospace;letter-spacing:.12em}
@@ -117,37 +117,19 @@ html,body{background:#10130e;color:#e9eadf;color-scheme:dark}
 #snow-lab #snow-tempo{width:68px;background:#11180e;color:var(--gold);border:1px solid var(--border);padding:8px}
 @media(max-width:600px){#snow-lab .lab-pattern-grid{grid-template-columns:repeat(3,minmax(0,1fr))}#snow-lab .lab-pattern-column{padding:6px}#snow-lab .lab-channel button{font-size:11px;padding:8px 3px}}
 
+#snow-lab .lab-step-grid{display:grid;grid-template-columns:repeat(16,minmax(0,1fr));gap:4px;margin:20px 0}
+#snow-lab .lab-step{height:58px;position:relative;background:#222;color:#8d9ca1;text-align:center;font:10px monospace;padding-top:4px;border:1px solid #38454a;isolation:isolate}
+#snow-lab .lab-step.on:before{content:"";position:absolute;bottom:0;left:0;width:100%;height:calc(var(--vel)*75%);background:var(--gold);opacity:.65;z-index:-1}
+#snow-lab .lab-step.on{color:white}#snow-lab .lab-step.current{outline:2px solid white;outline-offset:0}
+#snow-lab #snow-parm-amt{width:100px}#snow-lab .lab-pattern-grid{gap:4px}#snow-lab .lab-pattern-column{min-width:0;padding:4px}
+@media(max-width:600px){#snow-lab .lab-pattern-grid{grid-template-columns:repeat(6,minmax(0,1fr))}#snow-lab .lab-pattern-column strong{font-size:9px}#snow-lab .lab-pattern-column button{padding:8px 0}#snow-lab .lab-step-grid{gap:2px}#snow-lab .lab-step{font-size:8px}}
+
+#snow-lab audio{display:block;width:100%;max-width:440px;height:36px;margin:6px 0 14px}
+
 </style>
 </head>
 <body>
 <main>
-<section id="snow-lab" aria-label="Snow instrument laboratory">
-  <header class="lab-heading"><div><span class="lab-eyebrow">SNOW / FM-1 · 0.3</span><h1>Свої інструменти. Вільний синтез.</h1></div><button id="snow-power">Увімкнути звук</button></header>
-  <p class="lab-intro">KICK · SNARE · HAT · PERC · BASS · CHORD. По 10 пресетів свого інструмента на канал. Усі алгоритми, хвилі та огинаючі доступні для ручного перетворення звуку.</p>
-  <div class="lab-actions"><button id="snow-demo" disabled>Завантажити демо</button><button id="snow-play" disabled>PLAY / STOP</button><label>BPM <input id="snow-tempo" type="number" min="40" max="240" value="120" disabled></label><button id="snow-save" disabled>Temp Save</button><button id="snow-reload" disabled>Reload all</button><button id="snow-reload-track" disabled>Reload channel</button></div>
-  <p class="lab-hint">Увімкни звук → завантаж демо → PLAY. Демо замінює поточні кроки. Або відкрий ГЕНЕРАТОР та створи грув обраного стилю.</p>
-  <div id="snow-channels" class="lab-channels"></div>
-  <nav class="lab-tabs" aria-label="Редактор"><button data-view="sound" aria-pressed="true">СИНТЕЗ</button><button data-view="fx">ЕФЕКТИ КАНАЛУ</button><button data-view="patterns">ПАТЕРНИ / SEQ</button><button data-view="gen">ГЕНЕРАТОР / СТИЛІ</button></nav>
-  <div class="lab-sound"><strong id="snow-selection">KICK / CH 1</strong><label>Пресет інструмента <select id="snow-preset" disabled><option value="">Обрати звук…</option></select></label></div>
-  <p id="snow-notice" role="status" aria-live="polite"></p>
-  <section id="snow-pattern-panel" hidden>
-    <div class="lab-actions"><strong>НЕЗАЛЕЖНІ ПАТЕРНИ КАНАЛІВ</strong><button id="snow-pattern-half">A–H → I–P</button></div>
-    <p class="lab-hint">Кожна ручка під своєю колонкою перемикає тільки цей інструмент. На пристрої: утримуй SEQ; OCT+ — канали 5–6, OCT− — A–H / I–P. Активний патерн підсвічений, запланований — із пунктиром. Крапка означає збережений або поточний непорожній патерн.</p>
-    <div id="snow-pattern-grid" class="lab-pattern-grid"></div>
-    <p class="lab-hint">Новий слот порожній. Вибери його, дочекайся запуску під час гри й створи варіацію у ГЕНЕРАТОРІ. Звук каналу зберігається при перемиканні патернів.</p>
-  </section>
-  <section id="snow-generator-panel" hidden>
-    <div class="lab-scene"><label>Стиль для ансамблю <select id="snow-scene-style" disabled></select></label><label><input id="snow-style-tempo" type="checkbox" checked> Темп стилю</label><button id="snow-scene" disabled>Згенерувати всі 6 каналів</button></div>
-    <p class="lab-hint">Один стиль, шість різних ролей: кік тримає основу, снейр — backbeat/ghost notes, хет — пульсацію й дроблення, перкусія — додатковий ритм, бас — лінію, акорди — гармонію. Стиль і параметри нижче можна задати окремо для вибраного каналу.</p>
-    <div class="lab-actions"><button id="snow-generate" disabled>Генерувати канал із seed</button><button id="snow-vary" disabled>Нова варіація каналу</button></div>
-    <p class="lab-hint">Density 50 — типова щільність стилю для інструмента; 0 — тиша, 100 — усі кроки. Complexity додає ghost notes і дроблення; Variation — відхилення від опорних долей; Human — живу нерівність. Seed повторює результат. EVOLVE створює варіації кожні 1/2/4 цикли.</p>
-    <div id="snow-gen-controls"></div>
-  </section>
-  <section id="snow-fx-panel" hidden><p class="lab-hint">Окремі буфери й налаштування кожного каналу. Delay: час або tempo sync, feedback, tone, width. Reverb: room/hall/plate, decay, damping, predelay. Chorus: rate, depth, feedback. Tape та Bitcrush — зі своїми MIX і параметрами. Значення MIX 0 вимикає ефект; BYPASS вимикає весь ланцюг.</p><div id="snow-fx-controls"></div></section>
-  <section id="snow-sound-panel"><div id="snow-sound-controls"><p class="lab-hint">Увімкни звук, щоб відкрити параметри синтезу.</p></div></section>
-  <details class="lab-help"><summary>Керування пристроєм і збереження</summary><p>EDIT — параметри синтезу та ефектів; SEQ → GEN STYLE — стиль і варіативність. OCT+ на GEN — варіація каналу, OCT− — ансамбль у поточному стилі. Утримання SEQ — сітка патернів; K1–K4 відповідають своїм каналам. OCT+ перемикає сторінки каналів 1–4 / 5–6, OCT− — слоти A–H / I–P. Shift-клік у браузері утримує кнопку.</p><p>Позначки ALL визначають канали для Control All. GLO + K1–K4 — макрозміни, GLO + SAVE — Temp Save, GLO + HOME — Reload, GLO + OCT− — маска, GLO + OCT+ — Reload одного каналу. Temp Save існує в RAM до перезавантаження; звичайний SAVE зберігає проєкт. Прошивка ще потребує перевірки на фізичному FM-1. <a href="../try/">Skiff baseline</a> · <a href="../SNOW_PREVIEW.md">Можливості та перевірки</a>.</p></details>
-</section>
-
 <div class="device" id="device">
   <svg id="panel" viewBox="0 0 1000 624" aria-hidden="true"></svg>
   <canvas id="screen" width="240" height="240" role="img" aria-label="The screen"></canvas>
@@ -164,19 +146,47 @@ html,body{background:#10130e;color:#e9eadf;color-scheme:dark}
 </p>
 
 <footer>
-  <small class="version">v0.3-snow (prototype)</small><br>
+  <small class="version">v0.4-snow (prototype)</small><br>
   Skiff by illuminus5, built on Felucca by Leo Kuroshita, Hügelton Instruments · <a href="https://www.gnu.org/licenses/gpl-3.0.html">GPL-3.0</a> · browser build after charlesvestal's <a href="https://github.com/charlesvestal/fm1-x0x">X0X</a> · DotGothic16 font, <a href="fonts/OFL.txt">SIL OFL 1.1</a><br>
   Saves stay in this browser. Not here: USB (the editor, MIDI out, audio), the TRS MIDI jack.<br>
-  <nav><a href="snow-0.3.fwsc">Prototype firmware</a><a href="../webapp/editor/">Editor</a><a href="../learn/">Learn</a><a href="https://github.com/Timqos/snow/tree/codex/snow-deep-synthesis">Source</a></nav>
+  <nav><a href="snow-0.4.fwsc">Prototype firmware</a><a href="../webapp/editor/">Editor</a><a href="../learn/">Learn</a><a href="https://github.com/Timqos/snow/tree/codex/snow-deep-synthesis">Source</a></nav>
   <small>M-VAVE and FM-1 are trademarks of their respective owners. Skiff is not affiliated with or endorsed by them.</small>
 </footer>
+<section id="snow-lab" aria-label="Snow instrument laboratory">
+  <header class="lab-heading"><div><span class="lab-eyebrow">SNOW / FM-1 · 0.4</span><h1>SNOW / FM-1</h1></div><button id="snow-power">Увімкнути звук</button></header>
+  <p class="lab-intro">KICK · SNARE · HAT · PERC · BASS · CHORD. По 10 пресетів свого інструмента на канал. Усі алгоритми, хвилі та огинаючі доступні для ручного перетворення звуку.</p>
+  <div class="lab-actions"><button id="snow-demo" disabled>Завантажити демо</button><button id="snow-play" disabled>PLAY / STOP</button><label>BPM <input id="snow-tempo" type="number" min="40" max="240" value="120" disabled></label><button id="snow-save" disabled>Temp Save</button><button id="snow-reload" disabled>Reload all</button><button id="snow-reload-track" disabled>Reload channel</button></div>
+  <p class="lab-hint">Увімкни звук → завантаж демо → PLAY. Демо замінює поточні кроки. Або відкрий ГЕНЕРАТОР та натисни GEN RND.</p>
+  <div id="snow-channels" class="lab-channels"></div>
+  <nav class="lab-tabs" aria-label="Редактор"><button data-view="sound" aria-pressed="true">СИНТЕЗ</button><button data-view="fx">ЕФЕКТИ КАНАЛУ</button><button data-view="patterns">ПАТЕРНИ / SEQ</button><button data-view="gen">ГЕНЕРАТОР</button></nav>
+  <div class="lab-sound"><strong id="snow-selection">KICK / CH 1</strong><label>Пресет інструмента <select id="snow-preset" disabled><option value="">Обрати звук…</option></select></label></div>
+  <p id="snow-notice" role="status" aria-live="polite"></p>
+  <section id="snow-pattern-panel" hidden>
+    <div class="lab-actions"><strong>НЕЗАЛЕЖНІ ПАТЕРНИ КАНАЛІВ</strong><button id="snow-pattern-half">A–H → I–P</button></div>
+    <p class="lab-hint">Кожна ручка під своєю колонкою перемикає тільки цей інструмент. На пристрої: утримуй SEQ; ALGORITHM — бас, PRESETS — акорди; OCT± — A–H / I–P. Активний патерн підсвічений, запланований — із пунктиром. Крапка означає збережений або поточний непорожній патерн.</p>
+    <div id="snow-pattern-grid" class="lab-pattern-grid"></div>
+    <p class="lab-hint">Новий слот порожній. Вибери його, дочекайся запуску під час гри й створи варіацію у ГЕНЕРАТОРІ. Звук каналу зберігається при перемиканні патернів.</p>
+  </section>
+  <section id="snow-generator-panel" hidden>
+    <div class="lab-actions"><label>Генерувати <select id="snow-target" disabled><option value="all">Усі 6 каналів</option><option value="channel">Обраний канал</option></select></label><button id="snow-rnd" disabled>GEN RND</button><button id="snow-parm" disabled>GEN PARM</button><label>PARM AMT <input id="snow-parm-amt" type="range" min="0" max="100" value="30" disabled><output id="snow-amt-value">30%</output></label><button id="snow-clear" disabled>CLEAR</button></div>
+    <p class="lab-hint">GEN RND — нові ноти, ритм і velocity. GEN PARM — нові параметр-локи поверх цього рисунка; ноти та velocity залишаються. PARM AMT — кількість і глибина локів. CLEAR — прибрати кроки та локи. Кожне натискання дає новий результат; музичні напрями змішуються всередині генератора.</p>
+    <div id="snow-step-grid" class="lab-step-grid" aria-label="Згенеровані кроки обраного каналу"></div>
+    <p class="lab-hint">Висота смуги — velocity; крапка — параметр-лок; ×2/3/4 — ретригер. Для хета й перкусії прикраса звучить не частіше одного кроку кожного другого такту. Перкусія, бас і акорди враховують тональність. Density: 0 — тиша, 100 — усі кроки. EVOLVE — нова фраза кожні 1/2/4 цикли.</p>
+    <div id="snow-gen-controls"></div>
+  </section>
+  <section id="snow-fx-panel" hidden><p class="lab-hint">Окремі буфери й налаштування кожного каналу. Delay: час або tempo sync, feedback, tone, width. Reverb: room/hall/plate, decay, damping, predelay. Chorus: rate, depth, feedback. Tape та Bitcrush — зі своїми MIX і параметрами. Значення MIX 0 вимикає ефект; BYPASS вимикає весь ланцюг.</p><div id="snow-fx-controls"></div></section>
+  <section id="snow-sound-panel"><div id="snow-sound-controls"><p class="lab-hint">Увімкни звук, щоб відкрити параметри синтезу.</p></div></section>
+  <details class="lab-help"><summary>Послухати нові барабанні пресети</summary><p>По 10 сухих ударів у фабричному порядку, без ефектів. Один удар кожні 1,3 с. Це рендер C-движка FM-1.</p><label>KICK <audio controls preload="none" src="kick-presets.wav"></audio></label><label>SNARE <audio controls preload="none" src="snare-presets.wav"></audio></label><label>HAT <audio controls preload="none" src="hat-presets.wav"></audio></label><label>PERC <audio controls preload="none" src="perc-presets.wav"></audio></label></details>
+  <details class="lab-help"><summary>Кнопки FM-1 та збереження</summary><p>SEQ → SEQ GEN. OCT+ — GEN RND, OCT− — GEN PARM, SAVE + OCT− — CLEAR. TARGET задає CHANNEL / ALL 6. K4 — PARM AMT. Під генератором завжди видно справжню сітку кроків.</p><p>Утримуй SEQ: усі шість каналів на дисплеї. K1–K4 перемикають патерни каналів 1–4; ALGORITHM — басу, PRESETS — акордів. OCT± — A–H / I–P.</p><p>Утримуй GLO: ті самі шість ручок керують рівнями. Перші шість чорних клавіш — MUTE, білих — SOLO, E4 — ALL, F4 — FILL, G4 — TAP. GLO + OCT− повертає рівні та мʼюти. GLO + EDIT + K1–K4 — Control All; GLO + EDIT + OCT− — маска каналу. GLO + SAVE — Temp Save; GLO + HOME — Reload all; GLO + OCT+ — Reload channel. Звичайний SAVE зберігає проєкт.</p><label>Колір інтерфейсу <select id="snow-color" disabled></select></label><p>Прошивка ще потребує перевірки на фізичному FM-1. <a href="../try/">Skiff baseline</a> · <a href="../SNOW_PREVIEW.md">Перевірки та обмеження</a>.</p></details>
+</section>
+
 </main>
 
 <script src="../panel.js"></script>
 <script type="module">
 // the panel's controls and its drawing: ../panel.js (window.PANEL, shared with the Learn page)
 const { B, EN, PLAY_GREEN, WHITE, ROW1, ROW2, KNOBS } = window.PANEL;
-const STORE = "snow-fm1-prototype-03";
+const STORE = "snow-fm1-prototype-04";
 
 // ------------------------------------------------------------------ the panel
 // Two drawings of the same controls (PANEL.draw): WIDE after the FM-1's own layout, TALL for a phone held upright.
@@ -226,9 +236,12 @@ snowById('snow-demo').onclick=()=>{snowPost('snow-demo');snowNotice('Демо з
 snowById('snow-save').onclick=()=>{snowPost('snow-save');snowNotice('Тимчасовий стан збережено в RAM.');};
 snowById('snow-reload').onclick=()=>snowPost('snow-reload',{mask:63});
 snowById('snow-reload-track').onclick=()=>snowPost('snow-reload',{mask:1<<snowSelected});
-snowById('snow-generate').onclick=()=>{snowPost('snow-generate',{vary:false});snowNotice(`${snowRoles[snowSelected]}: генерація з поточного seed.`);};
-snowById('snow-vary').onclick=()=>{snowPost('snow-generate',{vary:true});snowNotice(`${snowRoles[snowSelected]}: нова варіація.`);};
-snowById('snow-scene').onclick=()=>{snowPost('snow-scene',{style:+snowById('snow-scene-style').value,vary:true,tempo:snowById('snow-style-tempo').checked});snowNotice('Згенеровано ансамбль: окремий рисунок кожного інструмента.');};
+const snowAll=()=>snowById('snow-target').value==='all';
+snowById('snow-rnd').onclick=()=>{snowPost(snowAll()?'snow-scene':'snow-generate',{vary:true});snowNotice('GEN RND: новий рисунок.');};
+snowById('snow-parm').onclick=()=>{snowPost('snow-genparm',{all:snowAll()});snowNotice('GEN PARM: нові локи поверх поточних нот.');};
+snowById('snow-clear').onclick=()=>{snowPost('snow-clear',{all:snowAll()});snowNotice('Кроки та локи очищено.');};
+snowById('snow-parm-amt').oninput=e=>{snowById('snow-amt-value').textContent=e.target.value+'%';const index=snowSchema?.params.findIndex(p=>p.name==='PARM AMT');if(index>=0){for(const track of snowAll()?[0,1,2,3,4,5]:[snowSelected])snowPost('snow-set',{track,index,value:+e.target.value});}};
+snowById('snow-color').onchange=e=>snowPost('snow-color',{value:+e.target.value});
 snowById('snow-preset').onchange=(e)=>{if(e.target.value!==''){snowPost('snow-preset',{preset:+e.target.value});snowNotice(`${snowRoles[snowSelected]}: ${e.target.selectedOptions[0].textContent}`);e.target.value='';}};
 function snowDesigner(schema){
  if(!schema)return;snowSchema=schema;snowDescriptorKey='';
@@ -254,9 +267,13 @@ function snowDesigner(schema){
   label.append(input);grid.append(label);snowControls.push({input,value});
  });
  const presets=snowById('snow-preset');presets.replaceChildren(new Option(`${schema.role}: 10 пресетів…`,''));schema.presets.forEach((name,i)=>presets.add(new Option(name,i)));
- const styles=snowById('snow-scene-style');if(!styles.options.length)schema.styles.forEach((name,i)=>styles.add(new Option(name,i)));
+ const colors=snowById('snow-color');colors.replaceChildren();schema.colors.forEach((name,i)=>colors.add(new Option(name,i)));
 }
 function snowFrame(state){
+ if(state.steps){const host=snowById('snow-step-grid');while(host.children.length<state.length){const cell=document.createElement('div');cell.className='lab-step';host.append(cell);}while(host.children.length>state.length)host.lastChild.remove();[...host.children].forEach((cell,i)=>{const step=state.steps[i],on=!!(step&256),hits=((step>>10)&3)+1;cell.classList.toggle('on',on);cell.classList.toggle('current',i===state.position);cell.style.setProperty('--vel',(step&255)/127);cell.textContent=`${i+1}${step&512?' •':''}${on&&hits>1?' ×'+hits:''}`;cell.title=on?`Note ${state.notes[i]}, velocity ${step&255}`:'Пауза';});}
+ if(state.color!==undefined&&document.activeElement!==snowById('snow-color')){snowById('snow-color').value=state.color;const colors=['#39dbf5','#709bff','#ff9850','#71e8a0','#eeeeee','#ebc75f','#f594c2','#ba96ff','#ff6a76','#7ce7ce'];document.documentElement.style.setProperty('--snow-accent',colors[state.color]||colors[0]);}
+ if(state.values&&snowSchema){const i=snowSchema.params.findIndex(p=>p.name==='PARM AMT');if(i>=0&&document.activeElement!==snowById('snow-parm-amt')){snowById('snow-parm-amt').value=state.values[i];snowById('snow-amt-value').textContent=state.values[i]+'%';}}
+
  if(state.selected!==snowSelected){snowSelected=state.selected;snowPost('snow-schema');}
  if(state.values&&snowSchema){const key=snowSchema.params.map((p,i)=>p.group==='DRIVE / INSERT / DUCK'&&p.name==='TYPE'?state.values[i]:'').join(',');if(snowDescriptorKey&&key!==snowDescriptorKey)snowPost('snow-schema');snowDescriptorKey=key;}
  snowById('snow-selection').textContent=`${snowRoles[snowSelected]} / CH ${snowSelected+1}`;
@@ -531,8 +548,8 @@ async function switchOn() {
   try {
     const ac = new AudioContext({ sampleRate: 44100, latencyHint: "interactive" });
     const [wasm] = await Promise.all([
-      fetch("felucca.wasm?v=7cbd6cfd037c").then((r) => { if (!r.ok) throw new Error(`felucca.wasm: ${r.status}`); return r.arrayBuffer(); }),
-      ac.audioWorklet.addModule("worklet.js?v=bf33656f6bfa")]);
+      fetch("felucca.wasm?v=f2c705c456b4").then((r) => { if (!r.ok) throw new Error(`felucca.wasm: ${r.status}`); return r.arrayBuffer(); }),
+      ac.audioWorklet.addModule("worklet.js?v=79e991b8abf7")]);
     node = new AudioWorkletNode(ac, "felucca", { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
     node.connect(ac.destination);
     let warned = false;

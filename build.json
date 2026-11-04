@@ -1,6 +1,6 @@
 {
   "project": "Snow",
-  "stage": "Snow 0.3 instrument laboratory + Skiff baseline",
+  "stage": "Snow 0.4 pixel UI, random phrases and new drum presets + Skiff baseline",
   "baseline_version": "2.2",
   "source_commit": "815358c56ce9307ed1cb4085351cd0fd94c15ee4",
   "source_dirty": false,
@@ -10,14 +10,15 @@
     "baseline": "try/",
     "snow": "snow/",
     "snow01": "snow01/",
-    "snow02": "snow02/"
+    "snow02": "snow02/",
+    "snow03": "snow03/"
   },
   "snow_build": {
-    "stage": "Snow fixed instruments, channel FX and style generator",
-    "version": "v0.3-snow",
-    "source_commit": "9fead0fc1c4b3f849e5a7e7cabdc6f9a2f0647ee",
+    "stage": "Snow fixed instruments, pixel UI and random phrase generator",
+    "version": "v0.4-snow",
+    "source_commit": "b53c1c285ea65475fcad825f8a5e271741179636",
     "source_dirty": false,
-    "package_sha256": "08e0bf8468b44eac68d12d94953e17a9b2c580c79b30b68cd8e23498ab9f5e87"
+    "package_sha256": "9cf2482c2b2083133408646267d31033d542b55302dd0d6673192dc1a87e2c79"
   },
-  "website_source_commit": "9fead0fc1c4b3f849e5a7e7cabdc6f9a2f0647ee"
+  "website_source_commit": "b53c1c285ea65475fcad825f8a5e271741179636"
 }
