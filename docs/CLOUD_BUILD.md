@@ -6,9 +6,12 @@ Workflow **Snow firmware and simulator** збирає поточну проши�
 Звук прошивки на цьому етапі не змінено.
 
 **Робочий браузерний симулятор:**
-[Snow FM-1](https://snow-fm1-lab.superfalcon1.chatgpt.site/try/).
-Сторінку опубліковано через Sites з доступом для власника; натисніть **Switch on**.
+[Snow FM-1 на GitHub Pages](https://timqos.github.io/snow/try/).
+Натисніть **Switch on**. Сторінка та її WebAssembly-модуль доступні через HTTPS.
 Це базовий Skiff, а не готові нові інструменти Snow.
+
+Резервне приватне прев'ю власника:
+[Sites](https://snow-fm1-lab.superfalcon1.chatgpt.site/try/).
 
 На Mac нічого встановлювати не потрібно. Відкрийте вкладку **Actions** у
 `Timqos/snow`, виберіть успішний запуск і завантажте результат
@@ -17,10 +20,12 @@ Workflow **Snow firmware and simulator** збирає поточну проши�
 
 ## Сторінка в браузері
 
-Готова базова сторінка також записана в гілку `gh-pages`. GitHub-підключення
-повернуло HTTP 403 при ввімкненні Pages через API, тому для доступу без ручних
-налаштувань зараз використовується наведене вище посилання Sites.
-Нижче — окремий маршрут автоматичної публікації майбутніх збірок на GitHub Pages.
+Готова базова сторінка записана в гілку `gh-pages`. Після ввімкнення Pages
+власником репозиторію GitHub успішно виконав `pages build and deployment` для
+коміту `0667ba4201a7fe611ef3b3dad52ef22bda96d312` і опублікував сайт.
+Перевірено HTTP 200 для головної сторінки, `try/`, `felucca.wasm`, worklet
+та panel.js; WebAssembly віддається з типом `application/wasm`.
+Нижче — маршрут автоматичної публікації майбутніх збірок вихідного коду.
 
 Після потрапляння workflow у `main` у **Settings → Pages → Build and deployment**
 потрібно вибрати **GitHub Actions**. Далі в **Actions → Snow firmware and simulator →
