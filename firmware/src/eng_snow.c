@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Snow 0.4: fixed instrument roles, with the complete open synthesis surface. */
+ * Snow 0.5: fixed instrument roles, with the complete open synthesis surface. */
 #include "snow_params.h"
 static const char *const SN_ALGS[] = {"FM PAIR","FM CHAIN","FM PAR","RING","ADDITIVE","FOLD"};
 static const char *const SN_WAVES[] = {"SINE","TRI","SAW","SQUARE","PULSE","ORGAN"};
@@ -8,7 +8,8 @@ static const char *const SN_MODES[] = {"HIT","GATED"};
 static const char *const SN_FILTERS[] = {"OFF","LP","HP","BP"};
 static const char *const SN_FB_NAMES[] = {"MOD","CARRIER","CROSS"};
 static const char *const SN_L2_DST[] = {"OFF","TONE","SHAPE","SWEEP","DECAY","MIX","FEEDBACK","CUTOFF","DRIVE","PITCH","AMP"};
-static const char *const SN_TARGETS[]={"CHANNEL","ALL 6"};
+static const char *const SN_TARGETS[]={"KK","ALL"};
+static const char *const SN_TARGET_NAMES[NTRK][2]={{"KK","ALL"},{"SN","ALL"},{"HH","ALL"},{"PR","ALL"},{"BS","ALL"},{"CH","ALL"}};
 static const char *const SN_CONTOUR[] = {"WALK","RISE","FALL","ARCH","MOTIF"};
 static const char *const SN_GEN_KIND[] = {"RHYTHM","MELODY","BOTH"};
 static const char *const SN_LIVE[] = {"OFF","1 LOOP","2 LOOPS","4 LOOPS"};

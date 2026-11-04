@@ -1,4 +1,5 @@
 let snowSelected=0,snowSchema=null,snowControls=[],snowDescriptorKey='',snowView='sound',snowHalf=0;
+let snowUpgradeFrom04=false;
 const snowRoles=['KICK','SNARE','HAT','PERC','BASS','CHORD'];
 const snowById=(id)=>document.getElementById(id);
 const snowPost=(type,data={})=>send({type,track:snowSelected,...data});
@@ -39,6 +40,8 @@ snowById('snow-rnd').onclick=()=>{snowPost(snowAll()?'snow-scene':'snow-generate
 snowById('snow-parm').onclick=()=>{snowPost('snow-genparm',{all:snowAll()});snowNotice('GEN PARM: нові локи поверх поточних нот.');};
 snowById('snow-clear').onclick=()=>{snowPost('snow-clear',{all:snowAll()});snowNotice('Кроки та локи очищено.');};
 snowById('snow-parm-amt').oninput=e=>{snowById('snow-amt-value').textContent=e.target.value+'%';const index=snowSchema?.params.findIndex(p=>p.name==='PARM AMT');if(index>=0){for(const track of snowAll()?[0,1,2,3,4,5]:[snowSelected])snowPost('snow-set',{track,index,value:+e.target.value});}};
+snowById('snow-target').onchange=()=>{const index=snowSchema?.params.findIndex(p=>p.name==='TARGET');if(index>=0)snowPost('snow-set',{index,value:snowAll()?1:0});};
+snowById('snow-random-sound').onclick=()=>{snowPost('snow-random-sound');snowNotice('RANDOM EDIT: усі параметри EDIT поточного каналу. SAVE held — UNDO.');};
 snowById('snow-color').onchange=e=>snowPost('snow-color',{value:+e.target.value});
 snowById('snow-preset').onchange=(e)=>{if(e.target.value!==''){snowPost('snow-preset',{preset:+e.target.value});snowNotice(`${snowRoles[snowSelected]}: ${e.target.selectedOptions[0].textContent}`);e.target.value='';}};
 function snowDesigner(schema){
@@ -74,6 +77,7 @@ function snowFrame(state){
 
  if(state.selected!==snowSelected){snowSelected=state.selected;snowPost('snow-schema');}
  if(state.values&&snowSchema){const key=snowSchema.params.map((p,i)=>p.group==='DRIVE / INSERT / DUCK'&&p.name==='TYPE'?state.values[i]:'').join(',');if(snowDescriptorKey&&key!==snowDescriptorKey)snowPost('snow-schema');snowDescriptorKey=key;}
+ if(snowSchema&&state.values){const target=snowById('snow-target'),index=snowSchema.params.findIndex(p=>p.name==='TARGET');target.options[0].textContent=['KK','SN','HH','PR','BS','CH'][snowSelected];if(index>=0&&document.activeElement!==target)target.value=state.values[index]?'all':'channel';}
  snowById('snow-selection').textContent=`${snowRoles[snowSelected]} / CH ${snowSelected+1}`;
  for(const b of document.querySelectorAll('[data-track]'))b.setAttribute('aria-pressed',String(+b.dataset.track===snowSelected));
  for(const c of document.querySelectorAll('[data-mask]'))c.checked=!!(state.mask&(1<<+c.dataset.mask));
@@ -85,4 +89,4 @@ function snowFrame(state){
  if(state.tempo&&document.activeElement!==snowById('snow-tempo'))snowById('snow-tempo').value=state.tempo;
  if(state.values)snowControls.forEach((c,i)=>{if(document.activeElement!==c.input){c.input.value=state.values[i];c.value.textContent=state.text?.[i]??state.values[i];}});
 }
-function snowReady(schema){snowDesigner(schema);for(const input of document.querySelectorAll('#snow-lab button,#snow-lab select,#snow-lab input'))input.disabled=false;snowById('snow-power').disabled=true;snowById('snow-power').textContent='Звук увімкнено';}
+function snowReady(schema){snowDesigner(schema);if(snowUpgradeFrom04){const index=schema.params.findIndex(p=>p.name==='TARGET');if(index>=0)for(let track=0;track<6;track++)snowPost('snow-set',{track,index,value:0});snowUpgradeFrom04=false;}for(const input of document.querySelectorAll('#snow-lab button,#snow-lab select,#snow-lab input'))input.disabled=false;snowById('snow-power').disabled=true;snowById('snow-power').textContent='Звук увімкнено';}

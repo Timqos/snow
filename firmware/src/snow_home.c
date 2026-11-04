@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * 3x2 pixel HOME, based on the user's second diagram. No framebuffer and no
- * audio-thread animation. Dirty tiles: <=2/frame, icons <=12 Hz, scope <=20 Hz. */
+ * audio-thread animation. Dirty tiles: <=2/frame, value-driven icons, scope <=20 Hz. */
 static uint8_t snow_home_active;
 static struct { uint32_t card[6],head,scope_ms,card_blits,scope_blits; } snow_home_state;
 static void snow_home_draw(void)
@@ -21,21 +21,20 @@ static void snow_home_draw(void)
     uint32_t drawn=0;
     for(uint32_t order=0;order<6u;order++) {
         uint32_t k=(order+song.sel)%6u;track_t *t=&trk[k];
-        uint32_t age=fm1_ms-snow_touch_state[k].ms,animate=snow_touch_state[k].valid&&age<800u&&!(ui_prefs&PREF_ANIM_OFF);
-        uint32_t phase=animate?(age/84u+1u):0u;
+        uint32_t active=snow_touch_state[k].valid,id=active?snow_touch_state[k].id:P_E0;
+        uint32_t position=snow_param_position(t,id);
         uint32_t pattern=snow_pattern_current(k),sig=ux.gen*977u+t->preset*31u+t->user*7919u+pattern*131u+(k==song.sel?0x40000000u:0u);
-        sig^=snow_touch_state[k].serial*65537u+phase*104729u+(uint32_t)t->p[P_MUTE]*51u;
+        sig^=snow_touch_state[k].serial*65537u+position*104729u+(uint32_t)t->p[P_MUTE]*51u;
         if(snow_home_state.card[k]==sig||drawn>=2u)continue;
         snow_home_state.card[k]=sig;drawn++;snow_home_state.card_blits++;
         cv_begin(80,92,T_BG);cv_rect(79,1,1,90,T_LINE);cv_rect(2,91,76,1,T_LINE);
         cv_rect(5,3,23,12,k==song.sel?T_THEME:T_SURF);snow_text(10,6,abbr[k],k==song.sel?T_INK:T_TEXT,2);
         char pat[5]="P";fmt_int(pat+1,(int32_t)pattern+1);cv_rect(53,3,23,12,T_SURF);snow_text(55,6,pat,T_THEME,3);
         char name[20];sound_name(t,name);snow_text(4,21,name,T_TEXT,12);
-        snow_icon(39,49,k,phase,2,t->p[P_MUTE]?T_DIM:animate?T_THEME:T_TEXT);
-        if(snow_touch_state[k].valid) {
-            uint32_t id=snow_touch_state[k].id;
-            if(id<P_COUNT){const param_desc_t *d=track_desc(t,id);int32_t value=snow_touch_state[k].value;
-                int32_t pct=d->max>d->min?clamp((value-d->min)*100/(d->max-d->min),0,100):0;
+        snow_icon(39,49,k,position,2,t->p[P_MUTE]?ux_mix(T_BG,T_THEME,30):T_THEME);
+        if(active) {
+            if(id<P_COUNT){const param_desc_t *d=track_desc(t,id);
+                int32_t pct=(int32_t)(position/10u);
                 snow_text(3,75,d->label,T_TEXT,8);char b[8];fmt_int(b,pct);str_cpy(b+str_len(b),"%",sizeof b-str_len(b));
                 snow_text(54,75,b,T_THEME,4);cv_rect(3,85,pct*73/100,2,T_THEME);
             }

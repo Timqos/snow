@@ -569,7 +569,15 @@ static uint32_t graph_y(void) { return large_kind() == LK_TALL ? LG_Y_GRAPH : Y_
  * taller (ADSR and LFO grow into it, the fixed layouts sit centred: graph_pad) */
 #define FOOT_LINE 16u
 static uint32_t foot_less(void) { return FOOT_LINE; }
-static uint32_t graph_h(void) { return (large_kind() == LK_TALL ? LG_H_GRAPH : H_GRAPH) + foot_less(); }
+static uint32_t graph_h(void)
+{
+#if FELUCCA_SNOW
+    const page_t *p=cur_page();
+    if(!ui.home&&!ui.layer&&((p->fam==FAM_SEQ&&p->graph==GR_NONE)||(p->fam==FAM_EDIT&&p->id[0]==P_E0)))
+        return 202u-graph_y(); /* keep the action hints clear of the graph blit */
+#endif
+    return (large_kind() == LK_TALL ? LG_H_GRAPH : H_GRAPH) + foot_less();
+}
 static int32_t graph_pad(void) { return (int32_t)foot_less() / 2; }
 static uint32_t foot_y(void) { return Y_FOOT + foot_less(); }
 static uint32_t foot_h(void) { return H_FOOT - foot_less(); }

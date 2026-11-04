@@ -31,7 +31,7 @@ static void snow_channels_draw(int patterns)
             }
         } else {
             snow_text(x+11,24,"LVL",T_MID,3);
-            snow_icon(x+19,47,k,0,1,t->p[P_MUTE]?T_DIM:T_THEME);
+            snow_icon(x+19,47,k,snow_param_position(t,P_LEVEL),1,t->p[P_MUTE]?ux_mix(T_BG,T_THEME,30):T_THEME);
             cv_frame(x+14,69,11,47,T_LINE);
             int32_t level=(t->p[P_LEVEL]-TP[P_LEVEL].min)*43/(TP[P_LEVEL].max-TP[P_LEVEL].min);
             cv_rect(x+16,114-level,7,level,t->p[P_MUTE]?T_DIM:T_THEME);

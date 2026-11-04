@@ -56,7 +56,7 @@ await worklet.onMessage({type:'snow-pattern',track:2,slot:2});
 worklet.publish();const frame=worklet.messages.findLast(m=>m.type==='frame');
 assert.equal(frame.snow.selected,2);assert.equal(frame.snow.patterns[2],2);assert.equal(frame.snow.values[alg],3);
 assert.equal(frame.snow.text.length,count);
-console.log('SNOW 0.4 WASM + WORKLET PASSED:',count,'editable parameters, algorithms, waveforms, ADSR, generation, independent patterns and control messages');
+console.log('SNOW 0.5 WASM + WORKLET PASSED:',count,'editable parameters, algorithms, waveforms, ADSR, generation, independent patterns and control messages');
 
 assert.equal(str(x.web_snow_role(0)),'KICK');assert.equal(str(x.web_snow_preset_name(0,8)),'SOFT LOW');
 assert.equal(str(x.web_snow_preset_name(1,8)),'BRUSH');assert.equal(x.web_snow_preset(0,10),1);
@@ -67,7 +67,7 @@ for(const group of ['CHANNEL DELAY','CHANNEL REVERB','CHANNEL CHORUS','TAPE','BI
 await worklet.onMessage({type:'snow-scene',vary:true});
 await worklet.onMessage({type:'snow-genparm',all:true});
 worklet.publish();const scene=worklet.messages.at(-1).snow;assert.equal(scene.used.length,6);assert.equal(scene.active.length,6);
-console.log('SNOW 0.4 ROLES / FX / RANDOM PASSED: 60 role-specific presets, per-channel FX controls, random phrases, auto locks and pattern grid metadata');
+console.log('SNOW 0.5 ROLES / FX / RANDOM PASSED: 60 role-specific presets, per-channel FX controls, random phrases, auto locks and pattern grid metadata');
 // Simultaneous racks run in the same firmware audio path as the browser and device.
 const z=await boot();render(z,1000);z.web_snow_demo();
 function parameter(group,name){return Array.from({length:z.web_snow_param_count()},(_,i)=>i).find(i=>{
@@ -81,3 +81,29 @@ for(let ch=0;ch<6;ch++)for(const [group,name,value] of rack){const i=parameter(g
 z.web_buttons(1<<10);render(z,70);z.web_buttons(0);render(z,70);
 const racks=render(z,8000);assert(racks.peak>0.02&&racks.peak<1);
 console.log('SIX CONCURRENT FX RACKS PASSED: finite bounded audio, peak',racks.peak);
+// Value-linked UI and full EDIT randomization through the production adapter.
+const target=find('GENERATIVE SEQUENCER','TARGET');assert(target>=0);
+const shortNames=['KK','SN','HH','PR','BS','CH'];
+for(let ch=0;ch<6;ch++){
+ assert.equal(str(x.web_snow_param_enum(ch,target,0)),shortNames[ch]);
+ assert.equal(str(x.web_snow_param_enum(ch,target,1)),'ALL');
+}
+const v=await boot();render(v,1000);v.web_snow_demo();
+const beforeGrid=Array.from(new Uint16Array(v.memory.buffer,v.web_snow_grid(1),64));
+const other=Array.from({length:count},(_,i)=>v.web_snow_param_value(0,i));
+const old=Array.from({length:count},(_,i)=>v.web_snow_param_value(1,i));
+assert.equal(v.web_snow_random_sound(1),0);
+const changedSound=Array.from({length:count},(_,i)=>v.web_snow_param_value(1,i));
+assert.notDeepEqual(changedSound,old);
+assert.deepEqual(Array.from({length:count},(_,i)=>v.web_snow_param_value(0,i)),other);
+assert.deepEqual(Array.from(new Uint16Array(v.memory.buffer,v.web_snow_grid(1),64)),beforeGrid);
+assert.equal(v.web_snow_random_sound(6),1);
+await worklet.onMessage({type:'snow-track',track:3});
+await worklet.onMessage({type:'snow-random-sound',track:3});
+assert.equal(worklet.messages.at(-1).type,'snow-schema');
+assert.equal(worklet.messages.at(-1).schema.params.find(p=>p.name==='TARGET').options[0],'PR');
+// Stress random sounds while the native sequence and UI are running.
+v.web_buttons(1<<10);render(v,70);v.web_buttons(0);render(v,70);
+for(let i=0;i<24;i++){assert.equal(v.web_snow_random_sound(i%6),0);const a=render(v,120);assert(a.peak<=1);}
+assert.equal(v.web_playing(),1);
+console.log('SNOW 0.5 RANDOM EDIT / TARGET PASSED: 96 EDIT parameters, role labels, unchanged sequence/other channels, live random-patch audio');

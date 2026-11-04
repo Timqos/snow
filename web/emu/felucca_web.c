@@ -672,6 +672,7 @@ EXPORT uint32_t web_snow_set(uint32_t channel,uint32_t i,int32_t value)
     motion_capture(t,id,t->p[id]);motion_unguard(guard);ui.force=1;
     return 0;
 }
+EXPORT uint32_t web_snow_random_sound(uint32_t channel){return (uint32_t)snow_random_sound(channel);}
 EXPORT uint32_t web_snow_generate(uint32_t channel,uint32_t vary) { return (uint32_t)snow_generate(channel,vary!=0); }
 EXPORT uint32_t web_snow_pattern(uint32_t channel,uint32_t slot) { return (uint32_t)snow_pattern_select(channel,slot); }
 EXPORT uint32_t web_snow_pattern_get(uint32_t channel) { return snow_pattern_current(channel); }

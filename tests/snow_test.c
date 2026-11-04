@@ -207,12 +207,81 @@ static void pattern_controls(void)
     advance(4600);assert(snow_pattern_current(0)==next&&!snow_generate(0,1));seq_stop();
     puts("Held SEQ: all six pattern encoders on one screen passed");
 }
+static void icon_position_tests(void)
+{
+    memset(snow_offset,0,sizeof snow_offset);
+    for(uint32_t kind=0;kind<6;kind++){
+        uint32_t rows[SN_ICON_N],first[SN_ICON_N],last[SN_ICON_N],hashes[101],unique=0;
+        for(uint32_t p=0;p<=100;p++){
+            snow_icon_rows(kind,p*10u,rows);uint32_t hash=2166136261u;
+            for(uint32_t y=0;y<SN_ICON_N;y++){assert(!(rows[y]>>SN_ICON_N));hash=(hash^rows[y])*16777619u;}
+            assert((rows[0]&3u)==3u&&(rows[29]&3u)==3u);
+            assert((rows[0]>>28)==3u&&(rows[29]>>28)==3u);
+            int seen=0;for(uint32_t j=0;j<p;j++)seen|=hashes[j]==hash;unique+=!seen;hashes[p]=hash;
+            if(!p)memcpy(first,rows,sizeof first);if(p==100)memcpy(last,rows,sizeof last);
+        }
+        uint32_t changed=0;for(uint32_t y=0;y<SN_ICON_N;y++)changed+=(uint32_t)__builtin_popcount(first[y]^last[y]);
+        printf("Icon %u: %u distinct value positions, %u changed pixels across sweep\n",kind+1,unique,changed);
+        assert(unique>=16&&changed>=45);
+        snow_icon_rows(kind,370,first);fm1_ms+=1234;snow_icon_rows(kind,370,last);assert(!memcmp(first,last,sizeof first));
+    }
+    go_home();sel_set(0);trk[0].p[P_MUTE]=0;trk[0].p[P_E0]=0;snow_touch(&trk[0],P_E0,0);advance(150);
+    assert(snow_param_position(&trk[0],P_E0)==0);
+    uint16_t before[900];for(uint32_t y=0;y<30;y++)memcpy(before+y*30,web_fb+(59+y)*240+25,60);
+    uint32_t blits=snow_home_state.card_blits;advance(1000);assert(snow_home_state.card_blits==blits);
+    for(uint32_t y=0;y<30;y++)assert(!memcmp(before+y*30,web_fb+(59+y)*240+25,60));
+    trk[0].p[P_E0]=127;snow_touch(&trk[0],P_E0,127);advance(80);assert(snow_param_position(&trk[0],P_E0)==1000);
+    uint32_t diff=0;for(uint32_t y=0;y<30;y++)for(uint32_t x=0;x<30;x++)diff+=before[y*30+x]!=web_fb[(59+y)*240+25+x];assert(diff>=45);
+    for(uint32_t c=0;c<NPALETTES;c++){
+        web_snow_color(c);advance(150);uint16_t ink=swap16(T_THEME),bg=swap16(T_BG);uint32_t pixels=0;
+        for(uint32_t y=59;y<89;y++)for(uint32_t x=25;x<55;x++){uint16_t p=web_fb[y*240+x];assert(p==ink||p==bg);pixels+=p==ink;}assert(pixels>30);
+    }
+    trk[0].p[P_E0]=0;snow_touch(&trk[0],P_E0,0);advance(80);
+    for(uint32_t y=0;y<30;y++)for(uint32_t x=0;x<30;x++)assert((before[y*30+x]!=swap16(SNOW_PALETTES[0].bg))==(web_fb[(59+y)*240+25+x]!=swap16(T_BG)));
+    puts("Value-driven icons: reversible 0..100%, fixed bounds, no idle animation, theme ink passed");
+}
+static void random_sound_tests(void)
+{
+    seq_stop();memset(snow_offset,0,sizeof snow_offset);
+    uint32_t initial_mask[(P_COUNT+31u)/32u];sel_set(0);snow_edit_mask(initial_mask);uint32_t count=0;
+    for(uint32_t id=0;id<P_COUNT;id++)count+=(initial_mask[id/32u]>>(id%32u))&1u;
+    printf("Random EDIT covers %u parameters\n",count);assert(count>=70);
+    assert(!((initial_mask[P_LEVEL/32u]>>(P_LEVEL%32u))&1u));assert((initial_mask[SN_BMIX/32u]>>(SN_BMIX%32u))&1u);
+    assert(snow_random_sound(NTRK)==1);
+    for(uint32_t k=0;k<NTRK;k++){
+        sel_set(k);assert(trk[k].p[SN_G_SCOPE]==0);const param_desc_t *target=track_desc(&trk[k],SN_G_SCOPE);
+        assert(!strcmp(target->names[0],SN_TARGET_NAMES[k][0])&&!strcmp(target->names[1],"ALL"));
+        int16_t params[NTRK][P_COUNT];step_t steps[NTRK][NSTEP];uint32_t eng[NTRK],preset[NTRK];
+        for(uint32_t j=0;j<NTRK;j++){memcpy(params[j],trk[j].p,sizeof params[j]);memcpy(steps[j],trk[j].step,sizeof steps[j]);eng[j]=trk[j].eng_req;preset[j]=trk[j].preset;}
+        motion_store_t locks=motion;int16_t low[P_COUNT],high[P_COUNT];for(uint32_t id=0;id<P_COUNT;id++){low[id]=32767;high[id]=-32768;}
+        for(uint32_t run=0;run<40;run++){
+            int16_t prev[P_COUNT];memcpy(prev,trk[k].p,sizeof prev);assert(!snow_random_sound(k));assert(memcmp(prev,trk[k].p,sizeof prev));
+            for(uint32_t id=0;id<P_COUNT;id++){
+                int included=(initial_mask[id/32u]>>(id%32u))&1u;
+                if(!included)assert(trk[k].p[id]==params[k][id]);
+                else {const param_desc_t*d=track_desc(&trk[k],id);assert(trk[k].p[id]>=d->min&&trk[k].p[id]<=d->max);if(trk[k].p[id]<low[id])low[id]=trk[k].p[id];if(trk[k].p[id]>high[id])high[id]=trk[k].p[id];}
+            }
+            for(uint32_t j=0;j<NTRK;j++){assert(!memcmp(steps[j],trk[j].step,sizeof steps[j]));assert(trk[j].eng_req==eng[j]&&trk[j].preset==preset[j]);if(j!=k)assert(!memcmp(params[j],trk[j].p,sizeof params[j]));}
+            assert(motion.count==locks.count);for(uint32_t e=0;e<locks.count;e++)assert(!memcmp(&motion.event[e],&locks.event[e],sizeof locks.event[e]));
+        }
+        for(uint32_t id=0;id<P_COUNT;id++)if((initial_mask[id/32u]>>(id%32u))&1u)assert(high[id]>low[id]);
+        int16_t previous[P_COUNT];memcpy(previous,trk[k].p,sizeof previous);snow_random_sound(k);undo_step(0);assert(!memcmp(previous,trk[k].p,sizeof previous));ui.undo_w=0;
+    }
+    sel_set(0);ui.home=0;ui.page=(uint8_t)page_first(FAM_EDIT);ui.force=1;advance(150);
+    assert(graph_y()+graph_h()<=202u);
+    uint16_t hint[240*8];memcpy(hint,web_fb+206*240,sizeof hint);advance(500);assert(!memcmp(hint,web_fb+206*240,sizeof hint));
+    uint32_t ink=0;for(uint32_t i=0;i<240*8;i++)ink+=hint[i]==swap16(T_THEME);assert(ink>40);
+    int16_t before[P_COUNT];memcpy(before,trk[0].p,sizeof before);int8_t octave=song.octave;tap(B_OCTUP);assert(memcmp(before,trk[0].p,sizeof before)&&song.octave==octave);
+    /* Only the first EDIT page owns this shortcut. */
+    ui.page++;ui.force=1;advance(80);memcpy(before,trk[0].p,sizeof before);tap(B_OCTUP);assert(!memcmp(before,trk[0].p,sizeof before));
+    puts("Random EDIT: all exposed parameters, selected channel only, bounds, sequence/locks intact, undo, physical OCT+ passed");
+}
 static void interface_tests(void)
 {
     go_home();advance(150);assert(snow_home_active);
     uint32_t cards=snow_home_state.card_blits,scopes=snow_home_state.scope_blits;snow_touch(&trk[0],P_E0,64);advance(1000);
     assert(snow_home_state.card_blits-cards<=14);assert(snow_home_state.scope_blits-scopes<=22);
-    for(uint32_t k=0;k<6;k++)for(uint32_t f=0;f<12;f++){assert(snow_icon_bit(k,-7,-7,f));assert(snow_icon_bit(k,7,7,f));}
+
     for(uint32_t c=0;c<UI_NPALETTES;c++){web_snow_color(c);advance(80);assert(web_snow_color_get()==c);}
     web_buttons(1u<<B_GLO);advance(700);assert(layer_open()==LAYER_GLO&&snow_channels_active);
     static const uint32_t knobs[]={EN_K1,EN_K2,EN_K3,EN_K4,EN_ALGO,EN_PRESET};
@@ -233,8 +302,8 @@ static void interface_tests(void)
 int main(void)
 {
     setvbuf(stdout,0,_IOLBF,0);web_nor_erase();web_boot();advance(1000);
-    synth_tests();generation_tests();ornament_tests();patterns_and_snapshot();fx_tests();pattern_controls();interface_tests();
-    puts("ALL SNOW 0.4 TESTS PASSED");return 0;
+    synth_tests();generation_tests();ornament_tests();patterns_and_snapshot();fx_tests();pattern_controls();interface_tests();icon_position_tests();random_sound_tests();
+    puts("ALL SNOW 0.5 TESTS PASSED");return 0;
 }
 
 #endif

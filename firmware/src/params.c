@@ -225,7 +225,7 @@ static const param_desc_t TP[P_COUNT] = {
     [SN_G_SEED_B] = PD("SEED B",F_INT,0,127,17),
     [SN_G_SEED_C] = PD("SEED C",F_INT,0,127,41),
     [SN_G_SEED_D] = PD("SEED D",F_INT,0,127,63),
-    [SN_G_SCOPE] = PE("TARGET",SN_TARGETS,1),
+    [SN_G_SCOPE] = PE("TARGET",SN_TARGETS,0),
 #else
 #define LANE(k, l) [P_LN0 + (k)] = PD(l, F_PCT, 0, 127, 127)
     LANE(0, "KICK"), LANE(1, "SNARE"), LANE(2, "CLAP"), LANE(3, "CL HAT"),
@@ -339,6 +339,13 @@ static const param_desc_t *track_desc(const track_t *t, uint32_t id)
     if (t->p[P_ESYNC] && (id == P_ATK || id == P_DEC || id == P_REL))   /* ((1.3) ENV SYNC: note values) */
         return &ESYNC_DESC[id == P_ATK ? 0 : id == P_DEC ? 1 : 2];
 #if FELUCCA_SNOW
+    if(id==SN_G_SCOPE){
+        static const param_desc_t d[NTRK]={
+#define SN_SCOPE(k) {"TARGET",SN_TARGET_NAMES[k],0,1,0,F_ENUM,0}
+            SN_SCOPE(0),SN_SCOPE(1),SN_SCOPE(2),SN_SCOPE(3),SN_SCOPE(4),SN_SCOPE(5)
+#undef SN_SCOPE
+        };return &d[snow_role(t)];
+    }
     if (id == SN_G_BASE) { static const param_desc_t d={"BASE NOTE",0,0,127,60,F_NOTE,0}; return &d; }
 #endif
     if (id >= P_E0 && id <= P_E7) {                   /* the engine asked for (t->engine follows after a fade) */
