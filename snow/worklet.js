@@ -91,7 +91,13 @@ if (typeof registerProcessor === "function") {
         ex.web_snow_preset(m.track >>> 0, m.preset >>> 0);
         this.port.postMessage({type:"snow-schema", schema:this.snowSchema()});
       }
-      else if (m.type === "snow-generate" && ex.web_snow_generate) ex.web_snow_generate(m.track >>> 0, m.vary ? 1 : 0);
+      else if (m.type === "snow-scene" && ex.web_snow_scene) {
+        if(ex.web_snow_scene(m.style>>>0,m.vary?1:0,m.tempo?1:0))this.port.postMessage({type:"snow-notice",text:"Дочекайся запуску запланованого патерна."});
+      }
+      else if (m.type === "snow-tempo" && ex.web_snow_tempo) ex.web_snow_tempo(m.value>>>0);
+      else if (m.type === "snow-generate" && ex.web_snow_generate) {
+        if(ex.web_snow_generate(m.track>>>0,m.vary?1:0))this.port.postMessage({type:"snow-notice",text:"Дочекайся запуску запланованого патерна."});
+      }
       else if (m.type === "snow-pattern" && ex.web_snow_pattern) {
         const rc=ex.web_snow_pattern(m.track >>> 0, m.slot >>> 0);
         if(rc) this.port.postMessage({type:"snow-notice",text:"Pattern unavailable: bank or automation capacity reached."});
@@ -112,13 +118,13 @@ if (typeof registerProcessor === "function") {
       const x=this.ex;
       if (!x?.web_snow_param_count) return null;
       const channel=x.web_snow_selected();
-      return {params:Array.from({length:x.web_snow_param_count()},(_,i)=> {
+      return {channel,role:this.string(x.web_snow_role(channel)),styles:Array.from({length:x.web_snow_style_count()},(_,i)=>this.string(x.web_snow_style_name(i))),params:Array.from({length:x.web_snow_param_count()},(_,i)=> {
         const min=x.web_snow_param_min(channel,i),max=x.web_snow_param_max(channel,i);
         const first=x.web_snow_param_enum(channel,i,min);
         return {id:x.web_snow_param_id(i),name:this.string(x.web_snow_param_name(channel,i)),
           group:this.string(x.web_snow_param_group(i)),min,max,
           options:first?Array.from({length:max-min+1},(_,v)=>this.string(x.web_snow_param_enum(channel,i,min+v))):null};
-      }),presets:Array.from({length:18},(_,i)=>this.string(x.web_snow_preset_name(i)))};
+      }),presets:Array.from({length:x.web_snow_preset_count(channel)},(_,i)=>this.string(x.web_snow_preset_name(channel,i)))};
     }
 
     publish() {
@@ -131,6 +137,10 @@ if (typeof registerProcessor === "function") {
           msg.snow.values=Array.from({length:ex.web_snow_param_count()},(_,i)=>ex.web_snow_param_value(selected,i));
           msg.snow.text=Array.from({length:ex.web_snow_param_count()},(_,i)=>this.string(ex.web_snow_param_text(selected,i)));
           msg.snow.patterns=Array.from({length:6},(_,i)=>ex.web_snow_pattern_get(i));
+          msg.snow.active=Array.from({length:6},(_,i)=>ex.web_snow_pattern_active(i));
+          msg.snow.pending=Array.from({length:6},(_,i)=>ex.web_snow_pattern_pending(i));
+          msg.snow.used=Array.from({length:6},(_,k)=>Array.from({length:16},(_,i)=>!!ex.web_snow_pattern_used(k,i)));
+          msg.snow.tempo=ex.web_snow_tempo_get();
         }
       }
       const leds = [ex.web_lit_buttons(), ex.web_lit_keys(), ex.web_dim_buttons(), ex.web_dim_keys(), ex.web_dim_level(),

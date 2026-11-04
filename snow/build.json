@@ -1,7 +1,7 @@
 {
-  "stage": "Snow open synthesis prototype",
-  "version": "v0.2-snow",
-  "source_commit": "2c6f47277d294004901e872ff6540ed12c1d125e",
+  "stage": "Snow fixed instruments, channel FX and style generator",
+  "version": "v0.3-snow",
+  "source_commit": "9fead0fc1c4b3f849e5a7e7cabdc6f9a2f0647ee",
   "source_dirty": false,
-  "package_sha256": "a645c44917213f8c4ff6e2b8957e3af7ce8b77efeedc8562ac03c13eb680df3f"
+  "package_sha256": "08e0bf8468b44eac68d12d94953e17a9b2c580c79b30b68cd8e23498ab9f5e87"
 }
