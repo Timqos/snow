@@ -1,3 +1,7 @@
+> **Snow / FM-1:** this fork is the starting point for a six-machine FM groovebox.
+> The current sound engine remains Skiff. See the [agreed Snow specification](docs/SNOW_SPEC.md)
+> and [cloud build and simulator instructions](docs/CLOUD_BUILD.md).
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/logo/skiff-logo.svg">
