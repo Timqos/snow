@@ -119,6 +119,9 @@ static void felucca_init(void)
         apply_preset_to(t, TRK_DEF[i][1]);    /* with its sends */
         t->engine = t->eng_req;
         track_defaults_steps(t);              /* (a sound load never touches them) */
+#if FELUCCA_SNOW
+        if (i == 5u) t->p[P_CHRD] = 3;       /* Snow: a major triad from one key; CHORD page changes it */
+#endif
     }
     lists_clear();                            /* (Skiff phase 5) no lists, no patterns on the tracks */
     undo_depth--;

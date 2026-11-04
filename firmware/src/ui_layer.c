@@ -626,12 +626,16 @@ static void layer_knob(uint32_t k, int32_t s)
         perf_k[k] = (int16_t)clamp(perf_k[k] + accel(EN_K1 + k, s, k ? 100 : 200), k ? 0 : -100, 100);   /* (#126) */
     } else if (l == LAYER_GLO) {                        /* the four tracks' LEVEL (T1..T4; (Skiff phase 6) the four
                                                          * shown: ui.c trk_top), recorded as on MIXER */
+#if FELUCCA_SNOW
+        snow_control_all(k, s);
+#else
         track_t *t = &trk[trk_top() + k];
         int16_t *vp = &t->p[P_LEVEL];
         *vp = (int16_t)clamp(*vp + accel(EN_K1 + k, s, TP[P_LEVEL].max - TP[P_LEVEL].min), TP[P_LEVEL].min,
                              TP[P_LEVEL].max);
         motion_capture(t, P_LEVEL, *vp);
         ml_knob(t, P_LEVEL);                            /* ((1.3) MIDI LEARN: Tk LEVEL picked) */
+#endif
     } else if (l == LAYER_EDIT) {                       /* ENG, No., FAV */
         if (k == 0u)
             edit_load(eng_step_for(song.sel, TSEL->eng_req, s), 0);
@@ -1274,12 +1278,20 @@ static void layer_cards(uint32_t l)
             draw_column(3, "DEPTH", val, "%", VR_LIVE, (100 - perf_k[3]) * 10, ICON_MIX);
         }
     } else if (l == LAYER_GLO) {                        /* the four tracks' LEVEL (the track's icon; muted: dim; */
+#if FELUCCA_SNOW
+        static const char *const names[4] = {"TONE", "SHAPE", "SWEEP", "DECAY"};
+        for (c = 0; c < 4u; c++) {
+            fmt_int(val, snow_param(TSEL, c));
+            draw_column(c, names[c], val, "ALL", VR_LIVE, snow_param(TSEL, c) * 1000 / 127, 0);
+        }
+#else
         for (c = 0; c < 4u; c++) {                      /* (Skiff phase 6) the four shown, ui.c trk_top) */
             uint32_t k = trk_top() + c;
             param_format(&TP[P_LEVEL], trk[k].p[P_LEVEL], val, &unit);
             draw_column(c, "LEVEL", val, unit, glo_sounding(k) ? VR_LIVE : VR_DIM, RATIO(&TP[P_LEVEL], trk[k].p[P_LEVEL]),
                         trk_icon(k, 1));
         }
+#endif
     } else if (l == LAYER_EDIT) {
         engine_columns();
     } else if (l == LAYER_PERF) {                       /* (Skiff) the throws as the B mockup shows them: how far */
@@ -1332,8 +1344,13 @@ static void draw_layer(void)
         sig += (perf_kill ? 0u : perf_held | perf_latched) * 31u + perf_latch_on * 11u + perf_act * 131u + perf_avail() * 7u + (uint32_t)perf_harm_on() * 3u +
                glo_mutes() * 7717u + perf_cut * 2803u;   /* ((2.0, D 1A) the black keys: GLO's MUTE) */
     else if (l == LAYER_GLO)
+#if FELUCCA_SNOW
+        sig += snow_mask * 997u + snow_param(TSEL, 0) * 31u + snow_param(TSEL, 1) * 127u +
+               snow_param(TSEL, 2) * 521u + snow_param(TSEL, 3) * 2081u;
+#else
         sig += perf_solo * 31u + (uint32_t)song.g[G_CLOCK] * 5u + (uint32_t)seq_fill * 104729u +
                glo_mutes() * 131u + trk_top() * 1299709u + (perf_cut | perf_held >> PF_M1) * 2803u;   /* ((2.0) holds) */
+#endif
     else if (l == LAYER_SCL)
         sig += (uint32_t)TSEL->p[P_SCALE] * 31u;
     else if (l == LAYER_REC)

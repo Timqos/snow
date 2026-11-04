@@ -523,3 +523,14 @@ asked first, as on the device. Nothing of these is pushed: the editor reads what
 
 **Still open:**
 - the 20 MHz LCD clock, `LCD_BAUD=2`, to try on hardware.
+# Snow prototype variant
+
+With `FELUCCA_SNOW=1`, tracks 1–6 are fixed to KICK / SNARE / HAT / PERC / BASS /
+CHORD. The four HOME and GLO-held knobs are TONE / SHAPE / SWEEP / DECAY;
+GLO applies additive offsets over the stored sound and step locks. GLO+SAVE
+captures a RAM-only musical snapshot, GLO+HOME restores it while the transport
+keeps its position, GLO+OCT− toggles the selected track in Control All, and
+GLO+OCT+ reloads that track alone. The ordinary SAVE/project workflow remains.
+The complete prototype contract and outstanding work are in
+[docs/SNOW_PREVIEW.md](docs/SNOW_PREVIEW.md). The rules below remain the baseline
+Skiff contract when `FELUCCA_SNOW=0`.

@@ -554,4 +554,50 @@ EXPORT uint16_t *web_screen(void) { return web_fb; }
 EXPORT uint32_t web_screen_draws(void) { return web_draws; }
 EXPORT uint32_t web_now_ms(void) { return fm1_ms; }
 EXPORT uint32_t web_playing(void) { return song.playing; }
+#if FELUCCA_SNOW
+/* Explicit demo command: never replaces a user's work during boot. */
+EXPORT void web_snow_demo(void)
+{
+    uint32_t k, s;
+    static const uint16_t hits[6] = {0x1111, 0x1010, 0xaaaa, 0x4080, 0x4545, 0x0101};
+    seq_stop();
+    for (k = 0; k < NTRK; k++) {
+        motion_reset(&trk[k]);
+        apply_preset_to(&trk[k], 0);
+        trk[k].p[P_SLEN] = 16;
+        trk[k].p[P_SDIV] = 2;
+        trk[k].p[P_SGATE] = k == 5u ? 127 : 75;
+        for (s = 0; s < NSTEP; s++) {
+            memset(&trk[k].step[s], 0, sizeof(step_t));
+            trk[k].step[s].time = ST_REST;
+            if (s < 16u && ((hits[k] >> s) & 1u)) {
+                trk[k].step[s].time = ST_NOTE;
+                trk[k].step[s].n = 1;
+                trk[k].step[s].note[0] = (uint8_t)(k == 4u ? (s >= 8u ? 55 : 60) : 60);
+                trk[k].step[s].vel = (uint8_t)(k == 2u ? (s % 4u == 3u ? 85 : 60) : 105);
+                if (k == 5u) {
+                    trk[k].step[s].n = 3;
+                    trk[k].step[s].note[1] = 64;
+                    trk[k].step[s].note[2] = 67;
+                }
+            }
+        }
+    }
+    song.g[G_BPM] = 120;
+    memset(snow_offset, 0, sizeof snow_offset);
+    motion_set_lock(&trk[0], 8, P_E0, 100);
+    motion_set_lock(&trk[3], 7, P_E1, 100);
+    motion.on = 63;
+    snow_temp_save();
+    ui.force = 1;
+}
+EXPORT void web_snow_save(void) { snow_temp_save(); }
+EXPORT uint32_t web_snow_reload(uint32_t mask) { return (uint32_t)snow_temp_reload(mask & 63u); }
+EXPORT void web_snow_select(uint32_t track) { if (track < NTRK) { sel_set(track); ui.force = 1; } }
+EXPORT int32_t web_snow_value(uint32_t track, uint32_t knob) { return track < NTRK && knob < 4u ? snow_param(&trk[track], knob) : -1; }
+EXPORT void web_snow_control(uint32_t knob, int32_t delta) { snow_control_all(knob, clamp(delta, -127, 127)); }
+EXPORT void web_snow_mask(uint32_t mask) { snow_mask = (uint8_t)(mask & 63u); }
+EXPORT uint32_t web_snow_mask_get(void) { return snow_mask; }
+EXPORT uint32_t web_snow_selected(void) { return song.sel; }
+#endif
 EXPORT uint32_t web_sample_rate(void) { return FS; }

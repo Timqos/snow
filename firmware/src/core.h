@@ -58,10 +58,15 @@ _Static_assert(NTRK <= 8 && NPART < NVOICE, "a track mask is a uint8_t; each par
                                   * sounds (fm4_convert.c), settings PER1..PER3, 1.0's FM6 bank. Only the converter
                                   * (web/conv) and its tests build them; 2.0 keeps such a record's bytes (OLD FORMAT) */
 #endif
-#define NENGINES 15u             /* (Skiff) DRUM-X (14) after SLICE (13): the other engines keep their numbers */
+/* Snow: appended machine IDs preserve every upstream stored engine number. */
+#ifndef FELUCCA_SNOW
+#define FELUCCA_SNOW 0
+#endif
+#define ENGI_SNOW 15u
+#define NENGINES (15u + (FELUCCA_SNOW ? 6u : 0u))
 #define ENGI_DIGITAL 1u          /* reserved without FELUCCA_FM4: never selectable (eng_ok), its sounds load as FM6 */
 #define ENGI_SLICE 13u           /* reserved without FELUCCA_SLICE, as DIGITAL is without FELUCCA_FM4 */
-#define NENG_SHOWN (NENGINES - !FELUCCA_FM4 - !FELUCCA_SLICE)   /* the engines one can pick: PRESETS, the EDIT layer,
+#define NENG_SHOWN (FELUCCA_SNOW ? 6u : NENGINES - !FELUCCA_FM4 - !FELUCCA_SLICE)   /* the engines one can pick: PRESETS, the EDIT layer,
                                                 * the editor, in the display order of engines.c ENGINE_ORDER */
 #define UP_SLOTS 32u             /* user presets (upreset.c) */
 #define NELEM(a) (sizeof(a) / sizeof((a)[0]))
@@ -237,7 +242,7 @@ static uint32_t gsid_get(int16_t *g, const uint8_t *b, uint32_t max)
 #define ENGI_PHYS 9u
 #define ENGI_DRUM 10u
 #define ENGI_DRUMX 14u           /* (Skiff) DRUM-X (eng_drumx.c): a drum track as DRUM's (seq.c drum_track) */
-#define NHEAVY 4u                /* (Skiff phase 6) the tracks that play every engine; the ones after them are light: no
+#define NHEAVY (FELUCCA_SNOW ? 0u : 4u) /* Snow uses no PHYS/GRAIN state; release that RAM for snapshots and FX.
                                   * PHYS, no GRAIN (engines.c eng_allowed: their state is the big one) */
 _Static_assert(NTRK >= NHEAVY, "the light tracks come after the four");
 /* PHYS MODEL DRUM (MODEL 4, before 1.0) -> the DRUM engine, its E values in place: {MODEL, TUNE, TONE, DECY,

@@ -1,7 +1,8 @@
 > **Snow / FM-1:** this fork is the starting point for a six-machine FM groovebox.
-> The current sound engine remains Skiff. See the [agreed Snow specification](docs/SNOW_SPEC.md)
+> Snow 0.1 adds six fixed FM machines, Control All and RAM Save/Reload; the default build retains Skiff.
+> See the [prototype guide](docs/SNOW_PREVIEW.md), [agreed Snow specification](docs/SNOW_SPEC.md)
 > and [cloud build and simulator instructions](docs/CLOUD_BUILD.md).
-> [**Open the playable baseline simulator**](https://timqos.github.io/snow/try/).
+> [**Try Snow 0.1**](https://timqos.github.io/snow/snow/) · [Compare the Skiff baseline](https://timqos.github.io/snow/try/).
 
 <p align="center">
   <picture>
