@@ -3,6 +3,7 @@
 > animated snowflake startup, six-channel mixer/pattern screens, value-linked icons, role-aware sound generation, GEN RND / GEN PARM and a backup-first installer. Default builds retain Skiff.
 > [Prototype guide](docs/SNOW_PREVIEW.md) · [Current goals](docs/SNOW_SPEC.md) · [Cloud build](docs/CLOUD_BUILD.md).
 > [**Try Snow 0.6.1**](https://timqos.github.io/snow/snow/) · [Skiff baseline](https://timqos.github.io/snow/try/).
+> [Installation & rollback audit](docs/SNOW_HARDWARE_AUDIT.md): software checks pass; physical FM-1 qualification is pending.
 
 <p align="center">
   <picture>

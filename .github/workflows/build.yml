@@ -27,6 +27,8 @@ jobs:
       EMU_PREVIEW: '0'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # compare flash/loader/USB sources with the audited Skiff base
       - name: Cloud build paths
         run: |
           echo "JIELI_TOOLCHAIN=$RUNNER_TEMP/snow-jieli/toolchain" >> "$GITHUB_ENV"
@@ -60,7 +62,10 @@ jobs:
           path: |
             build/*-build.log
             build/host-tests.log
+            build/snow-update-audit.log
             build/ui_new/report.txt
+            build/snow-update-audit/*.log
+            build/snow-update-audit/update-audit.json
           if-no-files-found: ignore
       - name: Downloadable firmware and simulator
         uses: actions/upload-artifact@v4

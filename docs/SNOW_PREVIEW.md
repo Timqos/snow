@@ -107,6 +107,11 @@ firmware and its tools for rollback. Direct USB, stable power, a desktop Web MID
 SysEx browser, no competing MIDI apps, and an uninterrupted tab are required.
 Physical recovery may require FM-1-transporter if the loader is unavailable.
 
+The [installation and rollback audit](SNOW_HARDWARE_AUDIT.md) records the exact
+package, unchanged boot/update components, tested transitions and the physical
+qualification still required. Factory rollback must match the preserved V15/V16
+startup head. Snow's musical data is not automatically portable to other forks.
+
 ## Verification and limits
 
 Native, sanitizer and WASM tests cover role identity, playable register/envelopes,

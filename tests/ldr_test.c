@@ -19,7 +19,9 @@
 #include <string.h>
 
 #if BOARD_SMK37
+#ifndef FELUCCA_ID
 #define FELUCCA_ID "ota-SMK-37 Pro_700"
+#endif
 #define T_APP_HI 0x9D000u                   /* end of the app area the loader writes */
 #define T_REC 0xBFF00u                      /* the SMK build's update record (ota.c OTA_RES) */
 #define T_REC2 0xAEF00u                     /* a record elsewhere in the VM (the stock app's staging is not fixed) */
@@ -29,7 +31,9 @@
 #define T_DATA_HI 0u
 #define T_USER 0xC2000u                     /* user sample data (USR1), outside the record window */
 #else
+#ifndef FELUCCA_ID
 #define FELUCCA_ID "ota-FM-1_900"
+#endif
 #define T_APP_HI 0x93000u
 #define T_REC 0xE4F00u
 #define T_REC2 0xE8F00u                     /* the stock firmware's */
