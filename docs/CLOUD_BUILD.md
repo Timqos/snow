@@ -5,12 +5,22 @@ Workflow **Snow firmware and simulator** збирає поточну проши�
 перевіряє її наявним набором тестів і збирає симулятор та конвертер у WebAssembly.
 Звук прошивки на цьому етапі не змінено.
 
+**Робочий браузерний симулятор:**
+[Snow FM-1](https://snow-fm1-lab.superfalcon1.chatgpt.site/try/).
+Сторінку опубліковано через Sites з доступом для власника; натисніть **Switch on**.
+Це базовий Skiff, а не готові нові інструменти Snow.
+
 На Mac нічого встановлювати не потрібно. Відкрийте вкладку **Actions** у
 `Timqos/snow`, виберіть успішний запуск і завантажте результат
 `snow-firmware-and-simulator-…`. Він містить сайт, `.fwsc`, контрольну суму,
 дані вихідного коміту й ліцензії. Логи доступні окремим artifact.
 
 ## Сторінка в браузері
+
+Готова базова сторінка також записана в гілку `gh-pages`. GitHub-підключення
+повернуло HTTP 403 при ввімкненні Pages через API, тому для доступу без ручних
+налаштувань зараз використовується наведене вище посилання Sites.
+Нижче — окремий маршрут автоматичної публікації майбутніх збірок на GitHub Pages.
 
 Після потрапляння workflow у `main` у **Settings → Pages → Build and deployment**
 потрібно вибрати **GitHub Actions**. Далі в **Actions → Snow firmware and simulator →
@@ -29,10 +39,10 @@ Workflow публікує лише збірку, що пройшла перев�
 
 Залежності встановлюються у хмарному середовищі, не на комп'ютері користувача:
 Python 3.12 з Pillow 13.0.0 і fonttools 4.61.1, Node.js 22, Emscripten 3.1.64
-та компілятор JieLi з `tools/get_toolchain.sh`.
+та компілятор JieLi `20260730.1` з `tools/cloud_toolchain.sh`, з перевіркою SHA-256.
 
 ```sh
-sh tools/get_toolchain.sh /workspace/snow-deps/jieli
+bash tools/cloud_toolchain.sh /workspace/snow-deps/jieli
 python3 tools/cloud_sdk.py /workspace/snow-deps/ac79
 # Emscripten має бути у PATH.
 JIELI_TOOLCHAIN=/workspace/snow-deps/jieli/toolchain \
@@ -42,6 +52,8 @@ AC79_SDK=/workspace/snow-deps/ac79 bash tools/cloud_build.sh
 `cloud_sdk.py` завантажує тільки три необхідні файли з офіційного SDK за
 фіксованим тегом і перевіряє SHA-256 з `tools/build.py` перед використанням.
 Пакувальник переносить ліцензії й авторство вихідних компонентів.
+
+Виміри базової збірки та початкові обмеження DSP: [BASELINE_AUDIT.md](BASELINE_AUDIT.md).
 
 Офіційні заводські пакети FM-1/SMK-37 і DaisySP не входять у цей checkout:
 відповідні додаткові перевірки upstream пропускаються. Перевірки на фізичному

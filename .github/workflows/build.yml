@@ -37,8 +37,8 @@ jobs:
           node-version: '22'
       - name: Python build dependencies
         run: python -m pip install Pillow==13.0.0 fonttools==4.61.1
-      - name: JieLi compiler
-        run: sh tools/get_toolchain.sh "$RUNNER_TEMP/snow-jieli"
+      - name: Pinned and verified JieLi compiler
+        run: bash tools/cloud_toolchain.sh "$RUNNER_TEMP/snow-jieli"
       - name: Checked AC79 SDK files
         run: python tools/cloud_sdk.py "$AC79_SDK"
       - name: Emscripten 3.1.64
