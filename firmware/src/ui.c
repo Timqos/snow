@@ -61,9 +61,12 @@ static void snow_pattern_knob(uint32_t channel,int32_t steps);
 static uint32_t snow_pattern_current(uint32_t channel);
 static int snow_pattern_used(uint32_t channel,uint32_t slot);
 static int snow_pattern_select(uint32_t channel,uint32_t slot);
-static uint8_t snow_pattern_bank,snow_pattern_half;
+static uint8_t snow_pattern_half;
 static int snow_generate(uint32_t channel,int vary);
-static int snow_generate_scene(uint32_t style,int vary,int set_tempo);
+static int snow_generate_scene(int vary);
+static int snow_generate_parameters(uint32_t channel);
+static int snow_parameter_scene(void);
+static int snow_clear_sequence(int all);
 static void snow_sequence_poll(void);
 #endif
 static uint32_t pool_len(uint32_t id);         /* (Skiff phase 5) SAVE > PATTERNS, the pool view (bank.c) */

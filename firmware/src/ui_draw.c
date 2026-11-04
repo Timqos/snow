@@ -615,6 +615,15 @@ static void ret_hints(uint32_t ret, int32_t y)
 }
 static void draw_foot(void)
 {
+#if FELUCCA_SNOW
+    if(!ui.home&&!ui.layer&&!ui.shift&&snow_gen_page(cur_page())){
+        uint32_t sig=ux.gen*977u+123u;
+        if(ui.force||ui.foot_sig!=sig){ui.foot_sig=sig;cv_oy=0;cv_begin(240,38,T_BG);
+            snow_text(3,4,"O+ GEN RND   O- GEN PARM",T_THEME,38);
+            snow_text(3,17,"SAVE + O- : CLEAR",T_MID,38);cv_blit(0,202);}
+        return;
+    }
+#endif
     char s[48], pn[16], ti[20];
     const track_t *t = TSEL;
     uint32_t sig;
@@ -1401,6 +1410,10 @@ static void confirm_text(char *a, char *b)
 static void draw_confirm(void) { draw_confirm_blocks(); }   /* (U2: BLOCKS' dialog, ui_blocks.c) */
 
 
+#if FELUCCA_SNOW
+#include "snow_home.c"
+#include "snow_channels.c"
+#endif
 static void ui_draw_page(uint32_t counting);
 static void ui_draw(void)
 {
@@ -1423,6 +1436,14 @@ static void ui_draw(void)
 }
 static void ui_draw_page(uint32_t counting)
 {
+#if FELUCCA_SNOW
+    int snow_overview=!ui.menu&&!ui.confirm&&!name_on()&&!counting&&!ui.shift&&
+        ((ui.layer&&(ui.ly==LAYER_GLO||ui.ly==LAYER_SEQ))||(!ui.layer&&!ui.home&&(cur_page()->graph==GR_TRK||cur_page()->graph==GR_SNOW_PAT)));
+    if(snow_overview){snow_home_active=0;snow_channels_draw(ui.layer?ui.ly==LAYER_SEQ:cur_page()->graph==GR_SNOW_PAT);return;}
+    snow_channels_active=0;
+    if(!ui.home||ui.menu||ui.confirm||ui.layer||ui.shift||name_on()||counting)snow_home_active=0;
+    if(ui.home&&!ui.menu&&!ui.confirm&&!ui.layer&&!ui.shift&&!name_on()&&!counting){snow_home_draw();return;}
+#endif
     if (ui.uboot) {
         draw_uboot();
         draw_head();

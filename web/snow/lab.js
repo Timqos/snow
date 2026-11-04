@@ -34,9 +34,12 @@ snowById('snow-demo').onclick=()=>{snowPost('snow-demo');snowNotice('Демо з
 snowById('snow-save').onclick=()=>{snowPost('snow-save');snowNotice('Тимчасовий стан збережено в RAM.');};
 snowById('snow-reload').onclick=()=>snowPost('snow-reload',{mask:63});
 snowById('snow-reload-track').onclick=()=>snowPost('snow-reload',{mask:1<<snowSelected});
-snowById('snow-generate').onclick=()=>{snowPost('snow-generate',{vary:false});snowNotice(`${snowRoles[snowSelected]}: генерація з поточного seed.`);};
-snowById('snow-vary').onclick=()=>{snowPost('snow-generate',{vary:true});snowNotice(`${snowRoles[snowSelected]}: нова варіація.`);};
-snowById('snow-scene').onclick=()=>{snowPost('snow-scene',{style:+snowById('snow-scene-style').value,vary:true,tempo:snowById('snow-style-tempo').checked});snowNotice('Згенеровано ансамбль: окремий рисунок кожного інструмента.');};
+const snowAll=()=>snowById('snow-target').value==='all';
+snowById('snow-rnd').onclick=()=>{snowPost(snowAll()?'snow-scene':'snow-generate',{vary:true});snowNotice('GEN RND: новий рисунок.');};
+snowById('snow-parm').onclick=()=>{snowPost('snow-genparm',{all:snowAll()});snowNotice('GEN PARM: нові локи поверх поточних нот.');};
+snowById('snow-clear').onclick=()=>{snowPost('snow-clear',{all:snowAll()});snowNotice('Кроки та локи очищено.');};
+snowById('snow-parm-amt').oninput=e=>{snowById('snow-amt-value').textContent=e.target.value+'%';const index=snowSchema?.params.findIndex(p=>p.name==='PARM AMT');if(index>=0){for(const track of snowAll()?[0,1,2,3,4,5]:[snowSelected])snowPost('snow-set',{track,index,value:+e.target.value});}};
+snowById('snow-color').onchange=e=>snowPost('snow-color',{value:+e.target.value});
 snowById('snow-preset').onchange=(e)=>{if(e.target.value!==''){snowPost('snow-preset',{preset:+e.target.value});snowNotice(`${snowRoles[snowSelected]}: ${e.target.selectedOptions[0].textContent}`);e.target.value='';}};
 function snowDesigner(schema){
  if(!schema)return;snowSchema=schema;snowDescriptorKey='';
@@ -62,9 +65,13 @@ function snowDesigner(schema){
   label.append(input);grid.append(label);snowControls.push({input,value});
  });
  const presets=snowById('snow-preset');presets.replaceChildren(new Option(`${schema.role}: 10 пресетів…`,''));schema.presets.forEach((name,i)=>presets.add(new Option(name,i)));
- const styles=snowById('snow-scene-style');if(!styles.options.length)schema.styles.forEach((name,i)=>styles.add(new Option(name,i)));
+ const colors=snowById('snow-color');colors.replaceChildren();schema.colors.forEach((name,i)=>colors.add(new Option(name,i)));
 }
 function snowFrame(state){
+ if(state.steps){const host=snowById('snow-step-grid');while(host.children.length<state.length){const cell=document.createElement('div');cell.className='lab-step';host.append(cell);}while(host.children.length>state.length)host.lastChild.remove();[...host.children].forEach((cell,i)=>{const step=state.steps[i],on=!!(step&256),hits=((step>>10)&3)+1;cell.classList.toggle('on',on);cell.classList.toggle('current',i===state.position);cell.style.setProperty('--vel',(step&255)/127);cell.textContent=`${i+1}${step&512?' •':''}${on&&hits>1?' ×'+hits:''}`;cell.title=on?`Note ${state.notes[i]}, velocity ${step&255}`:'Пауза';});}
+ if(state.color!==undefined&&document.activeElement!==snowById('snow-color')){snowById('snow-color').value=state.color;const colors=['#39dbf5','#709bff','#ff9850','#71e8a0','#eeeeee','#ebc75f','#f594c2','#ba96ff','#ff6a76','#7ce7ce'];document.documentElement.style.setProperty('--snow-accent',colors[state.color]||colors[0]);}
+ if(state.values&&snowSchema){const i=snowSchema.params.findIndex(p=>p.name==='PARM AMT');if(i>=0&&document.activeElement!==snowById('snow-parm-amt')){snowById('snow-parm-amt').value=state.values[i];snowById('snow-amt-value').textContent=state.values[i]+'%';}}
+
  if(state.selected!==snowSelected){snowSelected=state.selected;snowPost('snow-schema');}
  if(state.values&&snowSchema){const key=snowSchema.params.map((p,i)=>p.group==='DRIVE / INSERT / DUCK'&&p.name==='TYPE'?state.values[i]:'').join(',');if(snowDescriptorKey&&key!==snowDescriptorKey)snowPost('snow-schema');snowDescriptorKey=key;}
  snowById('snow-selection').textContent=`${snowRoles[snowSelected]} / CH ${snowSelected+1}`;

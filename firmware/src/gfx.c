@@ -1,3 +1,6 @@
+#ifndef FELUCCA_SNOW
+#define FELUCCA_SNOW 0
+#endif
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Small-canvas renderer (no full framebuffer). Draw text/lines into
@@ -28,6 +31,9 @@ typedef struct { uint16_t off; uint8_t w; const char *label; } kc_t;
 #include "ui_fonts.h"                   /* AF_S 12 px / 400, AF_M 15 px / 500, AF_L 28 px / 600 */
 #include "ui_pixfont.h"                 /* (Skiff) THEME CRYPT's pixel faces AF_S_PX .. (tools/gen_pixel_font.py) */
 #include "ui_palettes.h"
+#if FELUCCA_SNOW
+#include "snow_palettes.h"
+#endif
 #include "ui_keycaps.h"                 /* KC_*: the keycaps / badges (tools/gen_aa_keycaps.py), KNOB_* arcs */
 #define ELLIPSIS '\x85'                 /* the ellipsis glyph of AF_S and AF_M */
 
@@ -181,6 +187,10 @@ static void palette_set(uint32_t i)
     ux.quark = i == UI_QUARK_INDEX;
     uf.f = UF_FACE[ux.crypt || ux.neon];         /* (CRYPT, NEON: the pixel faces) */
     uf.cap = UF_CAP[ux.crypt || ux.neon];
+#if FELUCCA_SNOW
+    ux.crypt=ux.neon=ux.quark=0;
+    uf.f=UF_FACE[1];uf.cap=UF_CAP[1];
+#endif
     ux.bg = p->bg; ux.surf = p->surf; ux.text = p->text; ux.theme = p->theme;
     ux.accent = p->accent;
     for (k = 0; k < UI_NTRK; k++)
@@ -410,7 +420,7 @@ static const uint16_t *ramp(uint16_t fg, uint16_t bg)
     v = rc.v[i];
     for (a = 0; a < 16u; a++) {
         uint32_t out = 0;
-        int32_t w = cv[a];
+        int32_t w = FELUCCA_SNOW?(a<8u?0:256):cv[a];
         for (k = 0; k < 3u; k++) {
             int32_t x = (bg >> SH[k]) & MK[k], y = (fg >> SH[k]) & MK[k];
             out |= (uint32_t)(x + (((y - x) * w + 128) >> 8)) << SH[k];

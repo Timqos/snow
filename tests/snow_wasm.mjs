@@ -56,17 +56,18 @@ await worklet.onMessage({type:'snow-pattern',track:2,slot:2});
 worklet.publish();const frame=worklet.messages.findLast(m=>m.type==='frame');
 assert.equal(frame.snow.selected,2);assert.equal(frame.snow.patterns[2],2);assert.equal(frame.snow.values[alg],3);
 assert.equal(frame.snow.text.length,count);
-console.log('SNOW 0.3 WASM + WORKLET PASSED:',count,'editable parameters, algorithms, waveforms, ADSR, generation, independent patterns and control messages');
+console.log('SNOW 0.4 WASM + WORKLET PASSED:',count,'editable parameters, algorithms, waveforms, ADSR, generation, independent patterns and control messages');
 
-assert.equal(str(x.web_snow_role(0)),'KICK');assert.equal(str(x.web_snow_preset_name(0,8)),'AMBIENT LOW');
+assert.equal(str(x.web_snow_role(0)),'KICK');assert.equal(str(x.web_snow_preset_name(0,8)),'SOFT LOW');
 assert.equal(str(x.web_snow_preset_name(1,8)),'BRUSH');assert.equal(x.web_snow_preset(0,10),1);
 const select=worklet.messages.filter(m=>m.type==='snow-schema').at(-1);
 await worklet.onMessage({type:'snow-schema'});const schema=worklet.messages.at(-1).schema;
-assert.equal(schema.role,'HAT');assert.equal(schema.presets.length,10);assert.equal(schema.styles.length,20);
+assert.equal(schema.role,'HAT');assert.equal(schema.presets.length,10);assert.equal(schema.colors.length,10);
 for(const group of ['CHANNEL DELAY','CHANNEL REVERB','CHANNEL CHORUS','TAPE','BITCRUSH'])assert(schema.params.some(p=>p.group===group));
-await worklet.onMessage({type:'snow-scene',style:3,vary:true,tempo:true});assert.equal(worklet.ex.web_snow_tempo_get(),172);
+await worklet.onMessage({type:'snow-scene',vary:true});
+await worklet.onMessage({type:'snow-genparm',all:true});
 worklet.publish();const scene=worklet.messages.at(-1).snow;assert.equal(scene.used.length,6);assert.equal(scene.active.length,6);
-console.log('SNOW 0.3 ROLES / FX / STYLES PASSED: 60 role-specific presets, per-channel FX controls, 20 styles and pattern grid metadata');
+console.log('SNOW 0.4 ROLES / FX / RANDOM PASSED: 60 role-specific presets, per-channel FX controls, random phrases, auto locks and pattern grid metadata');
 // Simultaneous racks run in the same firmware audio path as the browser and device.
 const z=await boot();render(z,1000);z.web_snow_demo();
 function parameter(group,name){return Array.from({length:z.web_snow_param_count()},(_,i)=>i).find(i=>{

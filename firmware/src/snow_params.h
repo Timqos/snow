@@ -29,6 +29,12 @@
 #define SN_G_KIND P_LN6
 #define SN_G_LIVE P_LN7
 #define SN_G_BASE P_LTUNE0
+/* Former genre selector is now the reference groovebox's parameter-lock amount. */
+#define SN_G_LOCKS SN_G_STYLE
+#define SN_G_SEED_B P_LTUNE1
+#define SN_G_SEED_C P_LTUNE2
+#define SN_G_SEED_D P_LTUNE3
+#define SN_G_SCOPE P_LTUNE4
 #define SN_L2_RATE P_LPAN0
 #define SN_L2_WAVE P_LPAN1
 #define SN_L2_DEPTH P_LPAN2

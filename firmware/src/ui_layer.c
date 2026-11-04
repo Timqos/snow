@@ -55,14 +55,14 @@ static const layer_t LAYERS[LAYER_N] = {
     {B_FX, LK_HOLD, FAM_HOME, "[FX] HOLD", {{KC_WHITE, "EFFECTS"}, {KC_BLACK, "MUTE"}, {KC_K14, "MACROS"}}},   /* (LET GO: the
                                                      * header's HOLD; (2.0, D 1A) BLACK: GLO's MUTE) */
 #if FELUCCA_SNOW
-    {B_GLO, LK_SET, FAM_HOME, "CONTROL ALL", {{KC_SAVE, "TEMP"}, {KC_HOME, "RELOAD"}, {KC_GLO, "DONE"}}},
+    {B_GLO, LK_SET, FAM_HOME, "[GLO] MIXER", {{KC_SAVE, "TEMP"}, {KC_HOME, "RELOAD"}, {KC_GLO, "DONE"}}},
 #else
     {B_GLO, LK_SET, FAM_HOME, "[GLO] SET", {{KC_PLAY, "RESTART"}, {KC_OCTDN, "UNDO"}, {KC_GLO, "DONE"}}},
 #endif
     {B_SCL, LK_SET, FAM_SCL, "[SEL] SET", {{KC_KEYS, "ROOT"}, {KC_OCTDN, "UNDO"}, {KC_SCL, "DONE"}}},
     {B_EDIT, LK_SET, FAM_HOME, "[EDIT] SET", {{KC_KEYS, "ENGINE"}, {KC_OCTDN, "UNDO"}, {KC_EDIT, "DONE"}}},
 #if FELUCCA_SNOW
-    {B_SEQ,LK_SET,FAM_SEQ,"SEQ PATTERNS",{{KC_K14,"PATTERNS"},{KC_OCTUP,"CH 5-6"},{KC_OCTDN,"A/I"}}},
+    {B_SEQ,LK_SET,FAM_SEQ,"SEQ PATTERNS",{{KC_K14,"PATTERNS"},{KC_OCTUP,"A/I"},{KC_OCTDN,"A/I"}}},
 #else
     {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] TOOLS", {{KC_KEYS, "TOOLS"}, {KC_OCTDN, "UNDO"}, {KC_SEQ, "DONE"}}},
 #endif
@@ -76,9 +76,8 @@ static const uint8_t LY_KC[LAYER_N] = {0, KC_FX, KC_GLO, KC_SCL, KC_EDIT, KC_SEQ
 static const page_t LY_SCL = {"SCALE", FAM_SCL, SC_TRACK, GR_SCALE, {P_ROOT, P_SCALE, P_CHRD, P_VOIC}};
 /* SEQ TOOLS' knobs: the PATTERN page's (the length the tools work in) */
 #if FELUCCA_SNOW
-static const page_t LY_SEQ[2]={{"PATTERNS 1-4",FAM_SEQ,SC_GLOBAL,GR_SNOW_PAT,{0,1,2,3}},
- {"PATTERNS 5-6",FAM_SEQ,SC_GLOBAL,GR_SNOW_PAT,{4,5,0xff,0xff}}};
-static const page_t *ly_page(uint32_t l){return l==LAYER_SCL?&LY_SCL:l==LAYER_SEQ?&LY_SEQ[snow_pattern_bank&1u]:0;}
+static const page_t LY_SEQ={"PATTERNS",FAM_SEQ,SC_GLOBAL,GR_SNOW_PAT,{0,1,2,3}};
+static const page_t *ly_page(uint32_t l){return l==LAYER_SCL?&LY_SCL:l==LAYER_SEQ?&LY_SEQ:0;}
 #else
 static const page_t LY_SEQ = {"PATTERN", FAM_SEQ, SC_TRACK, GR_STEPS, {P_SLEN, P_SDIV, P_SSWING, P_SGATE}};
 static const page_t *ly_page(uint32_t l) { return l == LAYER_SCL ? &LY_SCL : l == LAYER_SEQ ? &LY_SEQ : 0; }
@@ -152,6 +151,9 @@ static void layer_masks(void)
 static void layer_arm(uint32_t pressed, uint32_t now)
 {
     uint32_t l, other = 0;
+#if FELUCCA_SNOW
+    if(ui.ly==LAYER_GLO&&(pressed&ly_bit(LAYER_EDIT)))return; /* Control All modifier */
+#endif
     if (ui.ly) {                                        /* ((Skiff U4, F7) a second layer's button: ignored, and said) */
         for (l = LAYER_FX; l < LAYER_N; l++)
             if (l != ui.ly && ly_avail(l))
@@ -646,7 +648,12 @@ static void layer_knob(uint32_t k, int32_t s)
     } else if (l == LAYER_GLO) {                        /* the four tracks' LEVEL (T1..T4; (Skiff phase 6) the four
                                                          * shown: ui.c trk_top), recorded as on MIXER */
 #if FELUCCA_SNOW
-        snow_control_all(k, s);
+        if(fm1_in.buttons&(1u<<panel.btn[B_EDIT])) {if(k<4u)snow_control_all(k,s);}
+        else if(k<NTRK) {
+            track_t *t=&trk[k];
+            t->p[P_LEVEL]=(int16_t)clamp(t->p[P_LEVEL]+s,TP[P_LEVEL].min,TP[P_LEVEL].max);
+            motion_capture(t,P_LEVEL,t->p[P_LEVEL]);ml_knob(t,P_LEVEL);
+        }
 #else
         track_t *t = &trk[trk_top() + k];
         int16_t *vp = &t->p[P_LEVEL];
@@ -675,6 +682,10 @@ static void layer_knob(uint32_t k, int32_t s)
             rp_apply();
             lys.rp_dirty = 1;
         }
+#if FELUCCA_SNOW
+    } else if (l == LAYER_SEQ) {
+        snow_pattern_knob(k,s);
+#endif
     } else if (l == LAYER_SEQ && eu.on) {               /* ((1.3) EUCLID: HITS STEPS ROT; KNOB 4: none) */
         eu_knob(TSEL, k, s);
     } else if (l) {                                     /* the page's knobs, wherever the page is */
@@ -732,8 +743,7 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
     mine = oct & lys.oct;
 #if FELUCCA_SNOW
     if(lys.l==LAYER_SEQ && mine) {
-        if(mine&2u)snow_pattern_bank^=1u;
-        if(mine&1u)snow_pattern_half^=1u;
+        snow_pattern_half^=1u;
         lys.oct=0;ui.force=1;return oct&~mine;
     }
 #endif
@@ -1214,7 +1224,7 @@ static void layer_euclid(void)
 static void layer_seq(void)
 {
 #if FELUCCA_SNOW
-    snow_pattern_grid(snow_pattern_bank?4u:0u);return;
+    snow_pattern_grid(0);return;
 #endif
     uint32_t p, st = LS_OFF, drum = (uint32_t)drum_track(TSEL);
     char n[3] = {0, 0, 0}, nm[8];
@@ -1402,7 +1412,7 @@ static void draw_layer(void)
                                                                                     * track: what it may play) */
 #if FELUCCA_SNOW
     if(l==LAYER_SEQ) {
-        sig+=snow_pattern_bank*1009u+snow_pattern_half*1543u+bank_gen()*131u;
+        sig+=snow_pattern_half*1543u+bank_gen()*131u;
         for(uint32_t k=0;k<NTRK;k++)sig=sig*31u+snow_pattern_current(k);
     }
 #endif

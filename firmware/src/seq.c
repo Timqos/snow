@@ -392,6 +392,9 @@ static __attribute__((noinline)) int step_cond_ok(const track_t *t, const step_t
     static const uint8_t A[TC_COUNT] = {0, 0, 0, 1, 2, 1, 2, 3, 1, 2, 3, 4};
     static const uint8_t B[TC_COUNT] = {1, 1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 4};
     uint32_t c = s->cond, p;
+#if FELUCCA_SNOW
+    if(c==TC_ORNAMENT)return 1; /* base hit remains unconditional; only extra hits are sparse */
+#endif
     if (c == TC_NONE || c >= TC_COUNT)
         return 1;
     if (c == TC_FILL || c == TC_NFILL)
@@ -1403,6 +1406,19 @@ static uint32_t flam_at(const track_t *t, uint32_t period)
     uint32_t h = step_samples(t, period, t->fire_idx) / 2u;
     return h < FLAM_SAMPLES ? h : FLAM_SAMPLES;
 }
+#if FELUCCA_SNOW
+static uint32_t snow_orn_bar[NTRK],snow_orn_step[NTRK];
+static uint32_t snow_step_hits(track_t *t,const step_t *s)
+{
+    uint32_t hits=step_ratchet(s);if(s->cond!=TC_ORNAMENT||hits<=1u)return hits;
+    uint32_t k=trk_index(t),len=(uint32_t)clamp(t->p[P_SLEN],1,NSTEP),pass=take_pass[k]?take_pass[k]-1u:0u;
+    uint32_t step=pass*len+t->fire_idx,bar=(uint32_t)((uint64_t)step*div_samples((uint32_t)t->p[P_SDIV])/(beat_samples()*4u));
+    if(!(bar&1u))return 1;
+    if(step<snow_orn_step[k])snow_orn_bar[k]=~0u;
+    if(snow_orn_bar[k]==bar&&snow_orn_step[k]!=step)return 1;
+    snow_orn_bar[k]=bar;snow_orn_step[k]=step;return hits;
+}
+#endif
 static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint32_t period, uint32_t skip)
 {
     uint32_t i, j, gate = period * (uint32_t)t->p[P_SGATE] / 128u;
@@ -1414,7 +1430,12 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
     /* ((2.0, #44) a LOOP switch at its end, a chain's next part: that pattern's first, so a note goes on across it) */
     const step_t *ns = f == t->seq_idx ? launch_next(t, len, &t->step[nx]) : &t->step[nx];
     uint32_t next_tie = ns->time == ST_TIE;
-    uint32_t hits = step_ratchet(s), grace = (s->flags & SF_FLAM) && !(skip & SEQ_REP);   /* (Skiff) FLAM */
+#if FELUCCA_SNOW
+    uint32_t hits=snow_step_hits(t,s), grace =
+#else
+    uint32_t hits = step_ratchet(s), grace =
+#endif
+        (s->flags & SF_FLAM) && !(skip & SEQ_REP);   /* (Skiff) FLAM */
     uint8_t nn[4 + NLANE], vv[4 + NLANE];           /* the notes it plays: its notes, then its hits */
     uint32_t m = 0, sk = 0;
     /* (2.0, #25) its per-note ties (tn: of nn); held: notes sound on into it (a hold, or notes kept for its ties: an
@@ -1583,7 +1604,11 @@ static __attribute__((noinline)) void seq_audition(void)
 static __attribute__((noinline)) void seq_ratchet(track_t *t, uint32_t period)
 {
     const step_t *s = &t->step[t->fire_idx];
-    uint32_t hits = step_ratchet(s);
+#if FELUCCA_SNOW
+    uint32_t hits=snow_step_hits(t,s);
+#else
+    uint32_t hits=step_ratchet(s);
+#endif
     if (s->flags & SF_FLAM) {                     /* (Skiff) FLAM: the full hit once the grace has had its time */
         if (t->rat_pos < flam_at(t, period))
             return;

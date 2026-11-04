@@ -64,6 +64,7 @@ static void snow_control_all(uint32_t knob, int32_t delta)
     uint32_t k, f = motion_guard();
     if (knob < 4u) for (k = 0; k < NTRK; k++) if ((snow_mask >> k) & 1u)
         snow_offset[k][knob] = (int16_t)clamp(snow_offset[k][knob] + delta, -127, 127);
+    for(k=0;k<NTRK;k++)if((snow_mask>>k)&1u)snow_touch(&trk[k],P_E0+knob,(int16_t)snow_param(&trk[k],knob));
     motion_unguard(f);
     ui.force = 1;
 }
@@ -73,13 +74,14 @@ static int snow_buttons(uint32_t pressed)
     if (ui.menu || ui.confirm || name_on() || !((fm1_in.buttons >> panel.btn[B_GLO]) & 1u)) return 0;
     if (!(pressed & ((1u << panel.btn[B_SAVE]) | (1u << panel.btn[B_HOME]) |
                      (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP])))) return 0;
+    if((pressed&(1u<<panel.btn[B_OCTDN]))&&!(fm1_in.buttons&(1u<<panel.btn[B_EDIT])))return 0;
     layer_arm(1u << panel.btn[B_GLO], fm1_ticks());
     (void)layer_gesture(fm1_ticks(), 1); /* consume the chord: releasing GLO must not open its page */
     if ((pressed >> panel.btn[B_SAVE]) & 1u) {
-        snow_temp_save(); ui_message("TEMP SAVED"); return 1;
+        ui.save_t0=(fm1_ticks()&~3u)|3u;snow_temp_save(); ui_message("TEMP SAVED"); return 1;
     }
     if ((pressed >> panel.btn[B_HOME]) & 1u) {
-        ui_message(snow_temp_reload((1u << NTRK) - 1u) ? "TEMP RELOADED" : "NO TEMP SAVE"); return 1;
+        ui.home_t0=(fm1_ticks()&~3u)|3u;ui_message(snow_temp_reload((1u << NTRK) - 1u) ? "TEMP RELOADED" : "NO TEMP SAVE"); return 1;
     }
     if ((pressed >> panel.btn[B_OCTDN]) & 1u) {
         snow_mask ^= (uint8_t)(1u << song.sel);

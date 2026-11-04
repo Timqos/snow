@@ -422,9 +422,17 @@ static void nudge_unpack(step_t *s, const uint8_t *b, uint32_t n)
 }
 /* Skiff: a step's trig condition (seq.c step_cond_ok): FILL / !FILL while GLO + F4 is held (or not), A:B on pass A of
  * every B of its track's loop (take.c take_pass). Saved in bit 7 of the step's note bytes (project.c) */
-enum { TC_NONE, TC_FILL, TC_NFILL, TC_1_2, TC_2_2, TC_1_3, TC_2_3, TC_3_3, TC_1_4, TC_2_4, TC_3_4, TC_4_4, TC_COUNT };
+enum { TC_NONE, TC_FILL, TC_NFILL, TC_1_2, TC_2_2, TC_1_3, TC_2_3, TC_3_3, TC_1_4, TC_2_4, TC_3_4, TC_4_4,
+#if FELUCCA_SNOW
+       TC_ORNAMENT,
+#endif
+       TC_COUNT };
 static const char *const TC_NAME[TC_COUNT] = {"--", "FILL", "!FILL", "1:2", "2:2", "1:3", "2:3", "3:3", "1:4", "2:4",
-                                              "3:4", "4:4"};
+                                       "3:4", "4:4"
+#if FELUCCA_SNOW
+                                       ,"ORN 2B"
+#endif
+};
 typedef struct {                 /* a step as formats 1..4 (projects to FUN4) stored it: no hits */
     uint8_t note[4];
     uint8_t n, time, flags, vel;
@@ -459,7 +467,7 @@ static void step_set_rflam(step_t *s, uint32_t v)
  * step byte (bank.c BK_VER2). The record stays 4 bytes: every copy (launch, undo, the tools) the size it was */
 #define MOTION_LOCK 0x80u                       /* (the stored id byte's lock bit; motion_put's kind) */
 #define MOTION_ID(e) ((uint32_t)(e)->id)
-typedef struct { uint16_t place : 9, lock : 1, : 6; uint8_t id; int8_t value; } motion_event_t;
+typedef struct { uint16_t place : 9, lock : 1, generated : 1, : 5; uint8_t id; int8_t value; } motion_event_t;
 typedef struct { uint8_t count, on, rsv[2]; motion_event_t event[MOTION_MAX]; } motion_store_t;
 _Static_assert(sizeof(motion_store_t) == 260u, "motion: a record is 4 bytes");
 #define CHAIN_ROWS 16u

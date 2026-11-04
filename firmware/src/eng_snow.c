@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Snow 0.3: fixed instrument roles, with the complete open synthesis surface. */
+ * Snow 0.4: fixed instrument roles, with the complete open synthesis surface. */
 #include "snow_params.h"
-#include "snow_styles.h"
 static const char *const SN_ALGS[] = {"FM PAIR","FM CHAIN","FM PAR","RING","ADDITIVE","FOLD"};
 static const char *const SN_WAVES[] = {"SINE","TRI","SAW","SQUARE","PULSE","ORGAN"};
 static const char *const SN_RMODELS[] = {"ROOM","HALL","PLATE"};
@@ -9,6 +8,7 @@ static const char *const SN_MODES[] = {"HIT","GATED"};
 static const char *const SN_FILTERS[] = {"OFF","LP","HP","BP"};
 static const char *const SN_FB_NAMES[] = {"MOD","CARRIER","CROSS"};
 static const char *const SN_L2_DST[] = {"OFF","TONE","SHAPE","SWEEP","DECAY","MIX","FEEDBACK","CUTOFF","DRIVE","PITCH","AMP"};
+static const char *const SN_TARGETS[]={"CHANNEL","ALL 6"};
 static const char *const SN_CONTOUR[] = {"WALK","RISE","FALL","ARCH","MOTIF"};
 static const char *const SN_GEN_KIND[] = {"RHYTHM","MELODY","BOTH"};
 static const char *const SN_LIVE[] = {"OFF","1 LOOP","2 LOOPS","4 LOOPS"};
@@ -16,6 +16,13 @@ static struct { uint32_t phase; int32_t value, fade, rng; } snow_l2[NTRK];
 static uint32_t snow_role(const track_t *t) { return (uint32_t)(t-trk)%NTRK; }
 static int16_t snow_offset[NTRK][4];
 static uint8_t snow_mask=63;
+static struct { uint32_t ms,serial;uint16_t id;int16_t value;uint8_t valid; } snow_touch_state[NTRK];
+static void snow_touch(track_t *t,uint32_t id,int16_t value)
+{
+    uint32_t k=(uint32_t)(t-trk)%NTRK;
+    snow_touch_state[k].ms=fm1_ms;snow_touch_state[k].serial++;
+    snow_touch_state[k].id=(uint16_t)id;snow_touch_state[k].value=value;snow_touch_state[k].valid=1;
+}
 static uint32_t div_samples(uint32_t div);
 static int32_t snow_param(const track_t *t,uint32_t k)
 {
@@ -151,6 +158,7 @@ static void snow_fill(int16_t *p,uint32_t role,uint32_t preset)
     for(uint32_t k=0;k<20u;k++)p[SN_ALG+k]=SNOW_DETAIL[role][preset][k];
     p[P_CHRD]=SNOW_CHORD[role][preset];
     if(role<5u)p[P_VOICE]=V_MONO;
+    if(role==3u)p[SN_KEYTRACK]=127; /* percussion follows the generated scale notes */
 }
 #define SNOW_MACHINE(role,title) { .name=title,.page_title={"MACROS","FM DETAIL"}, \
  .edit={{"TONE",0,0,127,40,F_PCT,0},{"SHAPE",0,0,127,64,F_PCT,0}, \

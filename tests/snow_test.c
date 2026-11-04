@@ -65,23 +65,52 @@ static void synth_tests(void)
 }
 static void generation_tests(void)
 {
-    track_t *t=&trk[0];t->p[P_SLEN]=16;t->p[P_ROOT]=2;t->p[P_SCALE]=2;
-    t->p[SN_G_KIND]=2;t->p[SN_G_DENS]=50;t->p[SN_G_SEED]=7;t->p[SN_G_BASE]=60;
-    motion_set_lock(t,0,P_E0,100);motion_store_t locks=motion;
-    step_t other[NSTEP],first[NSTEP];memcpy(other,trk[1].step,sizeof other);
-    assert(!snow_generate(0,0));memcpy(first,t->step,sizeof first);
-    assert(!snow_generate(0,0));assert(!memcmp(first,t->step,sizeof first));
-    assert(!memcmp(other,trk[1].step,sizeof other) && !memcmp(&locks,&motion,sizeof locks));
-    uint32_t count=0;
-    for(uint32_t i=0;i<16;i++)if(t->step[i].n){count++;assert(scale_snap(t,t->step[i].note[0])==t->step[i].note[0]);}
-    assert(count==4);assert(!snow_generate(0,1));assert(memcmp(first,t->step,sizeof first));
-    t->p[SN_G_DENS]=0;assert(!snow_generate(0,0));for(uint32_t i=0;i<16;i++)assert(t->step[i].time==ST_REST);
-    t->p[SN_G_DENS]=100;assert(!snow_generate(0,0));for(uint32_t i=0;i<16;i++)assert(t->step[i].time==ST_NOTE);
-    t->p[SN_G_LIVE]=1;song.playing=1;take_pass[0]=2;snow_gen_pass[0]=1;
-    int16_t seed=t->p[SN_G_SEED];snow_sequence_poll();assert(t->p[SN_G_SEED]==((seed+1)&127));
-    seed=t->p[SN_G_SEED];snow_sequence_poll();assert(t->p[SN_G_SEED]==seed);
-    snow_gen_pass[0]=8;take_pass[0]=1;snow_sequence_poll();assert(t->p[SN_G_SEED]==seed);
+    seq_stop();memset(&motion,0,sizeof motion);
+    for(uint32_t k=0;k<NTRK;k++) {
+        track_t *t=&trk[k];t->p[P_SLEN]=32;t->p[P_ROOT]=2;t->p[P_SCALE]=2;
+        t->p[SN_G_KIND]=2;t->p[SN_G_DENS]=50;t->p[SN_G_COMPLEX]=30;t->p[SN_G_VARIANT]=55;
+        uint64_t masks[256];uint32_t unique=0,notes=0;uint32_t firstnote=128;int pitched=0;
+        for(uint32_t i=0;i<256;i++) {
+            assert(!snow_generate(k,1));uint64_t mask=snow_hits(t->step,32);
+            if(i)assert(mask!=masks[i-1]);masks[i]=mask;
+            int seen=0;for(uint32_t j=0;j<i;j++)seen|=mask==masks[j];unique+=!seen;
+            for(uint32_t j=0;j<32;j++)if(t->step[j].time==ST_NOTE&&t->step[j].n){notes++;
+                assert(t->step[j].vel>0);assert(t->step[j].n==(k==5?3:1));
+                for(uint32_t n=0;n<t->step[j].n;n++)assert(scale_snap(t,t->step[j].note[n])==t->step[j].note[n]);
+                if(firstnote==128)firstnote=t->step[j].note[0];else pitched|=firstnote!=t->step[j].note[0];
+            }
+        }
+        printf("Role %u: %u/256 distinct hit masks, %u notes\n",k+1,unique,notes);assert(unique>40);if(k>=3)assert(pitched);
+        step_t first[NSTEP];memcpy(first,t->step,sizeof first);assert(!snow_generate(k,0));assert(!memcmp(first,t->step,sizeof first));
+        t->p[SN_G_DENS]=0;assert(!snow_generate(k,0));assert(!snow_hits(t->step,32));
+        t->p[SN_G_DENS]=100;assert(!snow_generate(k,0));assert(snow_hits(t->step,32)==0xffffffffu);t->p[SN_G_DENS]=50;
+    }
+    apply_preset_to(&trk[3],0);assert(trk[3].p[SN_KEYTRACK]==127);
+    track_t *t=&trk[0];t->p[P_SLEN]=32;assert(!snow_generate(0,1));
+    motion_set_lock(t,0,P_E0,99);t->p[SN_G_LOCKS]=100;
+    step_t old[NSTEP];memcpy(old,t->step,sizeof old);
+    for(uint32_t i=0;i<30;i++){assert(!snow_generate_parameters(0));assert(!memcmp(old,t->step,sizeof old));assert(motion.count>1&&motion.count<=9);assert(motion.event[0].value==99&&!motion.event[0].generated);}
+    uint32_t seed=snow_seed(t);t->p[SN_G_LIVE]=1;song.playing=1;take_pass[0]=2;snow_gen_pass[0]=1;
+    snow_sequence_poll();assert(snow_seed(t)!=seed);seed=snow_seed(t);snow_sequence_poll();assert(snow_seed(t)==seed);
     song.playing=0;t->p[SN_G_LIVE]=0;
+    assert(!snow_generate_scene(1));for(uint32_t k=0;k<NTRK;k++)trk[k].p[SN_G_LOCKS]=100;
+    assert(!snow_parameter_scene());assert(motion.count<=49);
+    assert(!project_save(1));uint32_t owned=0;for(uint32_t i=0;i<motion.count;i++)owned+=motion.event[i].generated;
+    seed=snow_seed(&trk[5]);assert(owned);project_load(1);uint32_t loaded=0;for(uint32_t i=0;i<motion.count;i++)loaded+=motion.event[i].generated;
+    assert(loaded==owned&&snow_seed(&trk[5])==seed);
+    int16_t fx=trk[0].p[SN_DTIME];assert(!snow_clear_sequence(1));assert(!motion.count);
+    for(uint32_t k=0;k<NTRK;k++)assert(!snow_hits(trk[k].step,NSTEP));assert(trk[0].p[SN_DTIME]==fx);
+    puts("Random phrases / GEN PARM / ownership / pitched percussion / CLEAR passed");
+}
+static void ornament_tests(void)
+{
+    track_t *t=&trk[2];step_t s={0};s.time=ST_NOTE;s.n=1;s.cond=TC_ORNAMENT;step_set_ratchet(&s,3);t->p[P_SDIV]=2;
+    for(uint32_t len=4;len<=64;len*=2){t->p[P_SLEN]=(int16_t)len;memset(snow_orn_bar,255,sizeof snow_orn_bar);memset(snow_orn_step,0,sizeof snow_orn_step);
+        uint32_t rolls[16]={0};
+        for(uint32_t i=0;i<128;i++){take_pass[2]=(uint16_t)(i/len+1);t->fire_idx=(uint16_t)(i%len);uint32_t bar=(uint32_t)((uint64_t)i*div_samples(2)/(beat_samples()*4u));uint32_t hits=snow_step_hits(t,&s);assert(hits>=1);if(hits>1){assert(bar&1u);rolls[bar]++;assert(snow_step_hits(t,&s)==3);}}
+        for(uint32_t bar=0;bar<16;bar++)assert(rolls[bar]<=1);
+    }
+    puts("Rare triplets: primary hit every bar, <=1 ornament every second bar passed");
 }
 static void patterns_and_snapshot(void)
 {
@@ -105,39 +134,6 @@ static void patterns_and_snapshot(void)
     trk[0].p[P_E0]=40;snow_control_all(0,10);project_t project;project_capture(&project);
     assert(project.t[0].p[P_E0]==50 && !project_restore_runtime(&project));
     assert(trk[0].p[P_E0]==50 && !snow_offset[0][0]);
-}
-static void style_tests(void)
-{
-    seq_stop();
-    for(uint32_t style=0;style<NELEM(SN_GROOVES);style++) {
-        for(uint32_t k=0;k<NTRK;k++) {
-            track_t *t=&trk[k];t->p[P_SLEN]=16;t->p[SN_G_STYLE]=(int16_t)style;
-            t->p[SN_G_KIND]=2;t->p[SN_G_DENS]=50;t->p[SN_G_COMPLEX]=0;t->p[SN_G_VARIANT]=0;
-            t->p[SN_G_ROTATE]=0;t->p[SN_G_SEED]=1;
-            assert(!snow_generate(k,0));
-            uint32_t mask=0;
-            for(uint32_t i=0;i<16;i++)if(t->step[i].time==ST_NOTE) {
-                mask|=1u<<i;
-                assert(t->step[i].n==(k==5?3:1));
-                for(uint32_t note=0;note<t->step[i].n;note++)assert(scale_snap(t,t->step[i].note[note])==t->step[i].note[note]);
-            }
-            assert(mask==SN_GROOVES[style].anchor[k]);
-        }
-    }
-    /* At high variation the rhythm changes across seeds, while low settings keep genre anchors. */
-    for(uint32_t k=0;k<NTRK;k++) {
-        track_t *t=&trk[k];t->p[SN_G_STYLE]=3;t->p[SN_G_COMPLEX]=80;t->p[SN_G_VARIANT]=120;
-        uint32_t first=0,different=0;
-        for(uint32_t seed=0;seed<24;seed++) {
-            t->p[SN_G_SEED]=(int16_t)seed;assert(!snow_generate(k,0));
-            uint32_t mask=0;for(uint32_t i=0;i<16;i++)if(t->step[i].time==ST_NOTE)mask|=1u<<i;
-            if(!seed)first=mask;else different+=mask!=first;
-        }
-        assert(different>2);
-    }
-    assert(!snow_generate_scene(3,1,1));assert(song.g[G_BPM]==172);
-    for(uint32_t k=0;k<NTRK;k++)assert(trk[k].p[SN_G_STYLE]==3);
-    puts("20 styles x 6 instrument roles: anchors, randomized variation, scales and ensemble passed");
 }
 static void fx_tests(void)
 {
@@ -194,24 +190,51 @@ static void fx_tests(void)
 }
 static void pattern_controls(void)
 {
-    web_snow_demo();seq_stop();snow_pattern_bank=0;
+    web_snow_demo();seq_stop();snow_pattern_half=0;
     web_buttons(1u<<B_SEQ);advance(700);assert(layer_open()==LAYER_SEQ);
     uint32_t before=snow_pattern_current(1),kick=snow_pattern_current(0),bass=snow_pattern_current(4);
     web_enc(EN_K1,1);advance(60);assert(snow_pattern_current(0)==kick+1&&snow_pattern_current(1)==before);
-    web_buttons((1u<<B_SEQ)|(1u<<B_OCTUP));advance(60);
-    web_buttons(1u<<B_SEQ);advance(60);assert(snow_pattern_bank==1);
-    web_enc(EN_K1,1);advance(60);assert(snow_pattern_current(4)==bass+1&&snow_pattern_current(0)==kick+1);
+    uint32_t chord=snow_pattern_current(5);web_enc(EN_ALGO,1);advance(60);assert(snow_pattern_current(4)==bass+1);
+    web_enc(EN_PRESET,1);advance(60);assert(snow_pattern_current(5)==chord+1);
+    assert(snow_channels_active);assert(snow_pattern_current(0)==kick+1);
     web_buttons(0);advance(90);
+    uint32_t current=snow_pattern_current(0),next=(current+1u)%NENT;
+    assert(!snow_pattern_select(0,next));assert(!snow_pattern_select(0,current));
+    while(pend_free()<PEND_N)assert(!pat_flush_one());
     tap(B_PLAY);assert(song.playing);
-    uint32_t next=(snow_pattern_current(0)+1u)%NENT;
     assert(!snow_pattern_select(0,next));step_t outgoing[NSTEP];memcpy(outgoing,trk[0].step,sizeof outgoing);
     assert(snow_generate(0,1)==2&&!memcmp(outgoing,trk[0].step,sizeof outgoing));
-    advance(2400);assert(snow_pattern_current(0)==next&&!snow_generate(0,1));seq_stop();
-    puts("Held SEQ: channel pattern knobs, grid and channels 5-6 navigation passed");
+    advance(4600);assert(snow_pattern_current(0)==next&&!snow_generate(0,1));seq_stop();
+    puts("Held SEQ: all six pattern encoders on one screen passed");
 }
+static void interface_tests(void)
+{
+    go_home();advance(150);assert(snow_home_active);
+    uint32_t cards=snow_home_state.card_blits,scopes=snow_home_state.scope_blits;snow_touch(&trk[0],P_E0,64);advance(1000);
+    assert(snow_home_state.card_blits-cards<=14);assert(snow_home_state.scope_blits-scopes<=22);
+    for(uint32_t k=0;k<6;k++)for(uint32_t f=0;f<12;f++){assert(snow_icon_bit(k,-7,-7,f));assert(snow_icon_bit(k,7,7,f));}
+    for(uint32_t c=0;c<UI_NPALETTES;c++){web_snow_color(c);advance(80);assert(web_snow_color_get()==c);}
+    web_buttons(1u<<B_GLO);advance(700);assert(layer_open()==LAYER_GLO&&snow_channels_active);
+    static const uint32_t knobs[]={EN_K1,EN_K2,EN_K3,EN_K4,EN_ALGO,EN_PRESET};
+    for(uint32_t k=0;k<6;k++){trk[k].p[P_LEVEL]=70;web_enc(knobs[k],1);advance(60);assert(trk[k].p[P_LEVEL]==71);}
+    for(uint32_t k=0;k<6;k++){uint32_t key=0;while(key<32&&(!key_black(key)||key_place(key)!=k))key++;assert(key<32);web_keys(1u<<key);advance(60);web_keys(0);advance(60);assert(trk[k].p[P_MUTE]);}
+    for(uint32_t k=0;k<6;k++){uint32_t key=0;while(key<32&&(key_black(key)||key_place(key)!=k))key++;web_keys(1u<<key);advance(60);assert(perf_solo==(1u<<k));web_keys(0);advance(60);assert(!perf_solo);}
+    int16_t offset=snow_offset[0][0];web_buttons((1u<<B_GLO)|(1u<<B_EDIT));advance(60);web_enc(EN_K1,1);advance(60);assert(snow_offset[0][0]==offset+1);web_buttons(1u<<B_GLO);advance(60);
+    web_buttons((1u<<B_GLO)|(1u<<B_OCTDN));advance(60);web_buttons(1u<<B_GLO);advance(60);for(uint32_t k=0;k<6;k++)assert(!trk[k].p[P_MUTE]);
+    web_buttons(0);advance(100);go_home();advance(100);
+    ui.home=0;ui.page=(uint8_t)page_first(FAM_SEQ);while(!snow_gen_page(cur_page()))ui.page++;
+    ui.force=1;advance(80);sel_set(0);trk[0].p[SN_G_SCOPE]=0;uint64_t mask=snow_hits(trk[0].step,trk[0].p[P_SLEN]);
+    for(uint32_t i=0;i<12;i++){tap(B_OCTUP);uint64_t m=snow_hits(trk[0].step,trk[0].p[P_SLEN]);assert(m!=mask);mask=m;}
+    step_t keep[NSTEP];memcpy(keep,trk[0].step,sizeof keep);trk[0].p[SN_G_LOCKS]=100;tap(B_OCTDN);assert(!memcmp(keep,trk[0].step,sizeof keep));
+    web_buttons((1u<<B_SAVE)|(1u<<B_OCTDN));advance(60);web_buttons(0);advance(100);assert(!snow_hits(trk[0].step,NSTEP)&&cur_page()->fam==FAM_SEQ);
+    puts("Pixel HOME / rate caps / ten colors / six GLO level encoders / six mutes / physical repeated OCT+ passed");
+}
+#ifndef SNOW_AUDITION
 int main(void)
 {
     setvbuf(stdout,0,_IOLBF,0);web_nor_erase();web_boot();advance(1000);
-    synth_tests();generation_tests();style_tests();patterns_and_snapshot();fx_tests();pattern_controls();
-    puts("ALL SNOW 0.3 TESTS PASSED");return 0;
+    synth_tests();generation_tests();ornament_tests();patterns_and_snapshot();fx_tests();pattern_controls();interface_tests();
+    puts("ALL SNOW 0.4 TESTS PASSED");return 0;
 }
+
+#endif

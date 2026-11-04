@@ -126,7 +126,7 @@ static const param_desc_t TP[P_COUNT] = {
     [P_SCALE] = PE("SCALE", N_SCALE, FELUCCA_SNOW?2:0),
     [P_QUANT] = PE("QUANTIZE", N_QUANT, 0),
     [P_TRANS] = PD("TRANSP", F_SEMI, -24, 24, 0),
-    [P_SLEN] = PD("LENGTH", F_STEPS, 1, NSTEP, 16),
+    [P_SLEN] = PD("LENGTH", F_STEPS, 1, NSTEP, FELUCCA_SNOW?32:16),
     [P_SDIV] = PE("DIV", N_DIV, 2),
     [P_SSWING] = PD("SWING", F_PCT, 0, 100, 0),
     [P_SGATE] = PD("GATE", F_PCT, 1, 127, 127),   /* ((2.0) a note 1 STEP by default: NOTES' LENGTH; 64 before) */
@@ -216,12 +216,16 @@ static const param_desc_t TP[P_COUNT] = {
     [SN_BBITS] = PD("BITS", F_INT, 2, 16, 12),
     [SN_BRATE] = PD("HOLD", F_INT, 1, 64, 1),
     [SN_BTONE] = PD("TONE", F_PCT, 0, 127, 127),
-    [SN_G_STYLE] = PE("STYLE", SN_STYLES, 1),
+    [SN_G_STYLE] = PD("PARM AMT", F_PCT, 0, 100, 30),
     [SN_G_COMPLEX] = PD("COMPLEX", F_PCT, 0, 100, 30),
     [SN_G_HUMAN] = PD("HUMAN", F_PCT, 0, 100, 10),
     [SN_G_ROTATE] = PD("ROTATE", F_INT, 0, 15, 0),
     [SN_G_VARIANT] = PD("VARIATION", F_PCT, 0, 127, 55),
     [SN_FX_BYPASS] = PE("BYPASS", N_ONOFF, 0),
+    [SN_G_SEED_B] = PD("SEED B",F_INT,0,127,17),
+    [SN_G_SEED_C] = PD("SEED C",F_INT,0,127,41),
+    [SN_G_SEED_D] = PD("SEED D",F_INT,0,127,63),
+    [SN_G_SCOPE] = PE("TARGET",SN_TARGETS,1),
 #else
 #define LANE(k, l) [P_LN0 + (k)] = PD(l, F_PCT, 0, 127, 127)
     LANE(0, "KICK"), LANE(1, "SNARE"), LANE(2, "CLAP"), LANE(3, "CL HAT"),
@@ -251,7 +255,13 @@ static const param_desc_t TP[P_COUNT] = {
                                                     * its whole name) */
 /* (Skiff phase 9) the DRUM engine's lanes, each moved from its design (eng_drum.c drum_render): 64 = as designed */
 #define LANE2(k) [P_LTUNE0 + (k)] = PD(FELUCCA_SNOW && (k)==0 ? "BASE NOTE" : "TUNE", FELUCCA_SNOW && (k)==0 ? F_NOTE : F_ST16, 0, 127, FELUCCA_SNOW && (k)==0 ? 60 : 64), [P_LDECAY0 + (k)] = PD("DECAY", F_BIPCT, -64, 63, 0)
+#if FELUCCA_SNOW
+    LANE2(0),LANE2(5),LANE2(6),LANE2(7),
+    [P_LDECAY1]=PD("DECAY",F_BIPCT,-64,63,0),[P_LDECAY2]=PD("DECAY",F_BIPCT,-64,63,0),
+    [P_LDECAY3]=PD("DECAY",F_BIPCT,-64,63,0),[P_LDECAY4]=PD("DECAY",F_BIPCT,-64,63,0),
+#else
     LANE2(0), LANE2(1), LANE2(2), LANE2(3), LANE2(4), LANE2(5), LANE2(6), LANE2(7),
+#endif
 #undef LANE2
 /* (2.0, #36) DRUM's and DRUM-X's lanes, each panned as the track's PAN (voice.c lpan_render): C as before */
 #if FELUCCA_SNOW
@@ -378,7 +388,7 @@ static int32_t param_fit(const param_desc_t *d, int32_t v)
 static int param_kept(uint32_t i)
 {
 #if FELUCCA_SNOW
-    if ((i>=SN_G_DENS && i<=SN_G_LIVE) || i==SN_G_BASE || (i>=SN_G_STYLE && i<=SN_G_VARIANT)) return 1;
+    if ((i>=SN_G_DENS && i<=SN_G_LIVE) || i==SN_G_BASE || (i>=SN_G_STYLE && i<=SN_G_VARIANT) || (i>=SN_G_SEED_B && i<=SN_G_SCOPE)) return 1;
 #endif
     return i == P_LEVEL || i == P_PAN || i == P_MUTE || (i >= P_AMODE && i <= P_SGATE) ||
            (i >= P_SLCR && i <= P_SLDEPTH) || i == P_CHRD || i == P_VOIC || i == P_DIR ||   /* ((Skiff) DIR: the pattern's; */
@@ -674,8 +684,7 @@ static const page_t PAGES[] = {
     {"CHORUS", FAM_GLO, SC_GLOBAL, GR_CHORUS, {G_CRATE, G_CDEPTH, G_CMODE, G_CFDBK}},   /* ((phase 9) MODE, FEEDBACK) */
     {"GLOBAL", FAM_GLO, SC_GLOBAL, GR_GLOBAL, {G_BPM, G_SWING, 0xFF, 0xFF}},   /* ((U3, R8) CLK TUNE: the MENU's) */
 #if FELUCCA_SNOW
-    {"PATTERNS 1-4",FAM_SAVE,SC_GLOBAL,GR_SNOW_PAT,{0,1,2,3}},
-    {"PATTERNS 5-6",FAM_SAVE,SC_GLOBAL,GR_SNOW_PAT,{4,5,0xFF,0xFF}},
+    {"PATTERNS",FAM_SAVE,SC_GLOBAL,GR_SNOW_PAT,{0,1,2,3}},
 #endif
     {"PRESETS", FAM_SAVE, SC_GLOBAL, GR_BROWSE, {0xFF, 0xFF, 0xFF, 0xFF}},   /* browser: PRESETS knob / KNOB 1 */
     {"USER", FAM_SAVE, SC_GLOBAL, GR_USER, {0xFF, 0xFF, 0xFF, 0xFF}},       /* user presets: SLOT LOAD ERASE SAVE */
@@ -689,8 +698,8 @@ static const page_t PAGES[] = {
     {"FEEL", FAM_SEQ, SC_STEP, GR_FEEL, {0xFF, 0xFF, 0xFF, 0xFF}},
     {"PATTERN", FAM_SEQ, SC_TRACK, GR_STEPS, {P_SLEN, P_SDIV, P_SSWING, P_SGATE}},   /* (2.0) PRESETS: the track's DIR */
 #if FELUCCA_SNOW
-    {"GEN STYLE",FAM_SEQ,SC_TRACK,GR_NONE,{SN_G_STYLE,SN_G_COMPLEX,SN_G_HUMAN,SN_G_VARIANT}},
-    {"GEN ROTATE",FAM_SEQ,SC_TRACK,GR_NONE,{SN_G_ROTATE,SN_G_DENS,SN_G_SYNC,SN_G_SEED}},
+    {"SEQ GEN",FAM_SEQ,SC_TRACK,GR_NONE,{SN_G_SCOPE,SN_G_DENS,SN_G_VARIANT,SN_G_LOCKS}},
+    {"GEN FEEL",FAM_SEQ,SC_TRACK,GR_NONE,{SN_G_COMPLEX,SN_G_HUMAN,SN_G_SYNC,SN_G_ROTATE}},
     {"GEN RHYTHM",FAM_SEQ,SC_TRACK,GR_NONE,{SN_G_DENS,SN_G_SYNC,SN_G_SEED,SN_G_KIND}},
     {"GEN MELODY",FAM_SEQ,SC_TRACK,GR_NONE,{SN_G_BASE,SN_G_SPAN,SN_G_CONTOUR,SN_G_ACCENT}},
     {"GEN LIVE",FAM_SEQ,SC_TRACK,GR_NONE,{SN_G_LIVE,P_SLEN,P_SCALE,P_ROOT}},

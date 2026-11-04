@@ -92,8 +92,11 @@ if (typeof registerProcessor === "function") {
         this.port.postMessage({type:"snow-schema", schema:this.snowSchema()});
       }
       else if (m.type === "snow-scene" && ex.web_snow_scene) {
-        if(ex.web_snow_scene(m.style>>>0,m.vary?1:0,m.tempo?1:0))this.port.postMessage({type:"snow-notice",text:"Дочекайся запуску запланованого патерна."});
+        if(ex.web_snow_scene(m.vary?1:0))this.port.postMessage({type:"snow-notice",text:"Дочекайся запуску запланованого патерна."});
       }
+      else if(m.type==="snow-genparm"&&ex.web_snow_genparm)ex.web_snow_genparm(m.all?1:0);
+      else if(m.type==="snow-clear"&&ex.web_snow_clear)ex.web_snow_clear(m.all?1:0);
+      else if(m.type==="snow-color"&&ex.web_snow_color)ex.web_snow_color(m.value>>>0);
       else if (m.type === "snow-tempo" && ex.web_snow_tempo) ex.web_snow_tempo(m.value>>>0);
       else if (m.type === "snow-generate" && ex.web_snow_generate) {
         if(ex.web_snow_generate(m.track>>>0,m.vary?1:0))this.port.postMessage({type:"snow-notice",text:"Дочекайся запуску запланованого патерна."});
@@ -118,7 +121,7 @@ if (typeof registerProcessor === "function") {
       const x=this.ex;
       if (!x?.web_snow_param_count) return null;
       const channel=x.web_snow_selected();
-      return {channel,role:this.string(x.web_snow_role(channel)),styles:Array.from({length:x.web_snow_style_count()},(_,i)=>this.string(x.web_snow_style_name(i))),params:Array.from({length:x.web_snow_param_count()},(_,i)=> {
+      return {channel,role:this.string(x.web_snow_role(channel)),colors:Array.from({length:x.web_snow_color_count()},(_,i)=>this.string(x.web_snow_color_name(i))),params:Array.from({length:x.web_snow_param_count()},(_,i)=> {
         const min=x.web_snow_param_min(channel,i),max=x.web_snow_param_max(channel,i);
         const first=x.web_snow_param_enum(channel,i,min);
         return {id:x.web_snow_param_id(i),name:this.string(x.web_snow_param_name(channel,i)),
@@ -141,6 +144,10 @@ if (typeof registerProcessor === "function") {
           msg.snow.pending=Array.from({length:6},(_,i)=>ex.web_snow_pattern_pending(i));
           msg.snow.used=Array.from({length:6},(_,k)=>Array.from({length:16},(_,i)=>!!ex.web_snow_pattern_used(k,i)));
           msg.snow.tempo=ex.web_snow_tempo_get();
+          msg.snow.color=ex.web_snow_color_get();
+          msg.snow.steps=Array.from(new Uint16Array(mem,ex.web_snow_grid(selected),64));
+          msg.snow.notes=Array.from(new Uint8Array(mem,ex.web_snow_grid_notes(),64));
+          msg.snow.length=ex.web_snow_length(selected);msg.snow.position=ex.web_snow_position(selected);
         }
       }
       const leds = [ex.web_lit_buttons(), ex.web_lit_keys(), ex.web_dim_buttons(), ex.web_dim_keys(), ex.web_dim_level(),

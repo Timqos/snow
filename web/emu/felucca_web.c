@@ -272,7 +272,7 @@ static void follow_demo(void)
     uint32_t k, i;
     for (k = 0; k < NTRK; k++) {
         track_defaults_steps(&trk[k]);
-        trk[k].p[P_SLEN] = 16;
+        trk[k].p[P_SLEN] = 32;
     }
     for (k = 0; k < 3u; k++) {
         track_t *t = &trk[k];
@@ -568,13 +568,13 @@ EXPORT void web_snow_demo(void)
         motion_reset(&trk[k]);
         apply_preset_to(&trk[k], TRK_DEF[k][1]);
         trk[k].p[SN_G_LIVE] = 0;
-        trk[k].p[P_SLEN] = 16;
+        trk[k].p[P_SLEN] = 32;
         trk[k].p[P_SDIV] = 2;
         trk[k].p[P_SGATE] = k == 5u ? 127 : 75;
         for (s = 0; s < NSTEP; s++) {
             memset(&trk[k].step[s], 0, sizeof(step_t));
             trk[k].step[s].time = ST_REST;
-            if (s < 16u && ((hits[k] >> s) & 1u)) {
+            if (s < 32u && ((hits[k] >> (s%16u)) & 1u)) {
                 trk[k].step[s].time = ST_NOTE;
                 trk[k].step[s].n = 1;
                 trk[k].step[s].note[0] = (uint8_t)(k == 4u ? (s >= 8u ? 55 : 60) : 60);
@@ -623,7 +623,7 @@ static const struct { uint16_t id; uint8_t group; } web_snow_params[] = {
     W(P_LEVEL,9),W(P_PAN,9),W(P_SPRD,9),W(P_MUTE,9),
     W(P_DIST,10),W(P_DTYPE,10),W(P_DTONE,10),W(P_ITYPE,10),W(P_IA,10),W(P_IB,10),W(P_IC,10),W(P_IMIX,10),
     W(P_DKSRC,10),W(P_DKAMT,10),W(P_DKREL,10),
-    W(SN_G_STYLE,11),W(SN_G_COMPLEX,11),W(SN_G_HUMAN,11),W(SN_G_VARIANT,11),W(SN_G_ROTATE,11),
+    W(SN_G_SCOPE,11),W(SN_G_LOCKS,11),W(SN_G_COMPLEX,11),W(SN_G_HUMAN,11),W(SN_G_VARIANT,11),W(SN_G_ROTATE,11),
     W(SN_G_KIND,11),W(SN_G_DENS,11),W(SN_G_SYNC,11),W(SN_G_SEED,11),W(SN_G_BASE,11),W(SN_G_SPAN,11),
     W(SN_G_CONTOUR,11),W(SN_G_ACCENT,11),W(SN_G_LIVE,11),W(P_SCALE,11),W(P_ROOT,11),
     W(P_SLEN,12),W(P_SDIV,12),W(P_SSWING,12),W(P_SGATE,12),W(P_DIR,12),
@@ -686,9 +686,24 @@ EXPORT const char *web_snow_role(uint32_t channel) { return channel<NTRK?SN_ROLE
 EXPORT uint32_t web_snow_pattern_used(uint32_t channel,uint32_t slot) { return snow_pattern_used(channel,slot); }
 EXPORT uint32_t web_snow_pattern_active(uint32_t channel) { return channel<NTRK && lists.cur[channel]<NENT?lists.cur[channel]:0; }
 EXPORT uint32_t web_snow_pattern_pending(uint32_t channel) { return channel<NTRK?bank_next(channel):255; }
-EXPORT uint32_t web_snow_style_count(void) { return NELEM(SN_STYLES); }
-EXPORT const char *web_snow_style_name(uint32_t style) { return style<NELEM(SN_STYLES)?SN_STYLES[style]:""; }
-EXPORT uint32_t web_snow_scene(uint32_t style,uint32_t vary,uint32_t tempo) { return snow_generate_scene(style,vary!=0,tempo!=0); }
+EXPORT uint32_t web_snow_scene(uint32_t vary) { return snow_generate_scene(vary!=0); }
+EXPORT uint32_t web_snow_genparm(uint32_t all) { return all?snow_parameter_scene():snow_generate_parameters(song.sel); }
+EXPORT uint32_t web_snow_clear(uint32_t all) { return snow_clear_sequence(all!=0); }
+static uint16_t web_snow_steps[64];static uint8_t web_snow_notes[64];
+EXPORT const uint16_t *web_snow_grid(uint32_t ch) {
+    ch%=NTRK;uint64_t locks=motion_lock_steps(ch);
+    for(uint32_t i=0;i<NSTEP;i++){const step_t *s=&trk[ch].step[i];web_snow_steps[i]=(uint16_t)(s->vel|((s->time==ST_NOTE&&s->n)?256u:0u)|(((locks>>i)&1u)?512u:0u)|((step_ratchet(s)-1u)<<10)|(s->time==ST_TIE?4096u:0u));web_snow_notes[i]=s->n?s->note[0]:255;}
+    return web_snow_steps;
+}
+EXPORT const uint8_t *web_snow_grid_notes(void){return web_snow_notes;}
+EXPORT uint32_t web_snow_length(uint32_t ch){return ch<NTRK?(uint32_t)trk[ch].p[P_SLEN]:0;}
+EXPORT uint32_t web_snow_position(uint32_t ch){return ch<NTRK&&song.playing?trk[ch].seq_idx:255;}
+EXPORT uint32_t web_snow_color_count(void){return NPALETTES;}
+EXPORT const char *web_snow_color_name(uint32_t c){return c<NPALETTES?UI_PALETTES[c].name:"";}
+EXPORT uint32_t web_snow_color_get(void){return settings.palette;}
+EXPORT void web_snow_color(uint32_t c){if(c<NPALETTES){settings.palette=(uint8_t)c;theme_apply();settings_save();ui.force=1;}}
+EXPORT uint32_t web_snow_ui_cards(void){return snow_home_state.card_blits;}
+EXPORT uint32_t web_snow_ui_scopes(void){return snow_home_state.scope_blits;}
 EXPORT uint32_t web_snow_tempo_get(void) { return (uint32_t)song.g[G_BPM]; }
 EXPORT void web_snow_tempo(uint32_t bpm) { song.g[G_BPM]=(int16_t)clamp((int32_t)bpm,40,240);ui.force=1; }
 #endif

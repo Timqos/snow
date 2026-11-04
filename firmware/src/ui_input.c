@@ -1502,7 +1502,8 @@ static void edit_param(uint32_t slot, int32_t steps)
     const param_desc_t *d;
     int32_t v;
 #if FELUCCA_SNOW
-    if(pg->graph==GR_SNOW_PAT){snow_pattern_knob(pg->id[slot],steps);return;}
+    if(pg->graph==GR_SNOW_PAT){snow_pattern_knob(slot,steps);return;}
+    if(pg->graph==GR_TRK&&slot<NTRK){track_t *t=&trk[slot];t->p[P_LEVEL]=(int16_t)clamp(t->p[P_LEVEL]+steps,TP[P_LEVEL].min,TP[P_LEVEL].max);motion_capture(t,P_LEVEL,t->p[P_LEVEL]);return;}
 #endif
     if (pg->graph == GR_FEEL) {                           /* (Skiff 2.0) FEEL: CHANCE RATCHET NUDGE TYPE of the selection */
         follow_hold();                                    /* ((1.3) the edited steps stay on the screen) */
@@ -1600,6 +1601,11 @@ static void edit_param(uint32_t slot, int32_t steps)
     if ((vp == &TSEL->p[P_DKSRC] || vp == &TSEL->p[P_FOLLOW]) && v == (int32_t)(song.sel % NTRK) + 1)
         v = v == d->max ? *vp : v + (steps > 0 ? 1 : -1);   /* (Skiff) DUCK BY, (2.1) FOLLOW: never the track itself */
     *vp = (int16_t)v;
+#if FELUCCA_SNOW
+    if(snow_gen_page(pg)&&TSEL->p[SN_G_SCOPE]&&(uint32_t)(vp-TSEL->p)!=SN_G_SCOPE){
+        uint32_t id=(uint32_t)(vp-TSEL->p);for(uint32_t k=0;k<NTRK;k++)trk[k].p[id]=(int16_t)v;
+    }
+#endif
     if (pg->scope != SC_GLOBAL) {
         motion_capture(TSEL, (uint32_t)(vp - TSEL->p), *vp);
         ml_knob(TSEL, (uint32_t)(vp - TSEL->p));        /* ((1.3) MIDI LEARN: picked) */
@@ -2097,17 +2103,22 @@ static void ui_input(void)
     uint32_t oct;
     uint32_t lay, combo = 0, lytap, lkeys, glo, kq = 0;
     int32_t s, sel = 0, ks[4] = {0, 0, 0, 0};
+#if FELUCCA_SNOW
+    int32_t snow_ks[2]={0,0};
+#endif
     static uint32_t lock_ms;                            /* BPM LOCK: the last locked SELECT turn (fm1_ms | 1; 0 none) */
     static uint8_t home_long;                           /* Skiff: HOME held past 0.7 s, the menu closed: MENU when let go */
 #if FELUCCA_SNOW
     if (snow_buttons(pressed)) return;
     snow_sequence_poll();
-    if(!ui.home && !ui.menu && !ui.confirm && !((fm1_in.buttons>>panel.btn[B_SEQ])&1u) && cur_page()->fam==FAM_SEQ &&
-       (cur_page()->id[0]==SN_G_DENS || cur_page()->id[0]==SN_G_BASE || cur_page()->id[0]==SN_G_LIVE || cur_page()->id[0]==SN_G_STYLE || cur_page()->id[0]==SN_G_ROTATE) &&
-       ((pressed>>panel.btn[B_OCTUP])&1u || (pressed>>panel.btn[B_OCTDN])&1u)) {
-        int all=(pressed>>panel.btn[B_OCTDN])&1u;
-        int rc=all?snow_generate_scene((uint32_t)TSEL->p[SN_G_STYLE],1,0):snow_generate(song.sel,1);
-        ui_message(rc?"WAIT PATTERN LAUNCH":all?"GENERATED: ALL 6":"GENERATED: CHANNEL");return;
+    if(!ui.home&&!ui.menu&&!ui.confirm&&!ui.layer&&!((fm1_in.buttons>>panel.btn[B_GLO])&1u)&&!((fm1_in.buttons>>panel.btn[B_SEQ])&1u)&&snow_gen_page(cur_page())&&
+       (((pressed>>panel.btn[B_OCTUP])&1u)||((pressed>>panel.btn[B_OCTDN])&1u))) {
+        int all=TSEL->p[SN_G_SCOPE]!=0,parm=(pressed>>panel.btn[B_OCTDN])&1u;
+        int clear=parm&&((fm1_in.buttons>>panel.btn[B_SAVE])&1u),rc;
+        if(clear){ui.save_t0=(now&~3u)|3u;rc=snow_clear_sequence(all);}
+        else if(parm)rc=all?snow_parameter_scene():snow_generate_parameters(song.sel);
+        else rc=all?snow_generate_scene(1):snow_generate(song.sel,1);
+        ui_message(rc?"WAIT PATTERN LAUNCH":clear?"CLEARED":parm?"GEN PARM":"GEN RND");return;
     }
 #endif
     fm6_poll();                                         /* FM6: PTCH turned -> its patch */
@@ -2242,6 +2253,12 @@ static void ui_input(void)
         for (k = 0; k < 4u; k++)                        /* KNOB 1..4: the layer's (ui_layer.c layer_knob) */
             if ((ks[k] = panel_enc(EN_K1 + k)) != 0)
                 combo = 1;
+#if FELUCCA_SNOW
+        if(ui.ly==LAYER_GLO||ui.ly==LAYER_SEQ) {
+            snow_ks[0]=panel_enc(EN_ALGO);snow_ks[1]=panel_enc(EN_PRESET);
+            if(snow_ks[0]||snow_ks[1])combo=1;
+        } else
+#endif
         if (ui.ly == LAYER_PERF) {                      /* (Skiff) PERFORM: SELECT the LAUNCH point, PRESETS the */
             int32_t ls = panel_enc(EN_SELECT), lp = panel_enc(EN_PRESET);   /* KEYS (ui_layer.c) */
             if (ls || lp) {
@@ -2251,7 +2268,11 @@ static void ui_input(void)
         } else {
             panel_enc(EN_PRESET);                       /* (a stray turn would load another sound) */
         }
-        if ((s = panel_enc(EN_ALGO)) != 0 && (ui.ly == LAYER_PERF || ui.ly == LAYER_GLO)) {   /* (one read: #102) */
+        if (
+#if FELUCCA_SNOW
+            ui.ly!=LAYER_GLO && ui.ly!=LAYER_SEQ &&
+#endif
+            (s = panel_enc(EN_ALGO)) != 0 && (ui.ly == LAYER_PERF || ui.ly == LAYER_GLO)) {   /* (one read: #102) */
             track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));
             combo = 1;                                  /* (Skiff U1) PERFORM, GLO: ALGORITHM the track (its keys,
                                                          * GLO's four LEVELs follow; their OCT-: no one track's).
@@ -2267,6 +2288,9 @@ static void ui_input(void)
     lytap = layer_gesture(now, combo);
     layer_show();
     layer_keys(lkeys);
+#if FELUCCA_SNOW
+    for(k=0;k<2u;k++)if(snow_ks[k])layer_knob(k+4u,snow_ks[k]);
+#endif
     rec_clear_poll();                                   /* ((Skiff U2) REC's CLEAR: held) */
     for (k = 0; k < 4u; k++)
         if (ks[k]) {
@@ -2500,7 +2524,14 @@ static void ui_input(void)
      * pass runs, so one landing after the layer's read went to the page as well: KNOB 1..4 edited the layer's control
      * and the page under it (HOME's sound, motion recorded), PRESETS could load a sound. They stay for the next pass */
     kq |= lay;
+#if FELUCCA_SNOW
+    if(kq&&!lay){panel_enc(EN_PRESET);panel_enc(EN_ALGO);}
+#endif
     if (!lay && (s = panel_enc(EN_PRESET)) != 0) {
+#if FELUCCA_SNOW
+        if(!ui.home&&(cur_page()->graph==GR_SNOW_PAT||cur_page()->graph==GR_TRK))edit_param(5,s);
+        else
+#endif
         if (shift_held() && sel_shift(s)) {             /* ((2.0) SHIFT + PRESETS on NOTES, FEEL: the selection, a */
             shift_mark();                               /* SHIFT combo) */
             home_long = 0;
@@ -2508,8 +2539,13 @@ static void ui_input(void)
             presets_turn(s);
         }
     }
-    if (!lay && (s = panel_enc(EN_ALGO)) != 0)     /* ALGORITHM: the selected track, on every page */
+    if (!lay && (s = panel_enc(EN_ALGO)) != 0) {
+#if FELUCCA_SNOW
+        if(!ui.home&&(cur_page()->graph==GR_SNOW_PAT||cur_page()->graph==GR_TRK))edit_param(4,s);else
+#endif
+        /* ALGORITHM: the selected track, on every page */
         track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));
+    }
     if ((s = glo ? sel : panel_enc(EN_SELECT)) != 0) {   /* SELECT: the tempo with GLO held (or BPM LOCK OFF, Felucca's
                                                          * way); (Skiff phase 8, rule 3) else the pages */
         int sheet = !lay && !ui.home && sheet_of(cur_page()->graph);   /* (Skiff U1) a sheet's rows: SELECT is their
