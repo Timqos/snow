@@ -24,11 +24,13 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     env:
-      JIELI_TOOLCHAIN: ${{ runner.temp }}/snow-jieli/toolchain
-      AC79_SDK: ${{ runner.temp }}/snow-ac79
       EMU_PREVIEW: '0'
     steps:
       - uses: actions/checkout@v4
+      - name: Cloud build paths
+        run: |
+          echo "JIELI_TOOLCHAIN=$RUNNER_TEMP/snow-jieli/toolchain" >> "$GITHUB_ENV"
+          echo "AC79_SDK=$RUNNER_TEMP/snow-ac79" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

@@ -1,4 +1,4 @@
-let snowSelected=0, snowSchema=null, snowControls=[];
+let snowSelected=0, snowSchema=null, snowControls=[], snowDescriptorKey='';
 const snowById=(id)=>document.getElementById(id);
 const snowPost=(type,data={})=>send({type,track:snowSelected,...data});
 for(let k=0;k<6;k++){
@@ -24,7 +24,7 @@ snowById('snow-vary').onclick=()=>{snowPost('snow-generate',{vary:true});snowByI
 snowById('snow-preset').onchange=(e)=>{if(e.target.value!==''){snowPost('snow-preset',{preset:+e.target.value});snowById('snow-notice').textContent=`CH ${snowSelected+1}: ${e.target.selectedOptions[0].textContent}`;e.target.value='';}};
 function snowDesigner(schema){
   if(!schema)return;
-  snowSchema=schema;
+  snowSchema=schema;snowDescriptorKey='';
   const host=snowById('snow-designer');
   const open=new Set([...host.querySelectorAll('details[open]')].map(d=>d.dataset.group));
   const initial=!snowControls.length;host.replaceChildren();snowControls=[];
@@ -50,6 +50,12 @@ function snowDesigner(schema){
 }
 function snowFrame(state){
   if(state.selected!==snowSelected){snowSelected=state.selected;snowPost('snow-schema');}
+  // Insert A/B/C labels and ranges also follow changes made on the hardware panel.
+  if(state.values&&snowSchema){
+    const key=snowSchema.params.map((p,i)=>p.group==='INSERT / SEND FX'&&p.name==='TYPE'?state.values[i]:'').join(',');
+    if(snowDescriptorKey&&key!==snowDescriptorKey)snowPost('snow-schema');
+    snowDescriptorKey=key;
+  }
   snowById('snow-selection').textContent=`CH ${snowSelected+1} / SOUND DESIGN`;
   for(const b of document.querySelectorAll('[data-track]'))b.setAttribute('aria-pressed',String(+b.dataset.track===snowSelected));
   for(const c of document.querySelectorAll('[data-mask]'))c.checked=!!(state.mask&(1<<+c.dataset.mask));
