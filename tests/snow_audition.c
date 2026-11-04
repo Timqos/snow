@@ -6,7 +6,7 @@
 static void word(FILE *f,uint32_t v,uint32_t n){for(uint32_t i=0;i<n;i++)fputc((int)(v>>(i*8u))&255,f);}
 int main(int argc,char **argv)
 {
-    if(argc!=2)return 1;web_nor_erase();web_boot();advance(1000);
+    if(argc!=2)return 1;web_nor_erase();web_boot();advance(SNOW_BOOT_MS+200u);
     static const char *const names[]={"kick","snare","hat","perc"};
     for(uint32_t k=0;k<4;k++) {
         char path[1024];snprintf(path,sizeof path,"%s/%s-presets.wav",argv[1],names[k]);

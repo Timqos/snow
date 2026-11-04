@@ -255,7 +255,13 @@ static void fm1_main(void)
     unit_g_adopt = ui_set_rev < 2u;           /* (Skiff U3, R8) the first boot: the session's CLOCK MIDI IN TUNE .. */
     autosave_boot(boot_clean);                /* (1.2) the last session's music, under the splash */
     unit_g_boot();                            /* .. become the unit's; later the unit's are put back over it (ui.c) */
+#if FELUCCA_SNOW
+    for (ms = 0; ms < SNOW_BOOT_MS; ms += 10u) {
+        snow_splash_frame(ms);              /* bounded 20 fps; audio IRQ never draws */
+        fm1_wdt_feed();
+#else
     for (ms = 0; ms < 400u; ms += 10u) {      /* the splash; the pot followed (MIDI IN plays under it) */
+#endif
         fm1_delay_ms(10);
         master_poll();
     }

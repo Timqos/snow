@@ -332,7 +332,11 @@ static void web_power_on(void)
 #ifdef FOLLOW_DEMO
     follow_demo();
 #endif
+#if FELUCCA_SNOW
+    web_boot_ms = fm1_ms + 30u + SNOW_BOOT_MS;
+#else
     web_boot_ms = fm1_ms + 430u;         /* main.c: 30 + 400 ms before the first frame */
+#endif
     web_booted = 1;
 }
 
@@ -374,8 +378,14 @@ static void web_ms(void)
         }
         web_half ^= 1u;
     }
-    if (!web_booted || (int32_t)(fm1_ms - web_boot_ms) < 0)
+    if (!web_booted)
         return;
+    if ((int32_t)(fm1_ms - web_boot_ms) < 0) {
+#if FELUCCA_SNOW
+        snow_splash_frame(30u+SNOW_BOOT_MS-(web_boot_ms-fm1_ms));
+#endif
+        return;
+    }
     if (web_boot_ms) {                                    /* main.c: the splash goes, the loop starts */
         web_boot_ms = 0;
         kb_boot_hold = 0;

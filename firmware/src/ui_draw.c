@@ -1166,6 +1166,9 @@ static void draw_columns(void)
 }
 
 
+#if FELUCCA_SNOW
+#include "snow_boot.c"
+#else
 /* The power-on splash (main.c fm1_main, web/emu felucca_web.c; 1.1.5): a RAISE square centred on the screen, square
  * corners (in every style; LINE too: RAISE from the palette's SURF), in it in AF_M, the ink SPL_PAD in from the left:
  * at the top the name and the version, the first line's capitals' top SPL_PAD down; at the bottom the maker and
@@ -1245,6 +1248,8 @@ static void draw_splash(void)
     }
     lcd_sync();
 }
+
+#endif
 
 /* UPDATE MODE countdown (main.c: OCT- + OCT+ held): over everything, the menu and the dialogs too */
 static void draw_uboot(void)

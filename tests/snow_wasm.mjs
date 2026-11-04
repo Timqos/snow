@@ -7,7 +7,12 @@ async function boot() {
   const x=instance.exports; x._initialize(); x.web_nor_erase(); x.web_boot(); return x;
 }
 function render(x,ms) { let peak=0, hash=0; for(let i=0;i<ms*44.1;i+=128) { x.web_render(128); for(const s of new Float32Array(x.memory.buffer,x.web_out_l(),128)) { assert(Number.isFinite(s)); peak=Math.max(peak,Math.abs(s)); hash=(Math.imul(hash,31)+Math.round(s*32768))|0; } } return {peak,hash}; }
-const x=await boot(); render(x,1000); x.web_snow_demo();
+const splash=await boot();const screen=x=>Array.from(new Uint16Array(x.memory.buffer,x.web_screen(),240*240));
+render(splash,300);const forming=screen(splash);render(splash,650);const complete=screen(splash);
+assert.notDeepEqual(forming,complete);render(splash,450);assert.deepEqual(screen(splash),complete);
+render(splash,300);assert.notDeepEqual(screen(splash),complete);
+console.log('WASM BOOT PASSED: animated logo, readable hold and transition to the instrument');
+const x=await boot(); render(x,1800); x.web_snow_demo();
 const values=Array.from({length:6},(_,t)=>x.web_snow_value(t,0));
 x.web_snow_save(); x.web_snow_mask(62); x.web_snow_control(0,10);
 assert.equal(x.web_snow_value(0,0),values[0]);
@@ -18,7 +23,7 @@ x.web_buttons(1<<10); render(x,70); x.web_buttons(0); render(x,70);
 assert.equal(x.web_playing(),1);
 const result=render(x,4000); assert(result.peak>0.01 && result.peak<1);
 x.web_snow_control(0,25); assert.equal(x.web_snow_reload(63),1); assert.equal(x.web_playing(),1);
-const y=await boot(); render(y,1000); y.web_snow_demo();
+const y=await boot(); render(y,1800); y.web_snow_demo();
 y.web_buttons(1<<10); render(y,70); y.web_buttons(0); render(y,70);
 assert.deepEqual(render(y,4000),result);
 console.log("SNOW WASM MIX PASSED: demo, six-machine mix, mask, Control All, RAM reload while playing, deterministic audio; peak",result.peak);
@@ -69,7 +74,7 @@ await worklet.onMessage({type:'snow-genparm',all:true});
 worklet.publish();const scene=worklet.messages.at(-1).snow;assert.equal(scene.used.length,6);assert.equal(scene.active.length,6);
 console.log('SNOW 0.6 ROLES / FX / RANDOM PASSED: 60 role-specific presets, per-channel FX controls, random phrases, auto locks and pattern grid metadata');
 // Simultaneous racks run in the same firmware audio path as the browser and device.
-const z=await boot();render(z,1000);z.web_snow_demo();
+const z=await boot();render(z,1800);z.web_snow_demo();
 function parameter(group,name){return Array.from({length:z.web_snow_param_count()},(_,i)=>i).find(i=>{
  const mem=new Uint8Array(z.memory.buffer);const read=p=>{let e=p;while(mem[e])e++;return new TextDecoder().decode(mem.subarray(p,e));};
  return read(z.web_snow_param_group(i))===group&&read(z.web_snow_param_name(0,i))===name;
@@ -88,7 +93,7 @@ for(let ch=0;ch<6;ch++){
  assert.equal(str(x.web_snow_param_enum(ch,target,0)),shortNames[ch]);
  assert.equal(str(x.web_snow_param_enum(ch,target,1)),'ALL');
 }
-const v=await boot();render(v,1000);v.web_snow_demo();
+const v=await boot();render(v,1800);v.web_snow_demo();
 const beforeGrid=Array.from(new Uint16Array(v.memory.buffer,v.web_snow_grid(1),64));
 const other=Array.from({length:count},(_,i)=>v.web_snow_param_value(0,i));
 const old=Array.from({length:count},(_,i)=>v.web_snow_param_value(1,i));

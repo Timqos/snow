@@ -5,7 +5,7 @@
 #include "snow_test.c"
 int main(int argc,char **argv)
 {
-    if(argc!=2)return 1;web_nor_erase();web_boot();advance(1000);
+    if(argc!=2)return 1;web_nor_erase();web_boot();advance(SNOW_BOOT_MS+200u);
     uint32_t mask[(P_COUNT+31u)/32u];sel_set(0);snow_edit_mask(mask);
     for(uint32_t k=0;k<NTRK;k++){
         char path[1024];snprintf(path,sizeof path,"%s/random-%u.pcm",argv[1],k);

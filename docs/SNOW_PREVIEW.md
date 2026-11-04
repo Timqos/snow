@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Snow 0.6 — sound design with an instrument body
+# Snow 0.6.1 — six instruments, one Snow identity
 
-[Open the simulator](https://timqos.github.io/snow/snow/?v=06) ·
+[Open the simulator](https://timqos.github.io/snow/snow/?v=061) ·
 [Install & back up](https://timqos.github.io/snow/snow/install/)
 
 Snow is custom firmware for the M-VAVE FM-1. Its browser simulator runs the
@@ -64,6 +64,18 @@ GLO + SAVE: RAM snapshot; GLO + HOME: reload all; GLO + OCT+: reload selected.
 Use SAVE’s PROJECT pages for permanent storage. RAM snapshots do not survive
 power-off. The pool has 64 unique patterns, 16 positions per channel; deferred
 writes have finite capacity, so stop when the device asks for space to save.
+
+## Startup and visual identity
+
+The supplied snowflake is a 7×7 pixel symbol with a central negative-space cell.
+At startup its blocks grow in place, from the inside out, and the Snow name fades
+in beneath it. A readable hold completes a 1.5-second sequence before HOME.
+Rendering is capped at 20 fps and stops after the reveal. The existing canvas is
+reused; no framebuffer is allocated and no animation runs in the audio IRQ.
+The browser uses the same timing and native renderer as the hardware build.
+
+The same symbol brands the English site and installer. A concise introduction
+precedes the simulator, followed by installation, feature details and the manual.
 
 ## Interface and browser page
 

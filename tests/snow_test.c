@@ -328,7 +328,7 @@ static void interface_tests(void)
 #ifndef SNOW_AUDITION
 int main(void)
 {
-    setvbuf(stdout,0,_IOLBF,0);web_nor_erase();web_boot();advance(1000);
+    setvbuf(stdout,0,_IOLBF,0);web_nor_erase();web_boot();advance(SNOW_BOOT_MS+200u);
     synth_tests();generation_tests();ornament_tests();patterns_and_snapshot();fx_tests();pattern_controls();interface_tests();icon_position_tests();random_sound_tests();smart_diversity_tests();
     puts("ALL SNOW 0.6 TESTS PASSED");return 0;
 }
