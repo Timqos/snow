@@ -42,7 +42,7 @@ and the published Skiff 2.2 package, SHA-256
 - No Snow-specific changes to voltage control, clock switching or GPIO register
   programming were introduced. The same build-time RAM/ROM/HAL guards pass.
 
-The audited image is 581120 bytes. Data+BSS use 86392/98304 bytes; the pool uses
+The audited image is 581168 bytes. Data+BSS use 86392/98304 bytes; the pool uses
 333584/356352; RAM code plus ramx uses 24176/24576. These are static budgets,
 not physical measurements of stack high-water marks, flash timings or audio CPU
 headroom. Runtime graphics/synthesis differences still need a hardware soak.

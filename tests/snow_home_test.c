@@ -7,6 +7,11 @@ static void focus(uint32_t panel){turn(EN_SELECT,-10);turn(EN_SELECT,(int32_t)pa
 static void controls(void)
 {
     go_home();sel_set(0);int16_t bpm=song.g[G_BPM];
+    for(int32_t v=-1;v<=1;v++){
+        trk[0].p[SN_DJ_FILTER]=(int16_t)v;assert(snow_home_percent(&trk[0],SN_DJ_FILTER)==(uint32_t)(50+v));
+        char text[8];const char *unit;param_format(&TP[SN_WIDTH],v,text,&unit);assert(atoi(text)==50+v);
+    }
+    trk[0].p[SN_DJ_FILTER]=0;
     for(uint32_t lock=0;lock<2;lock++){
         ui_prefs=lock?ui_prefs|PREF_BPM_LOCK:ui_prefs&~PREF_BPM_LOCK;
         focus(SN_HOME_MIX);focus(SN_HOME_GEN);focus(SN_HOME_SYNTH);assert(song.g[G_BPM]==bpm);

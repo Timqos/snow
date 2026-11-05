@@ -11,8 +11,8 @@ static void snow_text_big(int32_t x,int32_t y,const char *s,uint16_t ink,uint32_
 static uint32_t snow_home_percent(const track_t *t,uint32_t id)
 {
     int32_t v=motion_base_value(t,id);
-    if(id==P_PAN||id==SN_DJ_FILTER||id==SN_WIDTH)return (uint32_t)(v<0?50+v*50/64:50+v*50/63);
-    return snow_param_position(t,id)/10u;
+    if(id==P_PAN||id==SN_DJ_FILTER||id==SN_WIDTH)return (uint32_t)(v<0?50-((-v*50+32)/64):50+(v*50+31)/63);
+    return (snow_param_position(t,id)+5u)/10u;
 }
 static void snow_pixel_bar(int32_t x,int32_t y,int32_t w,int32_t h,uint32_t pct,int centered,uint16_t ink)
 {
@@ -64,7 +64,8 @@ static void snow_home_draw(void)
             snow_pixel_bar(x,17,40,12,snow_home_percent(t,mix_ids[j]),j==1u||j==2u,T_THEME);
         }
         char pat[5]="P";fmt_int(pat+1,(int32_t)pattern+1);cv_rect(207,4,27,25,T_SURF);snow_text(211,13,pat,T_THEME,3);
-        snow_pixel_bar(5,43,47,10,position/10u,0,T_THEME);char pct[8];fmt_int(pct,(int32_t)(position/10u));str_cpy(pct+str_len(pct),"%",sizeof pct-str_len(pct));snow_text(58,45,pct,T_THEME,4);
+        uint32_t percent=(position+5u)/10u;
+        snow_pixel_bar(5,43,47,10,percent,0,T_THEME);char pct[8];fmt_int(pct,(int32_t)percent);str_cpy(pct+str_len(pct),"%",sizeof pct-str_len(pct));snow_text(58,45,pct,T_THEME,4);
         snow_text_big(5,61,track_desc(t,id)->label,T_TEXT,7);
         char name[20];sound_name(t,name);snow_text(5,80,name,T_MID,14);
         snow_icon(45,129,k,position,2,t->p[P_MUTE]?T_MID:T_THEME);

@@ -476,7 +476,7 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
     fmt_named = d->fmt == F_ENUM;
 #if FELUCCA_SNOW
     if(d==&TP[SN_DTIME] || d==&TP[SN_RPRE]) {fmt_int(val,v*(d==&TP[SN_DTIME]?10:1));*unit="ms";return;}
-    if(d==&TP[SN_WIDTH]){fmt_int(val,v<0?50+v*50/64:50+v*50/63);*unit="%";return;}
+    if(d==&TP[SN_WIDTH]){fmt_int(val,v<0?50-((-v*50+32)/64):50+(v*50+31)/63);*unit="%";return;}
 #endif
     switch (d->fmt) {
     case F_PCT:                                     /* a 0..100 range (SWG) is its value, others a share of 127 */
