@@ -310,6 +310,9 @@ static void web_power_on(void)
     persist_boot();
     bank_boot();                          /* main.c: the patterns (bank.c; phase 5: every project's steps) */
     settings_init();
+#if FELUCCA_SNOW
+    snow_cpu_boot_defaults();
+#endif
     usb_serial_apply();
     lcd_init();
     draw_splash();                        /* main.c: the splash (ui_draw.c) */
@@ -329,6 +332,9 @@ static void web_power_on(void)
     unit_g_adopt = ui_set_rev < 2u;       /* main.c: (Skiff U3, R8) the unit's CLOCK MIDI IN TUNE */
     autosave_boot(boot_clean);            /* main.c: the last session's music (1.2, project.c) */
     unit_g_boot();
+#if FELUCCA_SNOW
+    snow_cpu_save_defaults();
+#endif
 #ifdef FOLLOW_DEMO
     follow_demo();
 #endif

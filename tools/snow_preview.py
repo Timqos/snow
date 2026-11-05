@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "build/snow-preview"
-RELEASE = "0.7.3"
+RELEASE = "0.7.4-rc1"
 VERSION = f"v{RELEASE}-snow"
 
 
@@ -31,6 +31,10 @@ def main():
     run(str(ROOT / "build/snow_sel_test"))
     run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/snow_home_test", "tests/snow_home_test.c", "-lm")
     run(str(ROOT / "build/snow_home_test"))
+    run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/snow_runtime_test", "tests/snow_runtime_test.c", "-lm")
+    run(str(ROOT / "build/snow_runtime_test"))
+    run("cc", "-O1", "-w", "-pthread", "-DVOICES_2CORE=8", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/snow_dualcore_test", "tests/snow_dualcore_test.c", "-lm")
+    run(str(ROOT / "build/snow_dualcore_test"))
     run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/snow_audition", "tests/snow_audition.c", "-lm")
     run(str(ROOT / "build/snow_audition"), str(OUT))
     run("python3", "tools/snow_audio_check.py", str(OUT))
@@ -99,6 +103,7 @@ def main():
     for token, value in (("@VERSION@", RELEASE), ("@PACKAGE@", package_name), ("@SHA256@", package_hash), ("@COMMIT@", commit), ("@SHORT_COMMIT@", commit[:12])):
         install_html = install_html.replace(token, value)
     (installer / "index.html").write_text(install_html)
+    shutil.copy(ROOT / "web/snow/install/factory.html", installer / "factory.html")
     (installer / "config.json").write_text(json.dumps({"version":VERSION,"product":"FM-1_700","package":"../"+package_name,"sha256":package_hash,"source_commit":commit},indent=2)+"\n")
     run("node", "tests/snow_install.mjs", str(installer))
     shutil.copytree(ROOT / "LICENSES", OUT / "LICENSES", dirs_exist_ok=True)

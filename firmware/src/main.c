@@ -169,6 +169,9 @@ static void fm1_main(void)
 #endif
     if (settings_init())                                /* a new unit: the SKIFF palette, and BPM LOCK on (DESIGN.md */
         ui_prefs |= PREF_BPM_LOCK;                      /* rule 3: the tempo with GLO held, #58) */
+#if FELUCCA_SNOW
+    snow_cpu_boot_defaults();                          /* before second-core startup, not after audio */
+#endif
     usb_serial_apply();                                 /* (#67: the saved USB SERIAL before usb_start) */
     lcd_init();
     draw_splash();                                      /* ui_draw.c (1.1.5) */
@@ -255,6 +258,9 @@ static void fm1_main(void)
     unit_g_adopt = ui_set_rev < 2u;           /* (Skiff U3, R8) the first boot: the session's CLOCK MIDI IN TUNE .. */
     autosave_boot(boot_clean);                /* (1.2) the last session's music, under the splash */
     unit_g_boot();                            /* .. become the unit's; later the unit's are put back over it (ui.c) */
+#if FELUCCA_SNOW
+    snow_cpu_save_defaults();                /* persist once; later user choices and fault fallback remain respected */
+#endif
 #if FELUCCA_SNOW
     for (ms = 0; ms < SNOW_BOOT_MS; ms += 10u) {
         snow_splash_frame(ms);              /* bounded 20 fps; audio IRQ never draws */

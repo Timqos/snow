@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Snow's backup-first flow uses the existing, model-checked FM-1 updater.
-import {productOf,logicalImage,sha256hex} from './fm1pkg.js';
+import {productOf,logicalImage,sha256hex,validateStockPackage} from './fm1pkg.js';
 import {sameModel,IS_OTA} from './fm1ota.js';
 import {captureBackup,BackupConnection,readBackup} from './fm1backup.js';
 export async function verifyPackage(bytes,config){
  if(productOf(bytes)!==config.product||config.product!=='FM-1_700')throw new Error('This package is not the Snow FM-1 package. Nothing was written.');
  if(await sha256hex(bytes)!==config.sha256)throw new Error('Firmware checksum mismatch. Reload the installer. Nothing was written.');
  return logicalImage(bytes);
+}
+export async function verifyFactoryPackage(bytes){
+ const checked=await validateStockPackage(bytes);
+ if(!/^FM-1_0(?:15|16)$/.test(checked.product))throw new Error('Select original FM-1 V15 or V16 firmware, not an SMK package. Nothing was written.');
+ return {...checked,factory:true,version:`Factory V${Number(checked.product.split('_')[1])}`};
 }
 // INFO extension parser, after Skiff's index_pkg.html (GPL-3.0-only).
 export function archiveInfo(a){
@@ -29,6 +34,8 @@ export class InstallSession{
    const dev=await this.updater.find();if(!dev)throw new Error('FM-1 not found. Check USB, stop playback and close other MIDI apps.');
    const input=dev.link.input,output=dev.link.output;dev.link.close();
    if(!sameModel(dev.id.model,'FM-1'))throw new Error('Snow is for the FM-1 only. No update was started.');
+   if(this.config.factory&&dev.id.text===this.config.product)throw new Error('This FM-1 already runs the selected factory firmware. Nothing was written.');
+   if(this.config.factory&&IS_OTA(dev.id))throw new Error('Finish the interrupted update first. Factory return needs running firmware to check the matching startup head. Nothing was written.');
    this.ports={input:input.id,output:output.id};this.device=dev.id.text;
    if(IS_OTA(dev.id)){this.mode='resume';return {mode:this.mode,device:this.device};}
    let link=this.connection(input,output);

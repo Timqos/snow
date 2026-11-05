@@ -152,6 +152,26 @@ static void theme_apply(void)                  /* settings.palette, and over it 
 #define CPU2_BYTE (favorites.factory[15][5])
 #define CPU2_SET (CPU2_BYTE & 1u)
 #define PREVIEW_SET ((CPU2_BYTE >> 1) & 1u)            /* ((1.3) MENU > STEP PREVIEW ON) */
+#if FELUCCA_SNOW
+/* Enable Snow's already-built second core once, including settings saved
+ * with the old default. Preserve later 1 CORE choices and fault fallback.
+ * SKS1 already preserves the complete CPU byte. */
+#define SN_CPU_DEFAULT_APPLIED 0x80u
+static uint8_t snow_cpu_defaults_changed;
+static void snow_cpu_boot_defaults(void)
+{
+#if FELUCCA_CPU2
+    if(!(CPU2_BYTE&SN_CPU_DEFAULT_APPLIED)){
+        CPU2_BYTE|=SN_CPU_DEFAULT_APPLIED|1u;
+        snow_cpu_defaults_changed=1;
+    }
+#endif
+}
+static void snow_cpu_save_defaults(void)
+{
+    if(snow_cpu_defaults_changed){snow_cpu_defaults_changed=0;settings_save();}
+}
+#endif
 /* (2.0, D 2A) MENU > CONTROL > RETURN: how MOMENTARY's values, the FX layer's macros and PERFORM's throws come back once
  * let go (mom_poll; throw.c thr_beats): SNAP, over 1 BEAT, over 1 BAR. A settings byte ([15][16]: zero, the default
  * 1 BAR; RET_BAR - the value) */
@@ -1277,6 +1297,20 @@ static void open_family(uint32_t fam)
 static void open_global(void)
 {
     uint32_t i, last = ui.fam_last[FAM_GLO];
+#if FELUCCA_SNOW
+    /* The shared bus pages are hidden in Snow: each channel has its own FX.
+     * Both a tap and a remembered page must honour the same visibility rules
+     * as SELECT. Otherwise GLO opened controls disconnected from the sound. */
+    if (!ui.home && (cur_page()->fam == FAM_TRK || cur_page()->fam == FAM_GLO)) {
+        for (i = ui.page + 1u; i < NPAGES; i++)
+            if (PAGES[i].fam == FAM_GLO && page_visible(i)) break;
+        ui.page = (uint8_t)(i < NPAGES ? i : page_first(FAM_TRK));
+    } else {
+        ui.page = (uint8_t)(last && last < NPAGES && page_visible(last) &&
+                           (PAGES[last].fam == FAM_GLO || PAGES[last].fam == FAM_TRK) ?
+                           last : page_first(FAM_TRK));
+    }
+#else
     if (!ui.home && (cur_page()->fam == FAM_TRK || cur_page()->fam == FAM_GLO)) {
         for (i = ui.page + 1u; i < NPAGES && PAGES[i].fam != FAM_GLO; i++) {}
         ui.page = (uint8_t)(cur_page()->fam == FAM_TRK ? page_first(FAM_GLO) : i < NPAGES ? i : page_first(FAM_TRK));
@@ -1284,6 +1318,7 @@ static void open_global(void)
         ui.page = (uint8_t)(last && last < NPAGES && (PAGES[last].fam == FAM_GLO || PAGES[last].fam == FAM_TRK) ? last :
                             page_first(FAM_TRK));
     }
+#endif
     ui.fam_last[FAM_GLO] = ui.page;
     ui.home = 0;
     page_entered();

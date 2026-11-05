@@ -1,11 +1,15 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Snow 0.7.3 — installation and rollback audit
+# Snow 0.7.4-rc1 — installation and rollback audit
 
 **Software checks passed. Physical FM-1 qualification is still pending.**
 No Snow-specific boot-area overwrite or firmware lock-in was found in the
 reviewed paths. This is evidence about code and simulated updates, not a
 guarantee that every physical unit, power interruption or third-party loader
 will recover without tools. Snow remains experimental.
+
+The reported 0.7.3 device ran at 99% CPU on one core, with distorted sound,
+sluggish UI and short release. This candidate changes runtime scheduling and
+idle work; it needs physical retesting. See the [runtime review](SNOW_RUNTIME_REVIEW.md).
 
 The [release evidence](https://timqos.github.io/snow/snow/update-audit.json)
 records the exact firmware source, package SHA-256 and audit-source commit for
@@ -42,12 +46,12 @@ and the published Skiff 2.2 package, SHA-256
 - No Snow-specific changes to voltage control, clock switching or GPIO register
   programming were introduced. The same build-time RAM/ROM/HAL guards pass.
 
-The audited image is 562448 bytes, leaving 19116 bytes of the application slot.
+The candidate image is 564100 bytes, leaving 17464 bytes of the application slot.
 Snow builds now require at least 4096 bytes of flash reserve. The retained BS
 animation decoder uses 273 temporary stack bytes, with no resident image cache.
 Snow-only unused antialiased font references were removed; the selected pixel
 fonts and the Skiff baseline stay unchanged. Data+BSS use 86392/98304 bytes; the pool uses
-333584/356352; RAM code plus ramx uses 24176/24576. These are static budgets,
+333680/356352; RAM code plus ramx uses 24176/24576. These are static budgets,
 not physical measurements of stack high-water marks, flash timings or audio CPU
 headroom. Runtime graphics/synthesis differences still need a hardware soak.
 
@@ -55,9 +59,9 @@ headroom. Runtime graphics/synthesis differences still need a hardware soak.
 
 | Path | Software evidence | Physical result |
 | --- | --- | --- |
-| Skiff 2.2 → Snow 0.7.3 | Real packages; OTA staging and C loader tests passed | Pending |
-| Snow 0.7.3 → Skiff 2.2 | Real packages; C loader, preserved boot head, interrupted-write/resume and unchanged-sector checks passed | Pending |
-| Snow 0.7.2 ↔ Snow 0.7.3 | Real packages in both directions; no new version lock found | Pending |
+| Skiff 2.2 → Snow 0.7.4-rc1 | Real packages; OTA staging and C loader tests | Pending |
+| Snow 0.7.4-rc1 → Skiff 2.2 | Real packages; C loader, preserved boot head, interrupted-write/resume and unchanged-sector checks | Pending |
+| Snow 0.7.3 ↔ Snow 0.7.4-rc1 | Real packages in both directions; version compatibility checks | Pending |
 | Factory V15/V16 → Snow | Real vendor package bootstrap heads used by the C loader tests; head remains intact | Pending |
 | Snow → factory V15/V16 | Real vendor package validation/staging and matching-head checks passed | Vendor loader execution on a unit is pending |
 | Saved Snow data → Skiff → Snow | Released WASM builds boot, respond to PLAY and render finite audio with persisted flash | Music-format compatibility is not asserted |

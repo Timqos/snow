@@ -2584,7 +2584,11 @@ static void ui_input(void)
             ui.force=1;
         }else
 #endif
-        if (glo || (!(ui_prefs & PREF_BPM_LOCK) && !sheet)) {
+        if (glo ||
+#if FELUCCA_SNOW
+            (!lay && !ui.home && (cur_page()->fam == FAM_TRK || cur_page()->fam == FAM_GLO)) ||
+#endif
+            (!(ui_prefs & PREF_BPM_LOCK) && !sheet)) {
             song.g[G_BPM] = (int16_t)clamp(song.g[G_BPM] + accel(EN_SELECT, s, 200), GP[G_BPM].min, GP[G_BPM].max);
             ui.bpm_t = 40;                              /* the header's BPM lights up; no message over the header */
         } else if (lay) {

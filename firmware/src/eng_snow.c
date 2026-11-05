@@ -1,6 +1,12 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Snow 0.6: fixed instrument roles, with the complete open synthesis surface. */
 #include "snow_params.h"
+/* Exact division by 2^bits, including C's truncation of negative samples.
+ * JieLi's size optimiser otherwise leaves hardware divisions in hot loops. */
+static inline int32_t snow_div2(int32_t x,uint32_t bits)
+{
+    return (x+((x>>31)&(int32_t)((1u<<bits)-1u)))>>bits;
+}
 static const char *const SN_ALGS[] = {"FM PAIR","FM CHAIN","FM PAR","RING","ADDITIVE","FOLD"};
 static const char *const SN_WAVES[] = {"SINE","TRI","SAW","SQUARE","PULSE","ORGAN"};
 static const char *const SN_RMODELS[] = {"ROOM","HALL","PLATE"};
@@ -100,7 +106,7 @@ static int32_t snow_wave(uint32_t ph,uint32_t inc,uint32_t wave,uint32_t pw)
     case 2:return clamp(osc_saw(ph,inc),-32767,32767);
     case 3:return osc_pulse(ph,inc,0x80000000u);
     case 4:return osc_pulse(ph,inc,pw);
-    case 5:return (sine_i(ph)*3+sine_i(ph*2u))/4;
+    case 5:return snow_div2(sine_i(ph)*3+sine_i(ph*2u),2);
     default:return sine_i(ph);
     }
 }
@@ -108,9 +114,9 @@ static void snow_render(track_t *t,voice_t *v,int32_t *out,uint32_t n,const vmod
 {
     const int16_t *p=t->p;
     uint32_t a=v->ph[0],b=v->ph[1],c=v->ph[2],alg=(uint32_t)p[SN_ALG]%6u;
-    int32_t tone=clamp(snow_param(t,0)+(m->shape-(64<<8))/256,0,127);
+    int32_t tone=clamp(snow_param(t,0)+snow_div2(m->shape-(64<<8),8),0,127);
     int32_t pitch=60*16+(m->pitch16-60*16)*p[SN_KEYTRACK]/127+p[SN_TUNE]*16;
-    int32_t sweep=p[SN_PAMT]+(snow_param(t,2)-64)/2;
+    int32_t sweep=p[SN_PAMT]+snow_div2(snow_param(t,2)-64,1);
     pitch+=(int32_t)(((int64_t)sweep*16*(v->s[2]>>9))>>15);
     if(p[SN_L2_DEST]==9)pitch+=snow_l2[snow_role(t)].value*2;
     uint32_t inc=pitch_inc((uint32_t)clamp(pitch,0,2047));
@@ -123,18 +129,23 @@ static void snow_render(track_t *t,voice_t *v,int32_t *out,uint32_t n,const vmod
     int32_t depth=tone<=64?tone*128:8192+(tone-64)*(tone-64)*32;
     int32_t index=mulq15(depth,v->s[8]>>9),index0=v->s[7],prev=v->s[3],rng=v->s[4];
     int32_t lo=v->s[5],bp=v->s[6],cut=clamp((snow_param(t,6)<<8)+m->cutoff,0,127<<8);
-    tsvf_t filter;tsvf_coef(&filter,cut,p[SN_RESO]);
+    tsvf_t filter;if(p[SN_FILTER])tsvf_coef(&filter,cut,p[SN_RESO]);
     uint32_t pw=(uint32_t)clamp(p[SN_PW],1,126)<<25;
     int32_t mix=clamp(p[SN_MIX]+snow_param(t,4),0,127);
+    /* A control block keeps these values fixed. Resolving the track index,
+     * LFO destination and bounds twice per sample needlessly starved the UI
+     * and audio deadline on the FM-1, though a desktop rendered it easily. */
+    int32_t feedback_gain=snow_param(t,5)*128,drive_gain=128+snow_param(t,7)*3;
+    uint32_t third_on=alg==1u||alg==2u||p[SN_SUB]||p[SN_FB_ROUTE]==2;
     for(uint32_t i=0;i<n;i++) {
         int32_t idx=index0+(((index-index0)*(int32_t)(i+1u))>>CTL_LOG2);
-        int32_t third=snow_wave(c,inc3,(uint32_t)p[SN_WAVE3],pw);
-        int32_t feedback=prev*snow_param(t,5)*128;
+        int32_t third=third_on?snow_wave(c,inc3,(uint32_t)p[SN_WAVE3],pw):0;
+        int32_t feedback=prev*feedback_gain;
         int32_t mod=snow_wave(b+(uint32_t)feedback,incm,(uint32_t)p[SN_WAVE2],pw);
         uint32_t shift=(uint32_t)mod*(uint32_t)idx;
         if(alg==1)mod=snow_wave(b+(uint32_t)third*(uint32_t)idx+(uint32_t)feedback,incm,(uint32_t)p[SN_WAVE2],pw);
         if(alg==1)shift=(uint32_t)mod*(uint32_t)idx;
-        if(alg==2)shift=(uint32_t)((mod+third)/2)*(uint32_t)idx;
+        if(alg==2)shift=(uint32_t)snow_div2(mod+third,1)*(uint32_t)idx;
         if(alg>=3)shift=0;
         int32_t x=snow_wave(a+shift,inc,(uint32_t)p[SN_WAVE1],pw);
         if(alg==3)x=mulq15(x,mod);
@@ -149,7 +160,7 @@ static void snow_render(track_t *t,voice_t *v,int32_t *out,uint32_t n,const vmod
             int32_t lp=tsvf_lp(&filter,x,&bp,&lo);
             x=p[SN_FILTER]==1?lp:p[SN_FILTER]==2?x-lp-((bp*(8192-p[SN_RESO]*7600/127))>>12):bp;
         }
-        x=soft_knee(x*(128+snow_param(t,7)*3)/128,22000);
+        x=soft_knee(snow_div2(x*drive_gain,7),22000);
         out[i]+=voice_amp(x,m,i);
         a+=inc;b+=incm;c+=inc3;
     }

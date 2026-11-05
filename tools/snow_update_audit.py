@@ -123,6 +123,9 @@ def main():
         if len(stock) == 2:
             run("v15-rejects-v16-head", out/"stock-head", stock["015"]["path"], stock["016"]["path"])
             run("v16-rejects-v15-head", out/"stock-head", stock["016"]["path"], stock["015"]["path"])
+            factory_page = a.metadata.resolve().parent / "install"
+            if (factory_page / "factory.html").exists():
+                run("factory-installer", "node", ROOT/"tests/snow_factory_install.mjs", factory_page, a.stock_dir.resolve())
     if a.sanitizers:
         for name, source, defines in [("ota-asan", "ota_test.c", ["-DOWN_PKG=1"]), ("loader-asan", "ldr_test.c", [])]:
             run("compile-"+name, *compiler, "-fsanitize=address,undefined", "-fno-sanitize-recover=all", *defines,

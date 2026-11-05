@@ -391,7 +391,10 @@ static void settings_reset(void)
     menu_put(MI_PREVIEW, 0);
     menu_put(MI_RETURN, RET_BAR);
 #if FELUCCA_CPU2
-    menu_put(MI_CPU, 0);                               /* ((Skiff 1.3) 1 CORE) */
+#if FELUCCA_SNOW
+    CPU2_BYTE |= SN_CPU_DEFAULT_APPLIED;
+#endif
+    menu_put(MI_CPU, FELUCCA_SNOW ? 1u : 0u);           /* Snow: 2 CORES; upstream Skiff: 1 CORE */
 #endif
     menu_put(MI_CLK, 0);                               /* ((Skiff) 360 MHZ) */
     settings_save();

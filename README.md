@@ -1,9 +1,8 @@
 > **Snow / FM-1:** KICK / SNARE / HAT / PERC / BASS / CHORD, ten factory sounds each.
-> Snow 0.6.2 keeps six fixed instruments and deep synthesis, with a pixel UI throughout,
-> animated snowflake startup, six-channel mixer/pattern screens, value-linked icons, role-aware sound generation, dedicated LFO/FX randomisation, GEN RND / GEN PARM and a backup-first installer. Default builds retain Skiff.
+> Snow 0.7.4-rc1 is a runtime repair candidate: two cores by default, sleeping dry/empty effect racks, exact-output DSP optimisation and corrected GLO routing. All six instruments, algorithms, controls, polyphony and effects remain available. Default non-Snow builds retain Skiff.
 > [Prototype guide](docs/SNOW_PREVIEW.md) · [Current goals](docs/SNOW_SPEC.md) · [Cloud build](docs/CLOUD_BUILD.md).
-> [**Try Snow 0.6.2**](https://timqos.github.io/snow/snow/) · [Skiff baseline](https://timqos.github.io/snow/try/).
-> [Installation & rollback audit](docs/SNOW_HARDWARE_AUDIT.md): software checks pass; physical FM-1 qualification is pending.
+> [**Try Snow**](https://timqos.github.io/snow/snow/) · [Factory firmware installer](https://timqos.github.io/snow/snow/install/factory.html) · [Skiff baseline](https://timqos.github.io/snow/try/).
+> [Runtime repair](docs/SNOW_RUNTIME_REVIEW.md): 0.7.3 was reported at 99% CPU on one core, with distortion and short release. The candidate needs physical retesting. [Installation & rollback audit](docs/SNOW_HARDWARE_AUDIT.md).
 
 <p align="center">
   <picture>
