@@ -1,12 +1,12 @@
 {
   "stage": "Snow animated boot identity, role-aware groovebox and backup-first installer",
-  "version": "v0.6.2-snow",
-  "source_commit": "f4b6222224f5644f046f722754b55c1e304b7bca",
+  "version": "v0.6.3-snow",
+  "source_commit": "8eae5ee6b9cf77fd04df0e7a4f8ab2c17ae4b70a",
   "source_dirty": false,
-  "package_sha256": "9ba27acab63c3bb0256c2718703038b986c445c71e7fc1a6d5823df6a962f20e",
+  "package_sha256": "8d272e23426094c3214a8bccaedb10ce1c23eff23cdb71aa82c945cd3e87674c",
   "installation_audit": {
     "report": "update-audit.json",
-    "audit_source_commit": "f4b6222224f5644f046f722754b55c1e304b7bca",
+    "audit_source_commit": "8eae5ee6b9cf77fd04df0e7a4f8ab2c17ae4b70a",
     "software_checks": "passed",
     "physical_fm1_validation": "pending"
   }

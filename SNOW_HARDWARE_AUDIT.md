@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Snow 0.6.2 — installation and rollback audit
+# Snow 0.6.3 — installation and rollback audit
 
 **Software checks passed. Physical FM-1 qualification is still pending.**
 No Snow-specific boot-area overwrite or firmware lock-in was found in the
@@ -42,7 +42,7 @@ and the published Skiff 2.2 package, SHA-256
 - No Snow-specific changes to voltage control, clock switching or GPIO register
   programming were introduced. The same build-time RAM/ROM/HAL guards pass.
 
-The audited image is 577392 bytes. Data+BSS use 86040/98304 bytes; the pool uses
+The audited image is 578588 bytes. Data+BSS use 86040/98304 bytes; the pool uses
 333584/356352; RAM code plus ramx uses 24176/24576. These are static budgets,
 not physical measurements of stack high-water marks, flash timings or audio CPU
 headroom. Runtime graphics/synthesis differences still need a hardware soak.
@@ -51,9 +51,9 @@ headroom. Runtime graphics/synthesis differences still need a hardware soak.
 
 | Path | Software evidence | Physical result |
 | --- | --- | --- |
-| Skiff 2.2 → Snow 0.6.2 | Real packages; OTA staging and C loader tests passed | Pending |
-| Snow 0.6.2 → Skiff 2.2 | Real packages; C loader, preserved boot head, interrupted-write/resume and unchanged-sector checks passed | Pending |
-| Snow 0.6.1 ↔ Snow 0.6.2 | Real packages in both directions; no new version lock found | Pending |
+| Skiff 2.2 → Snow 0.6.3 | Real packages; OTA staging and C loader tests passed | Pending |
+| Snow 0.6.3 → Skiff 2.2 | Real packages; C loader, preserved boot head, interrupted-write/resume and unchanged-sector checks passed | Pending |
+| Snow 0.6.3 ↔ Snow 0.6.3 | Real packages in both directions; no new version lock found | Pending |
 | Factory V15/V16 → Snow | Real vendor package bootstrap heads used by the C loader tests; head remains intact | Pending |
 | Snow → factory V15/V16 | Real vendor package validation/staging and matching-head checks passed | Vendor loader execution on a unit is pending |
 | Saved Snow data → Skiff → Snow | Released WASM builds boot, respond to PLAY and render finite audio with persisted flash | Music-format compatibility is not asserted |

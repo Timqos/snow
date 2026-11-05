@@ -6,7 +6,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Snow Firmware 0.6.2 · FM-1 groovebox</title>
+<title>Snow Firmware 0.6.3 · FM-1 groovebox</title>
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <meta name="description" content="Snow for the M-VAVE FM-1: six instruments, smart sound generation, generative patterns and a browser simulator. Install, back up and learn the controls.">
 <style>
@@ -88,7 +88,7 @@ main{max-width:1040px}.keys,footer{color:#a4a5a8}kbd{color:#e9e9e4;border-color:
 <body>
 <main>
 <header class="snow-header"><a class="snow-brand" href="../" aria-label="Snow Firmware home"><img src="logo.svg" alt="" width="42" height="42"><span>Snow <span>Firmware</span></span></a><nav aria-label="Main navigation"><a href="#device">Simulator</a><a href="install/">Install</a><a href="#manual-title">Manual</a></nav></header>
-<section class="snow-intro" aria-labelledby="snow-title"><div><p class="eyebrow">CUSTOM FIRMWARE / M-VAVE FM-1</p><h1 id="snow-title">Six instruments.<br>Your next sound.</h1><p class="lede">Kick, snare, hat, pitched percussion, bass and chord. Shape each sound with deep synthesis, discover new voices with smart randomisation, and build fresh grooves with the generative sequencer.</p><p class="intro-note">Play the firmware in your browser below. The install guide and button manual follow the device.</p></div><div class="intro-details"><span class="release-tag">SNOW 0.6.2 · EXPERIMENTAL</span><p>Six dedicated channels<br>Three oscillators · Six algorithms<br>Independent effects<br>Generative patterns</p><a href="#device">Explore the simulator <span aria-hidden="true">↓</span></a></div></section>
+<section class="snow-intro" aria-labelledby="snow-title"><div><p class="eyebrow">CUSTOM FIRMWARE / M-VAVE FM-1</p><h1 id="snow-title">Six instruments.<br>Your next sound.</h1><p class="lede">Kick, snare, hat, pitched percussion, bass and chord. Shape each sound with deep synthesis, discover new voices with smart randomisation, and build fresh grooves with the generative sequencer.</p><p class="intro-note">Play the firmware in your browser below. The install guide and button manual follow the device.</p></div><div class="intro-details"><span class="release-tag">SNOW 0.6.3 · EXPERIMENTAL</span><p>Six dedicated channels<br>Three oscillators · Six algorithms<br>Independent effects<br>Generative patterns</p><a href="#device">Explore the simulator <span aria-hidden="true">↓</span></a></div></section>
 <div class="device" id="device">
   <svg id="panel" viewBox="0 0 1000 624" aria-hidden="true"></svg>
   <canvas id="screen" width="240" height="240" role="img" aria-label="The screen"></canvas>
@@ -96,7 +96,7 @@ main{max-width:1040px}.keys,footer{color:#a4a5a8}kbd{color:#e9e9e4;border-color:
 </div>
 
 <section class="install-strip" aria-labelledby="install-title">
-  <div class="install-action"><span class="eyebrow">ON YOUR FM-1</span><h2 id="install-title">Make it yours.</h2><a class="primary-button" href="install/">Install Snow 0.6.2 <span aria-hidden="true">↗</span></a><a class="quiet-link" href="snow-0.6.2.fwsc" download>Download firmware (.fwsc)</a><span class="release-tag">Experimental firmware · FM-1 only</span></div>
+  <div class="install-action"><span class="eyebrow">ON YOUR FM-1</span><h2 id="install-title">Make it yours.</h2><a class="primary-button" href="install/">Install Snow 0.6.3 <span aria-hidden="true">↗</span></a><a class="quiet-link" href="snow-0.6.3.fwsc" download>Download firmware (.fwsc)</a><span class="release-tag">Experimental firmware · FM-1 only</span></div>
   <div class="install-notes"><p><strong>Back up before you install.</strong> Save your projects, sounds, samples and settings to your computer, and keep a copy of your current firmware. The installer downloads a complete backup when the running firmware supports it. Otherwise, export with that firmware’s own tools first.</p><p>Use desktop Chrome or Edge, a direct USB connection and reliable power. Close other MIDI applications. Keep the device connected and this tab open until the installer finishes. Snow changes the instrument model: projects and sounds from other firmware may not translate. Keep the backup for rollback.</p><p class="subtle">Snow has passed software and memory-budget checks; this release has not been validated on physical FM-1 hardware. An interrupted or failed update may require recovery tools. Read the <a href="install/#recovery">installation and recovery guide</a> before continuing.</p></div>
 </section>
 <p class="keys">
@@ -124,14 +124,15 @@ main{max-width:1040px}.keys,footer{color:#a4a5a8}kbd{color:#e9e9e4;border-color:
     <div><dt>HOLD GLO</dt><dd>Six channel levels: K1–K4, ALGORITHM and PRESETS. The first six black keys mute; the first six white keys solo while held. E4: unmute all. F4: fill. G4: tap tempo. GLO + SELECT sets tempo; GLO + OCT− restores the mixer snapshot.</dd></div>
     <div><dt>LFO → FIRST PAGE → OCT+</dt><dd>Randomise both LFOs, their timing/sync, depths and modulation routes for the selected channel. All LFO pages participate. Hold SAVE to undo.</dd></div>
     <div><dt>FX → FIRST PAGE → OCT+</dt><dd>Randomise all effect pages for the selected channel: delay, reverb, chorus, drive, insert, Tape, bitcrush, slicer and ducking. Feedback and wet levels stay bounded. Hold SAVE to undo, including slicer and duck settings.</dd></div>
-    <div><dt>ENV / SEL</dt><dd>Open envelopes and scale/chord settings. EDIT also exposes detailed synthesis and per-channel FX pages. Manual controls retain their full ranges.</dd></div>
+    <div><dt>SEL → SCALE</dt><dd>K1: CHORDS / NOTES; K2: root; K3: scale; K4: quantisation. All 35 scales include the Ableton Scale names shown in the reference, with the full name below the keyboard. NOTES plays each key as one note: play and record your own chords, up to four notes on CH. Use QUANTIZE OFF for chromatic chords. CHORDS expands one key using the shape and voicing on SEL page 2; transpose is also on page 2. Changing mode leaves existing pattern notes intact. New generation creates single notes in NOTES or diatonic chords in CHORDS.</dd></div>
+    <div><dt>ENV → CH RELEASE</dt><dd>The CH channel starts at 2BAR release on all ten factory sounds. It follows tempo even with ENV SYNC off; attack and decay stay in milliseconds unless you enable ENV SYNC. EDIT → OCT+ keeps the release, including any manual adjustment. Other channels keep their original envelope behaviour.</dd></div>
     <div><dt>SAVE / TEMP SAVE</dt><dd>Use SAVE’s PROJECT pages to store a project. GLO + SAVE takes a temporary RAM snapshot; GLO + HOME reloads it, and GLO + OCT+ reloads the selected channel. Temporary snapshots disappear after power-off.</dd></div>
     <div><dt>CONTROL ALL</dt><dd>GLO + EDIT + K1–K4 changes the included channels together. GLO + EDIT + OCT− toggles the selected channel’s inclusion. A sound generated by RANDOM EDIT keeps its role; manual editing can still take it far beyond that starting point.</dd></div>
   </dl><p class="subtle">Up to 64 steps per pattern, 16 pattern positions per channel and a shared pool of 64 unique patterns. The deferred-save queue is finite; stop playback if the device asks for space to save.</p></section>
   <section class="release-links" aria-labelledby="release-title"><h2 id="release-title">Open source, in progress.</h2><p>Snow builds on <a href="https://github.com/illuminus5/skiff">Skiff</a> and <a href="https://github.com/hugelton/Felucca">Felucca</a>. The firmware and simulator share the same sound engine. Development and software testing continue; hardware validation is still required.</p><nav aria-label="Project resources"><a href="https://github.com/Timqos/snow/tree/codex/snow-deep-synthesis">Source code</a><a href="https://github.com/Timqos/snow/issues">Report an issue</a><a href="build.json">Build details</a><a href="install/">Install &amp; recovery</a><a href="https://github.com/Timqos/snow/blob/codex/snow-deep-synthesis/docs/SNOW_HARDWARE_AUDIT.md">Compatibility &amp; rollback audit</a><a href="LICENSING.md">Licences &amp; credits</a></nav></section>
 </section>
 <footer>
-  <small class="version">v0.6.2-snow (experimental)</small><br>
+  <small class="version">v0.6.3-snow (experimental)</small><br>
   Skiff by illuminus5, built on Felucca by Leo Kuroshita, Hügelton Instruments · <a href="https://www.gnu.org/licenses/gpl-3.0.html">GPL-3.0</a> · browser build after charlesvestal's <a href="https://github.com/charlesvestal/fm1-x0x">X0X</a> · DotGothic16 font, <a href="fonts/OFL.txt">SIL OFL 1.1</a><br>
   Saves stay in this browser. Not here: USB (the editor, MIDI out, audio), the TRS MIDI jack.<br>
 
@@ -431,7 +432,7 @@ async function switchOn() {
   try {
     const ac = new AudioContext({ sampleRate: 44100, latencyHint: "interactive" });
     const [wasm] = await Promise.all([
-      fetch("felucca.wasm?v=f9f222f94b2e").then((r) => { if (!r.ok) throw new Error(`felucca.wasm: ${r.status}`); return r.arrayBuffer(); }),
+      fetch("felucca.wasm?v=d92869aac22c").then((r) => { if (!r.ok) throw new Error(`felucca.wasm: ${r.status}`); return r.arrayBuffer(); }),
       ac.audioWorklet.addModule("worklet.js?v=1176e72da3c3")]);
     node = new AudioWorkletNode(ac, "felucca", { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
     node.connect(ac.destination);

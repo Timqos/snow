@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Snow 0.6.2 — six instruments, one Snow identity
+# Snow 0.6.3 — six instruments, one Snow identity
 
-[Open the simulator](https://timqos.github.io/snow/snow/?v=062) ·
+[Open the simulator](https://timqos.github.io/snow/snow/?v=063) ·
 [Install & back up](https://timqos.github.io/snow/snow/install/)
 
 Snow is custom firmware for the M-VAVE FM-1. Its browser simulator runs the
@@ -15,6 +15,37 @@ sounds each. Three oscillators, six algorithms, multiple waveforms, full ADSR,
 pitch/FM envelopes, filters, two LFOs and modulation remain manually editable
 through 27 EDIT pages. Each channel has independent delay/reverb/chorus state
 and tails, Tape, bitcrush, drive and insert effects. Manual ranges remain open.
+
+## SEL: scales and your own chords
+
+The first SEL page has MODE, ROOT, SCALE and QUANTIZE on K1–K4. CHORDS
+expands one key to the shape and voicing on SEL page 2. NOTES plays each
+key as one note: on CH, play up to four simultaneous notes to make your own
+chord, and record it live with REC + PLAY or into a stopped, armed SEQ step.
+QUANTIZE OFF permits chromatic chords; other quantisation modes retain their
+scale mapping. Shape/voicing are remembered when switching modes. Transpose
+is on page 2. Existing recorded notes are not rewritten by a mode change.
+New generation makes single-note CH phrases in NOTES and diatonic chords
+in CHORDS; rhythm-only generation keeps the existing pitches.
+
+There are 35 scales, including every name in the supplied Ableton Scale
+screenshot: Spanish 8-tone, Bhairav, Dorian #4, Hirajoshi, Insen, Iwato, Kumoi,
+Super Locrian, Lydian Augmented/Dominant, Harmonic Major, Messiaen 3–7,
+Hungarian Minor and both melodic-minor directions, plus the existing modes,
+pentatonics, blues, whole-tone and diminished scales. Melodic Minor Down
+has natural-minor pitches. Original scale indices 0–15 remain unchanged;
+new scales are appended. These are musical pitch sets, not imported Ableton
+preset files. The full scale name appears below the on-screen keyboard.
+
+## CH: a two-bar release
+
+Every CH factory sound defaults to 2BAR release. The actual amplitude tail
+follows BPM (or the measured external clock), independently of ENV SYNC;
+attack and decay retain their millisecond controls when ENV SYNC is off.
+EDIT → OCT+ preserves the release, including a manual adjustment. LFO/FX
+randomisation also leaves it unchanged. Other channels retain their existing
+envelope timing. Loading a CH factory sound restores its two-bar default;
+saved projects retain their stored release value on the tempo scale.
 
 ## Smart RANDOM EDIT
 
