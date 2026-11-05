@@ -1,7 +1,7 @@
 {
-  "version": "v0.6.3-snow",
+  "version": "v0.7.0-snow",
   "product": "FM-1_700",
-  "package": "../snow-0.6.3.fwsc",
-  "sha256": "8d272e23426094c3214a8bccaedb10ce1c23eff23cdb71aa82c945cd3e87674c",
-  "source_commit": "8eae5ee6b9cf77fd04df0e7a4f8ab2c17ae4b70a"
+  "package": "../snow-0.7.0.fwsc",
+  "sha256": "21ebf901792a6bcf48faaceebcb8ea3ba87b63e9cd7b1c8ee8c0ebca743d7964",
+  "source_commit": "8e3b4034aea73ab9a68b70549eb5c82f3900f624"
 }

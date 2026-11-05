@@ -1,13 +1,13 @@
 {
-  "stage": "Snow animated boot identity, role-aware groovebox and backup-first installer",
-  "version": "v0.6.3-snow",
-  "source_commit": "8eae5ee6b9cf77fd04df0e7a4f8ab2c17ae4b70a",
+  "stage": "Snow three-panel HOME, reference pixel icons and channel performance controls",
+  "version": "v0.7.0-snow",
+  "source_commit": "8e3b4034aea73ab9a68b70549eb5c82f3900f624",
   "source_dirty": false,
-  "package_sha256": "8d272e23426094c3214a8bccaedb10ce1c23eff23cdb71aa82c945cd3e87674c",
+  "package_sha256": "21ebf901792a6bcf48faaceebcb8ea3ba87b63e9cd7b1c8ee8c0ebca743d7964",
   "installation_audit": {
-    "report": "update-audit.json",
-    "audit_source_commit": "8eae5ee6b9cf77fd04df0e7a4f8ab2c17ae4b70a",
+    "audit_source_commit": "8e3b4034aea73ab9a68b70549eb5c82f3900f624",
     "software_checks": "passed",
-    "physical_fm1_validation": "pending"
+    "physical_fm1_validation": "pending",
+    "report": "update-audit.json"
   }
 }

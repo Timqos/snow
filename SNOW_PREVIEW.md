@@ -1,12 +1,63 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Snow 0.6.3 — six instruments, one Snow identity
+# Snow 0.7.0 — six instruments, one Snow identity
 
-[Open the simulator](https://timqos.github.io/snow/snow/?v=063) ·
+[Open the simulator](https://timqos.github.io/snow/snow/?v=070) ·
 [Install & back up](https://timqos.github.io/snow/snow/install/)
 
 Snow is custom firmware for the M-VAVE FM-1. Its browser simulator runs the
 same C synthesis and interface through WebAssembly. Physical FM-1 validation
 is still required; the package has passed software and memory-budget checks.
+
+## HOME: three panels, one selected instrument
+
+ALGORITHM selects KK / SD / HH / PR / BS / CH; PRESETS browses its ten factory
+sounds. The preset name occupies one fixed pixel row under the active macro.
+SELECT has three clamped positions, with three arrows turning together:
+
+| Arrows | K1 | K2 | K3 | K4 |
+| --- | --- | --- | --- | --- |
+| Left / SYNTH | Tone | Shape | Sweep | Decay |
+| Right / GEN | Sound | Phrase + locks | LFO | FX |
+| Up / MIX | Volume | Pan | DJ filter | Stereo width |
+
+Each generator detent, in either direction and without acceleration, generates
+one result for the selected channel. GN/SEQ calls the existing phrase and
+parameter-lock generators in one undo transaction. Hold SAVE to undo the phrase and its locks together. The original random stream keeps advancing,
+so generating after undo does not repeat the cancelled result. OCT± remains octave on HOME (the existing undo
+window still uses OCT−/OCT+ for further undo/redo). The original EDIT/LFO/FX
+OCT+ commands and separate SEQ GEN RND / GEN PARM remain available.
+
+HOME SELECT never changes tempo. GLO retains its existing tempo controls:
+open its normal window and use SELECT with the existing BPM-lock preference;
+keeping GLO held is not required. Existing held-GLO shortcuts also remain.
+Panel focus stays unchanged when selecting another channel. MIXER and PATTERNS
+still show all six channels on one screen.
+
+The ten reference motifs are stored as fixed pixel grids; repeated rows share
+storage without losing pixels. The icons use the selected theme colour.
+Local details respond to knob position or generator actions, with no idle
+animation or moving icon bounds. Pixel progress bars and three arrows identify
+the controls without adding panel frames. The bottom scope shows the master
+output; its note label belongs to the selected channel.
+
+On CH HOME, hold HOME and press OCT+ once to toggle N/NOTES and CHO/CHORDS.
+Keeping OCT+ held does not repeat; octave and panel focus stay unchanged.
+Ordinary OCT+ remains immediate octave-up. Releasing HOME after the combination
+does not open settings; holding HOME on its own still opens system settings.
+The switch under the cassette shares its state with SEL page 1. Held HOME retains its existing system-settings action.
+
+### Performance filter and width
+
+FLR is a per-channel DJ filter after its stereo effect rack: 50% neutral,
+below 50% removes highs, above 50% removes lows. WDT includes the full channel
+and its effect returns: 0% mono, 50% original stereo, 100% twice the side
+component. It preserves the mid component and does not create stereo from a
+mono source; SPREAD or stereo effects can supply that content. PAN is applied
+independently afterward. Controls are smoothed. Neutral defaults use the exact
+previous audio path. The two controls reuse previously unused, zero-default
+lane-decay slots; stored IDs, P_COUNT and the project format do not change.
+Sound/preset generation preserves these performance settings. The selected
+factory preset name stays visible while editing; it is a starting-point label.
 
 ## Six instruments, deep synthesis
 
@@ -129,9 +180,9 @@ precedes the simulator, followed by installation, feature details and the manual
 
 ## Interface and browser page
 
-All native pages/menus use pixel fonts and ten system colours. HOME shows six
-cards and a bottom scope. Existing icon motifs derive their geometry from the
-last touched parameter’s 0–100% position. Bounds/centres are fixed, reverse
+All native pages/menus use pixel fonts and ten system colours. HOME shows the
+selected channel and a bottom scope. Reference icon details respond to absolute
+knob position or generation events while their silhouettes stay recognisable. Bounds/centres are fixed, reverse
 motion is reproducible, there is no idle animation clock, and icons use the
 selected theme ink.
 
@@ -179,3 +230,34 @@ are rendered through the C oscillators/filter/envelope: 384 distinct dry renders
 bounded peaks, low-frequency kick/bass bodies and broad high-frequency hats.
 These measurements detect regressions; they do not replace listening or certify
 every possible generated sound.
+
+## Risk, installation and factory return
+
+Snow is unofficial, experimental third-party firmware. Install, update, use
+and remove it at your own risk and responsibility. It is supplied AS IS without
+warranty to the extent permitted by applicable law. To that extent its authors,
+maintainers, contributors and distributors are not liable for device damage,
+data loss, loss of use or resulting losses. Non-waivable legal rights and
+liability are unaffected. See GPL-3.0 and the full installer notice. Physical
+FM-1 qualification remains pending. This notice is not a recovery guarantee.
+
+The installer page contains the installation checklist, risk acknowledgement
+and matching-factory return procedure. Save a backup and retain the original
+firmware/version before writing. This Snow installer only accepts the exact
+Snow package. Factory return uses the unmodified package matching the preserved
+V15/V16 bootstrap and the established USB-MIDI helper or supported vendor tool.
+Do not guess the version or force an unrecognised package. The helper supports
+recognised original V15/V16 files:
+
+```sh
+python -m pip install mido python-rtmidi
+python tools/fm1_install.py --info
+python tools/fm1_install.py "/path/to/matching-factory.fwsc"
+```
+
+Run from the source repository folder on a desktop computer; replace the path
+with the compatible original file. Keep USB/power connected and follow the
+helper’s confirmation and status. After factory boot, restore only the original
+factory backup with its matching tools. Snow archives belong to Snow. If the
+loader no longer answers, use the documented FM-1-transporter recovery route;
+physical recovery may be necessary.
