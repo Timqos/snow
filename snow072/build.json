@@ -1,0 +1,13 @@
+{
+  "stage": "Snow three-panel HOME, reference pixel icons and channel performance controls",
+  "version": "v0.7.2-snow",
+  "source_commit": "27eca33250209a661cdfc0ca1842c0e593338551",
+  "source_dirty": false,
+  "package_sha256": "b2a34b56d9d42eec0f234d2480904e5da00ed2a37218245fba1d917b7ef15799",
+  "installation_audit": {
+    "audit_source_commit": "27eca33250209a661cdfc0ca1842c0e593338551",
+    "software_checks": "passed",
+    "physical_fm1_validation": "pending",
+    "report": "update-audit.json"
+  }
+}
