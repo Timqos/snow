@@ -230,3 +230,34 @@ are rendered through the C oscillators/filter/envelope: 384 distinct dry renders
 bounded peaks, low-frequency kick/bass bodies and broad high-frequency hats.
 These measurements detect regressions; they do not replace listening or certify
 every possible generated sound.
+
+## Risk, installation and factory return
+
+Snow is unofficial, experimental third-party firmware. Install, update, use
+and remove it at your own risk and responsibility. It is supplied AS IS without
+warranty to the extent permitted by applicable law. To that extent its authors,
+maintainers, contributors and distributors are not liable for device damage,
+data loss, loss of use or resulting losses. Non-waivable legal rights and
+liability are unaffected. See GPL-3.0 and the full installer notice. Physical
+FM-1 qualification remains pending. This notice is not a recovery guarantee.
+
+The installer page contains the installation checklist, risk acknowledgement
+and matching-factory return procedure. Save a backup and retain the original
+firmware/version before writing. This Snow installer only accepts the exact
+Snow package. Factory return uses the unmodified package matching the preserved
+V15/V16 bootstrap and the established USB-MIDI helper or supported vendor tool.
+Do not guess the version or force an unrecognised package. The helper supports
+recognised original V15/V16 files:
+
+```sh
+python -m pip install mido python-rtmidi
+python tools/fm1_install.py --info
+python tools/fm1_install.py "/path/to/matching-factory.fwsc"
+```
+
+Run from the source repository folder on a desktop computer; replace the path
+with the compatible original file. Keep USB/power connected and follow the
+helper’s confirmation and status. After factory boot, restore only the original
+factory backup with its matching tools. Snow archives belong to Snow. If the
+loader no longer answers, use the documented FM-1-transporter recovery route;
+physical recovery may be necessary.
