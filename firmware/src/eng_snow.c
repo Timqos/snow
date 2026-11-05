@@ -77,10 +77,10 @@ static int32_t snow_amp(track_t *t,voice_t *v,int32_t adsr)
     (void)adsr;
     if(p[SN_MODE]&&!v->gate)stage=3;
     if(stage==0) {
-        env+=(int32_t)ENV_LIN[p[P_ATK]&127];
+        env+=(int32_t)(snow_role(t)==5u&&p[P_ESYNC]?t->esync_k[0]:ENV_LIN[p[P_ATK]&127]);
         if(env>=(1<<24)){env=1<<24;stage=1;}
-    }else if(stage==3)env-=mulq16(env,ENV_EXP[p[P_REL]&127]);
-    else env+=mulq16(sus-env,ENV_EXP[decay]);
+    }else if(stage==3)env-=mulq16(env,snow_role(t)==5u?t->esync_k[2]:ENV_EXP[p[P_REL]&127]);
+    else env+=mulq16(sus-env,snow_role(t)==5u&&p[P_ESYNC]?t->esync_k[1]:ENV_EXP[decay]);
     v->s[0]=clamp(env,0,1<<24);v->s[1]=stage;
     v->s[2]-=mulq16(v->s[2],ENV_EXP[p[SN_PDEC]&127]);
     if(p[SN_FMDEC])v->s[8]-=mulq16(v->s[8],ENV_EXP[p[SN_FMDEC]&127]);
@@ -158,6 +158,7 @@ static void snow_fill(int16_t *p,uint32_t role,uint32_t preset)
     role%=NTRK;preset%=10u;
     for(uint32_t k=0;k<20u;k++)p[SN_ALG+k]=SNOW_DETAIL[role][preset][k];
     p[P_CHRD]=SNOW_CHORD[role][preset];
+    if(role==5u)p[P_REL]=SN_CH_RELEASE;
     if(role<5u)p[P_VOICE]=V_MONO;
     if(role==3u)p[SN_KEYTRACK]=127; /* percussion follows the generated scale notes */
 }

@@ -2107,6 +2107,9 @@ static void track_defaults(track_t *t)
     uint32_t i;
     for (i = 0; i < P_E0; i++)
         t->p[i] = TP[i].def;
+#if FELUCCA_SNOW
+    t->p[SN_PLAY_MODE]=snow_role(t)==5u?0:1;
+#endif
     track_defaults_steps(t);
 }
 

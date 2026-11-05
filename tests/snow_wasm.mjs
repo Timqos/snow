@@ -143,3 +143,26 @@ for(const button of [3,0]){
  }
 }
 console.log('PHYSICAL LFO / FX RANDOM PASSED: 96 repeated OCT+ gestures during six-track playback, isolated channels, unchanged notes, finite bounded audio');
+
+// First SEL page uses the physical encoders; CH release survives all random sections.
+const harmony=await boot();render(harmony,1800);harmony.web_snow_select(5);
+const mode=find('VOICE / MIX','MODE'),scale=find('GENERATIVE SEQUENCER','SCALE'),release=find('AMP ADSR','RELEASE');
+assert(mode>=0&&scale>=0&&release>=0);
+assert.equal(harmony.web_snow_param_max(5,scale),34);
+assert.equal(harmony.web_snow_param_base(5,mode),0);
+const press=b=>{harmony.web_buttons(1<<b);render(harmony,70);harmony.web_buttons(0);render(harmony,70);};
+press(1); // SEL, page 1: MODE / ROOT / SCALE / QUANTIZE.
+harmony.web_enc(3,1);render(harmony,90);assert.equal(harmony.web_snow_param_base(5,mode),1);
+harmony.web_snow_save();harmony.web_enc(3,-1);render(harmony,90);assert.equal(harmony.web_snow_param_base(5,mode),0);
+assert.equal(harmony.web_snow_reload(63),1);assert.equal(harmony.web_snow_param_base(5,mode),1);
+for(let preset=0;preset<10;preset++){
+ assert.equal(harmony.web_snow_preset(5,preset),0);
+ assert.equal(harmony.web_snow_param_base(5,release),113);
+ assert.equal(harmony.web_snow_param_base(5,mode),1);
+ for(let i=0;i<20;i++){
+  assert.equal(harmony.web_snow_random_sound(5),0);
+  assert.equal(harmony.web_snow_param_base(5,release),113);
+  assert.equal(harmony.web_snow_param_base(5,mode),1);
+ }
+}
+console.log('WASM SEL / CH RELEASE PASSED: 35 scales, physical mode knob, snapshot recall, 200 sound randomisations keep 2BAR and NOTES');

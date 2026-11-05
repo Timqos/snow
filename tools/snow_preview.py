@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "build/snow-preview"
-RELEASE = "0.6.2"
+RELEASE = "0.6.3"
 VERSION = f"v{RELEASE}-snow"
 
 
@@ -27,6 +27,8 @@ def main():
     run(str(ROOT / "build/snow_boot_test"))
     run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/snow_test", "tests/snow_test.c", "-lm")
     run(str(ROOT / "build/snow_test"))
+    run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/snow_sel_test", "tests/snow_sel_test.c", "-lm")
+    run(str(ROOT / "build/snow_sel_test"))
     run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/snow_audition", "tests/snow_audition.c", "-lm")
     run(str(ROOT / "build/snow_audition"), str(OUT))
     run("python3", "tools/snow_audio_check.py", str(OUT))

@@ -10,8 +10,19 @@ static const char *const N_DIV[] = {"1/4", "1/8", "1/16", "1/32", "8T", "16T", "
  * LFO SYNC keep N_DIV's ten (fx.c delay_samples) */
 static const char *const N_DTIME[] = {"1/4", "1/8", "1/16", "1/32", "8T", "16T", "1/2", "1/1", "2BAR", "4BAR",
                                       "1/8D", "1/16D", "1/4D"};
+#if FELUCCA_SNOW
+static const char *const N_PLAY_MODE[] = {"CHORDS", "NOTES"};
+static const char *const N_SCALE[] = {
+    "CHROMATIC", "MAJOR", "MINOR", "DORIAN MODE", "MIXOLYDIAN", "MAJOR PENTATONIC", "MINOR PENTATONIC", "MINOR HARMONIC",
+    "PHRYGIAN", "LYDIAN MODE", "LOCRIAN MODE", "MINOR MELODIC UP", "MINOR BLUES", "WHOLE TONE", "HALF-WHOLE DIMINISHED", "WHOLE-HALF DIMINISHED",
+#define SN_SCALE_NAME(name,mask) name,
+    SN_EXTRA_SCALES(SN_SCALE_NAME)
+#undef SN_SCALE_NAME
+};
+#else
 static const char *const N_SCALE[] = {"CHR", "MAJ", "MIN", "DOR", "MIX", "PEN", "MPEN", "HARM",
                                     "PHRY", "LYD", "LOC", "MEL", "BLUES", "WHOLE", "DIMHW", "DIMWH"};
+#endif
 static const char *const N_ONOFF[] = {"OFF", "ON"};
 /* seq.c kb_map; 1 = SNAP (stored projects: the former ON); 3 = SEQ: SNAP, and the sequencer's notes snap too as
  * they play (seq.c seq_step; the steps keep what was written). Append-only: older projects hold 0..2. (2.1, #74) SOLO:
@@ -105,7 +116,11 @@ static const param_desc_t TP[P_COUNT] = {
     [P_ED_FLT] = PD("CUTOFF", F_BIPCT, -64, 63, 0),
     [P_ED_PIT] = PD("PITCH", F_BIPCT, -64, 63, 0),
     [P_ED_SHP] = PD("SHAPE", F_BIPCT, -64, 63, 0),
+#if FELUCCA_SNOW
+    [SN_PLAY_MODE] = PE("MODE", N_PLAY_MODE, 1),
+#else
     [P_ED_FX] = PD("FX", F_BIPCT, -64, 63, 0),
+#endif
     [P_LRATE] = PD("RATE", F_LFOHZ, 0, 127, 60),
     [P_LWAVE] = PE("WAVE", N_LWAVE, 0),
     [P_LPHASE] = PD("PHASE", F_INT, 0, 127, 0),
@@ -334,6 +349,9 @@ static const param_desc_t *ins_desc(int32_t type, uint32_t k)
 
 static const param_desc_t *track_desc(const track_t *t, uint32_t id)
 {
+#if FELUCCA_SNOW
+    if(snow_role(t)==5u && id==P_REL)return &ESYNC_DESC[2];
+#endif
     if (id >= P_IA && id <= P_IC)                     /* ((1.3) the INSERT's values as its TYPE names them) */
         return ins_desc(t->p[P_ITYPE], id - P_IA);
     if (t->p[P_ESYNC] && (id == P_ATK || id == P_DEC || id == P_REL))   /* ((1.3) ENV SYNC: note values) */
@@ -395,6 +413,7 @@ static int32_t param_fit(const param_desc_t *d, int32_t v)
 static int param_kept(uint32_t i)
 {
 #if FELUCCA_SNOW
+    if(i==SN_PLAY_MODE)return 1;
     if ((i>=SN_G_DENS && i<=SN_G_LIVE) || i==SN_G_BASE || (i>=SN_G_STYLE && i<=SN_G_VARIANT) || (i>=SN_G_SEED_B && i<=SN_G_SCOPE)) return 1;
 #endif
     return i == P_LEVEL || i == P_PAN || i == P_MUTE || (i >= P_AMODE && i <= P_SGATE) ||
@@ -639,8 +658,13 @@ static const page_t PAGES[] = {
     {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IMIX, 0xFF, 0xFF, 0xFF}},  /* .. its dry / wet */
     {"SLICER", FAM_FX, SC_TRACK, GR_SLCR, {P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH}},
     {"DUCK", FAM_FX, SC_TRACK, GR_DUCK, {P_DKSRC, P_DKAMT, P_DKREL, 0xFF}},   /* (Skiff) ducking (duck.c) */
+#if FELUCCA_SNOW
+    {"SCALE", FAM_SCL, SC_TRACK, GR_SCALE, {SN_PLAY_MODE, P_ROOT, P_SCALE, P_QUANT}},
+    {"CHORD", FAM_SCL, SC_TRACK, GR_CHORD, {P_CHRD, P_VOIC, P_TRANS, 0xFF}},
+#else
     {"SCALE", FAM_SCL, SC_TRACK, GR_SCALE, {P_ROOT, P_SCALE, P_QUANT, P_TRANS}},   /* ((#8) was SCL) */
     {"CHORD", FAM_SCL, SC_TRACK, GR_CHORD, {P_CHRD, P_VOIC, 0xFF, 0xFF}},   /* SEL again: the chord keys (chord.c) */
+#endif
     {"FOLLOW", FAM_SCL, SC_TRACK, GR_FOLLOW, {P_FOLLOW, P_FMODE, P_FNOTE, 0xFF}},   /* (2.1) again: the chord follow */
     {"EDIT 1", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E0, P_E1, P_E2, P_E3}},
     {"EDIT 2", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E4, P_E5, P_E6, P_E7}},

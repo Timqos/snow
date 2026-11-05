@@ -621,11 +621,19 @@ static __attribute__((noinline)) void esync_coef(track_t *t)   /* (not inlined: 
         uint32_t q = beat_samples();
         t->esync_k[0] = esync_one(q, p[P_ATK], 0);
         t->esync_k[1] = esync_one(q, p[P_DEC], 1);
+#if FELUCCA_SNOW
+        if(snow_role(t)==5u)t->esync_k[1]=esync_one(q,clamp(p[P_DEC]+snow_param(t,3)-64,0,127),1);
+#endif
         t->esync_k[2] = esync_one(q, p[P_REL], 2);
     } else {                                            /* OFF: the tables, as always */
         t->esync_k[0] = ENV_LIN[p[P_ATK] & 127];
         t->esync_k[1] = ENV_EXP[p[P_DEC] & 127];
         t->esync_k[2] = ENV_EXP[p[P_REL] & 127];
+#if FELUCCA_SNOW
+        /* CH release is always a tempo value; attack/decay keep their ms
+         * controls unless ENV SYNC is explicitly enabled. */
+        if(snow_role(t)==5u)t->esync_k[2]=esync_one(beat_samples(),p[P_REL],2);
+#endif
     }
 }
 

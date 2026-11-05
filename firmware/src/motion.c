@@ -34,6 +34,7 @@ static void motion_unguard(uint32_t f)
 static int motion_param(uint32_t id)
 {
 #if FELUCCA_SNOW
+    if(id==SN_PLAY_MODE)return 0; /* input interpretation is never a sound lock */
     if((id>=SN_G_DENS&&id<=SN_G_LIVE)||id==SN_G_BASE||(id>=SN_G_STYLE&&id<=SN_G_VARIANT)||(id>=SN_G_SEED_B&&id<=SN_G_SCOPE))return 0;
 #endif
     /* Sound only: transport, routing, voice allocation and discrete engine

@@ -91,7 +91,7 @@ static void snow_phrase(track_t *t,uint32_t channel,uint32_t seed,step_t *out)
             }
             if(channel==4u&&i%8u==0u&&snow_prob(&rng,65))degree=0;
             if(channel==5u)degree=(int32_t)snow_int(&rng,0,6);
-            out[i].n=(uint8_t)(channel==5u?3:1);
+            out[i].n=(uint8_t)(channel==5u&&!t->p[SN_PLAY_MODE]?3:1);
             for(uint32_t n=0;n<out[i].n;n++)out[i].note[n]=(uint8_t)snow_degree(t,t->p[SN_G_BASE],degree+(int32_t)n*2);
         } else if(kind==0u&&t->step[i].n) {out[i].n=t->step[i].n;memcpy(out[i].note,t->step[i].note,sizeof out[i].note);}
         else {out[i].n=1;out[i].note[0]=(uint8_t)snow_degree(t,t->p[SN_G_BASE],0);}

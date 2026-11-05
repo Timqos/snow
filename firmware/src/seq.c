@@ -30,7 +30,13 @@ static const uint16_t SCALE_MASK[] = {
     (1 << 0) | (1 << 2) | (1 << 4) | (1 << 6) | (1 << 8) | (1 << 10),              /* WHOLE */
     (1 << 0) | (1 << 1) | (1 << 3) | (1 << 4) | (1 << 6) | (1 << 7) | (1 << 9) | (1 << 10), /* DIMHW */
     (1 << 0) | (1 << 2) | (1 << 3) | (1 << 5) | (1 << 6) | (1 << 8) | (1 << 9) | (1 << 11), /* DIMWH */
+#if FELUCCA_SNOW
+#define SN_SCALE_MASK(name,mask) mask,
+    SN_EXTRA_SCALES(SN_SCALE_MASK)
+#undef SN_SCALE_MASK
+#endif
 };
+_Static_assert(NELEM(SCALE_MASK)==NELEM(N_SCALE), "scale names and pitch sets agree");
 
 #define KB_SILENT 255u
 static uint32_t kb_prev;

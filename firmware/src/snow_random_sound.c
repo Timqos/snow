@@ -129,6 +129,8 @@ static void snow_design_sound(const track_t *t,uint32_t channel,uint32_t seed,co
     p[SN_L2_PHASE]=ss_range(&r,0,127);p[SN_L2_FADE]=ss_range(&r,0,63);p[SN_L2_TRIG]=ss_range(&r,0,1);
     p[P_EG2_ATK]=ss_range(&r,0,42);p[P_EG2_DEC]=ss_range(&r,40,93);p[P_EG2_SUS]=ss_range(&r,0,86);p[P_EG2_REL]=ss_range(&r,30,77);
     snow_design_fx(channel,&r,p);
+    /* CH keeps its two-bar release, or the user's manual choice. */
+    if(channel==5u)p[P_REL]=motion_base_value(t,P_REL);
     for(uint32_t id=0;id<P_COUNT;id++)if((mask[id/32u]>>(id%32u))&1u){
         const param_desc_t *d=id>=P_IA&&id<=P_IC?ins_desc(p[P_ITYPE],id-P_IA):track_desc(t,id);
         p[id]=(int16_t)param_fit(d,p[id]);

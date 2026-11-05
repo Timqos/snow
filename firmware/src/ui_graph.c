@@ -713,6 +713,9 @@ static void graph_scale(const track_t *t, uint16_t c)
         uint16_t col = (mask >> deg) & 1u ? (deg == 0u ? T_ACCENT : c) : T_RAISE;
         cv_rrect(x + 3, BLACK[i] ? 6 : 38, 10, 52, 3, col, T_SURF);
     }
+#if FELUCCA_SNOW
+    cv_text_on(12,104,&AF_S,N_SCALE[clamp(t->p[P_SCALE],0,NELEM(N_SCALE)-1)],c,T_SURF);
+#endif
 }
 /* CHORD (SCL 2): the chord's name ("Cm7": the last one the track played; before any, the one on its ROOT from
  * C4) over the keys from the C below its lowest note (two octaves, three for a wide one): its notes THEME, its
@@ -728,6 +731,12 @@ static void graph_chord(const track_t *t, uint16_t c)
     uint16_t mask;
     char b[12];
     const char *cap = "LAST";
+#if FELUCCA_SNOW
+    if(t->p[SN_PLAY_MODE]){
+        panel_note("NOTES: PLAY YOUR CHORDS", "UP TO 4 NOTES / REC TO RECORD", "SEL PAGE 1: MODE CHORDS");
+        return;
+    }
+#endif
     if (!t->p[P_CHRD]) {
         panel_note("CHORD KEYS OFF", "[K1] DIA3: IN-KEY CHORDS", 0);   /* (the title says what they are) */
         return;

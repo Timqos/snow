@@ -13,6 +13,7 @@ static uint32_t sound(uint32_t track,uint32_t frames,uint32_t gate)
     for(uint32_t pos=0;pos<frames;pos+=CTL) {
         if(pos>=gate)v->gate=0;
         snow_block(t);
+        esync_coef(t);
         vmod_t m={.pitch16=60*16,.shape=64<<8,.amp0=last};m.amp1=snow_amp(t,v,0);last=m.amp1;
         memset(block,0,sizeof block);snow_render(t,v,block,CTL,&m);
         for(uint32_t i=0;i<CTL && pos+i<frames;i++) {
@@ -274,7 +275,7 @@ static void random_sound_tests(void)
         }
         for(uint32_t id=0;id<P_COUNT;id++)if((initial_mask[id/32u]>>(id%32u))&1u){
             int invariant=id==SN_MODE||id==SN_KEYTRACK||id==P_VOICE||id==P_ED_PIT||id==SN_FX_BYPASS||id==P_DTYPE||
-                (k<4u&&id==P_SUS)||(k==2u&&(id==SN_PAMT||id==P_E2))||((k==0u||k>=3u)&&id==SN_FILTER);
+                (k<4u&&id==P_SUS)||(k==5u&&id==P_REL)||(k==2u&&(id==SN_PAMT||id==P_E2))||((k==0u||k>=3u)&&id==SN_FILTER);
             assert(invariant||high[id]>low[id]);
         }
         int16_t previous[P_COUNT];memcpy(previous,trk[k].p,sizeof previous);snow_random_sound(k);undo_step(0);assert(!memcmp(previous,trk[k].p,sizeof previous));ui.undo_w=0;

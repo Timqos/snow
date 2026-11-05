@@ -630,6 +630,7 @@ static const struct { uint16_t id; uint8_t group; } web_snow_params[] = {
     W(P_M1SRC,8),W(P_M1DST,8),W(P_M1AMT,8),W(P_M2SRC,8),W(P_M2DST,8),W(P_M2AMT,8),
     W(P_M3SRC,8),W(P_M3DST,8),W(P_M3AMT,8),W(P_M4SRC,8),W(P_M4DST,8),W(P_M4AMT,8),
     W(P_VOICE,9),W(P_GLIDE,9),W(P_GLMODE,9),W(P_DETUNE,9),W(P_CHRD,9),W(P_VOIC,9),
+    W(SN_PLAY_MODE,9),W(P_QUANT,9),W(P_TRANS,9),
     W(P_LEVEL,9),W(P_PAN,9),W(P_SPRD,9),W(P_MUTE,9),
     W(P_DIST,10),W(P_DTYPE,10),W(P_DTONE,10),W(P_ITYPE,10),W(P_IA,10),W(P_IB,10),W(P_IC,10),W(P_IMIX,10),
     W(P_DKSRC,10),W(P_DKAMT,10),W(P_DKREL,10),
