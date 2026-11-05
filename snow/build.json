@@ -1,13 +1,7 @@
 {
-  "stage": "Snow three-panel HOME, reference pixel icons and channel performance controls",
-  "version": "v0.7.3-snow",
-  "source_commit": "25007e24bfd81d4b0352c892aa3bc8bf6c9b2438",
+  "stage": "Snow runtime candidate: two-core DSP, idle FX sleep and factory recovery",
+  "version": "v0.7.4-rc1-snow",
+  "source_commit": "68888143a634608a9fe3ccf32b01934347b24348",
   "source_dirty": false,
-  "package_sha256": "e0ed487bdc869130a98d3afce55e02a73a228e55e6c344f411e87af0e6572eae",
-  "installation_audit": {
-    "audit_source_commit": "25007e24bfd81d4b0352c892aa3bc8bf6c9b2438",
-    "software_checks": "passed",
-    "physical_fm1_validation": "pending",
-    "report": "update-audit.json"
-  }
+  "package_sha256": "4f28ed4d2534d236de1b418ff97fa67b23c4cdaa27d40f93d20950a3c8a48088"
 }
