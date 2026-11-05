@@ -1004,6 +1004,9 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
     int32_t *d = SPREAD_BUF(t), *e = t->lpan_on ? LPAN_BUF(t) : 0;
     uint32_t i, k = (uint32_t)(t - trk);
     int32_t lvl = LEVEL_Q12[t->p[P_LEVEL] & 127], pan = t->p[P_PAN], s = (t->p[P_SPRD] + 1) >> 1;
+#if FELUCCA_SNOW
+    int performance=snow_mix_begin(t);int32_t master_pan=pan;if(performance)pan=0;
+#endif
     int32_t pa = clamp(pan - s, -64, 63), pb = clamp(pan + s, -64, 63);
     int32_t gla = 4096 - (pa > 0 ? pa * 64 : 0), gra = 4096 + (pa < 0 ? pa * 64 : 0);
     int32_t glb = 4096 - (pb > 0 ? pb * 64 : 0), grb = 4096 + (pb < 0 ? pb * 64 : 0);
@@ -1020,6 +1023,13 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
     slicer_track_sd(t, b, d, e, n);
 #if FELUCCA_SNOW
     snow_fx_process(t,b,n);
+    if(performance&&!e){
+        for(i=0;i<n;i++){
+            int32_t side=snow_fx[k].side[i],left=(((b[i]+side)*glm)>>12)+((d[i]*gld)>>12),right=(((b[i]-side)*grm)>>12)+((d[i]*grd)>>12);
+            snow_mix_sample(t,&left,&right);b[i]=(left+right)/2;snow_fx[k].side[i]=(left-right)/2;d[i]=0;
+        }
+        glm=4096-(master_pan>0?master_pan*64:0);grm=4096+(master_pan<0?master_pan*64:0);gld=grd=0;
+    }
 #endif
     if (((pf.mute >> k) & 1u) || t->p[P_MUTE] || pf.mg[k] != 32768) {   /* (the mute's ramp on both: from the same start,
                                                                           * the same; (2.0) a MUTE's too) */
@@ -1152,6 +1162,9 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
     }
     {
         int32_t lvl = LEVEL_Q12[t->p[P_LEVEL] & 127], pan = t->p[P_PAN];
+#if FELUCCA_SNOW
+        int performance=snow_mix_begin(t);
+#endif
         int32_t gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
         int32_t c = FELUCCA_SNOW?0:t->p[P_CHOR] * 258, d = FELUCCA_SNOW?0:t->p[P_DLY] * 258, r = FELUCCA_SNOW?0:t->p[P_REV] * 258, pk = t->peak;
         int32_t xmax = c > d ? c : d;
@@ -1162,6 +1175,10 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
         slicer_track(t, b, n);                          /* slicer.c: before the level, pan and sends */
 #if FELUCCA_SNOW
         snow_fx_process(t,b,n);
+        if(performance)for(i=0;i<n;i++){
+            int32_t left=b[i]+snow_fx[t-trk].side[i],right=b[i]-snow_fx[t-trk].side[i];
+            snow_mix_sample(t,&left,&right);b[i]=(left+right)/2;snow_fx[t-trk].side[i]=(left-right)/2;
+        }
 #endif
         if (((pf.mute >> (t-trk))&1u) || t->p[P_MUTE] || pf.mg[t-trk]!=32768) {
 #if FELUCCA_SNOW

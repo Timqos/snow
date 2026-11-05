@@ -1805,6 +1805,10 @@ static int undo_swap(undo_t *c)
             t->p[k] = c->p[k];
             c->p[k] = v;
         }
+#if FELUCCA_SNOW
+        static const uint8_t seeds[]={SN_G_SEED,SN_G_SEED_B,SN_G_SEED_C,SN_G_SEED_D};
+        for(uint32_t j=0;j<4u;j++){uint32_t k=seeds[j];int16_t v=t->p[k];t->p[k]=c->p[k];c->p[k]=v;}
+#endif
         for (i = 0; i < NSTEP; i++) {
             step_t s = t->step[i];
             t->step[i] = c->step[i];
@@ -2305,6 +2309,10 @@ static uint32_t preset_visible(uint32_t cur, uint32_t total, uint32_t row)
 static const param_desc_t *home_param(uint32_t k, int16_t **vp)
 {
     uint32_t id = ENGINES[TSEL->eng_req % NENGINES]->knob[k & 3u];
+#if FELUCCA_SNOW
+    static const uint8_t mix[]={P_LEVEL,P_PAN,SN_DJ_FILTER,SN_WIDTH};
+    if(snow_home_panel==SN_HOME_MIX)id=mix[k&3u];
+#endif
     *vp = &TSEL->p[id];
     return track_desc(TSEL, id);
 }

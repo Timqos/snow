@@ -166,3 +166,22 @@ for(let preset=0;preset<10;preset++){
  }
 }
 console.log('WASM SEL / CH RELEASE PASSED: 35 scales, physical mode knob, snapshot recall, 200 sound randomisations keep 2BAR and NOTES');
+
+// The production WebAssembly uses the actual HOME controls, not an external editor.
+const home=await boot();render(home,1800);
+const rotate=(encoder,n)=>{home.web_enc(encoder,n);render(home,100);};
+const tempo=home.web_snow_tempo_get();rotate(0,2);assert.equal(home.web_snow_home_panel(),2);assert.equal(home.web_snow_tempo_get(),tempo);
+rotate(0,-1);assert.equal(home.web_snow_home_panel(),1);
+for(let ch=0;ch<6;ch++){
+ home.web_snow_select(ch);assert.equal(home.web_snow_home_panel(),1);
+ for(let knob=0;knob<4;knob++){
+  const before=home.web_snow_home_generations(ch,knob),other=Array.from({length:6},(_,k)=>home.web_snow_home_generations(k,knob));
+  rotate(3+knob,knob%2?-2:2);assert.equal(home.web_snow_home_generations(ch,knob),before+2);
+  for(let k=0;k<6;k++)if(k!==ch)assert.equal(home.web_snow_home_generations(k,knob),other[k]);
+ }
+}
+home.web_snow_select(5);home.web_buttons(1<<6);render(home,850);home.web_buttons((1<<6)|(1<<13));render(home,400);home.web_buttons(1<<6);render(home,70);home.web_buttons(0);render(home,100);
+assert.equal(home.web_snow_param_base(5,mode),1);assert.equal(home.web_snow_home_panel(),1);
+home.web_buttons(1<<6);render(home,70);home.web_buttons((1<<6)|(1<<13));render(home,70);home.web_buttons(1<<6);render(home,70);home.web_buttons(0);render(home,100);assert.equal(home.web_snow_param_base(5,mode),0);
+assert.equal(home.web_snow_tempo_get(),tempo);
+console.log('WASM HOME PASSED: three SELECT panels, exact detent counts for four generators on six channels, preserved focus/BPM and HOME+OCT+ N/CHO');

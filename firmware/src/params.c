@@ -271,7 +271,10 @@ static const param_desc_t TP[P_COUNT] = {
 /* (Skiff phase 9) the DRUM engine's lanes, each moved from its design (eng_drum.c drum_render): 64 = as designed */
 #define LANE2(k) [P_LTUNE0 + (k)] = PD(FELUCCA_SNOW && (k)==0 ? "BASE NOTE" : "TUNE", FELUCCA_SNOW && (k)==0 ? F_NOTE : F_ST16, 0, 127, FELUCCA_SNOW && (k)==0 ? 60 : 64), [P_LDECAY0 + (k)] = PD("DECAY", F_BIPCT, -64, 63, 0)
 #if FELUCCA_SNOW
-    LANE2(0),LANE2(5),LANE2(6),LANE2(7),
+    LANE2(0),LANE2(7),
+    [P_LTUNE5]=PD("TUNE",F_ST16,0,127,64),[P_LTUNE6]=PD("TUNE",F_ST16,0,127,64),
+    [SN_DJ_FILTER]=PD("DJ FILTER",F_BIPCT,-64,63,0),
+    [SN_WIDTH]=PD("WIDTH",F_BIPCT,-64,63,0),
     [P_LDECAY1]=PD("DECAY",F_BIPCT,-64,63,0),[P_LDECAY2]=PD("DECAY",F_BIPCT,-64,63,0),
     [P_LDECAY3]=PD("DECAY",F_BIPCT,-64,63,0),[P_LDECAY4]=PD("DECAY",F_BIPCT,-64,63,0),
 #else
@@ -413,7 +416,7 @@ static int32_t param_fit(const param_desc_t *d, int32_t v)
 static int param_kept(uint32_t i)
 {
 #if FELUCCA_SNOW
-    if(i==SN_PLAY_MODE)return 1;
+    if(i==SN_PLAY_MODE||i==SN_DJ_FILTER||i==SN_WIDTH)return 1;
     if ((i>=SN_G_DENS && i<=SN_G_LIVE) || i==SN_G_BASE || (i>=SN_G_STYLE && i<=SN_G_VARIANT) || (i>=SN_G_SEED_B && i<=SN_G_SCOPE)) return 1;
 #endif
     return i == P_LEVEL || i == P_PAN || i == P_MUTE || (i >= P_AMODE && i <= P_SGATE) ||
@@ -473,6 +476,7 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
     fmt_named = d->fmt == F_ENUM;
 #if FELUCCA_SNOW
     if(d==&TP[SN_DTIME] || d==&TP[SN_RPRE]) {fmt_int(val,v*(d==&TP[SN_DTIME]?10:1));*unit="ms";return;}
+    if(d==&TP[SN_WIDTH]){fmt_int(val,v<0?50+v*50/64:50+v*50/63);*unit="%";return;}
 #endif
     switch (d->fmt) {
     case F_PCT:                                     /* a 0..100 range (SWG) is its value, others a share of 127 */

@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "build/snow-preview"
-RELEASE = "0.6.3"
+RELEASE = "0.7.0"
 VERSION = f"v{RELEASE}-snow"
 
 
@@ -29,6 +29,8 @@ def main():
     run(str(ROOT / "build/snow_test"))
     run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/snow_sel_test", "tests/snow_sel_test.c", "-lm")
     run(str(ROOT / "build/snow_sel_test"))
+    run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/snow_home_test", "tests/snow_home_test.c", "-lm")
+    run(str(ROOT / "build/snow_home_test"))
     run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/snow_audition", "tests/snow_audition.c", "-lm")
     run(str(ROOT / "build/snow_audition"), str(OUT))
     run("python3", "tools/snow_audio_check.py", str(OUT))
@@ -103,7 +105,7 @@ def main():
     for name in ("LICENSE", "LICENSING.md"):
         shutil.copy(ROOT / name, OUT / name)
     source = Path(os.environ.get("SNOW_SOURCE_DIR", ROOT))
-    metadata = {"stage":"Snow animated boot identity, role-aware groovebox and backup-first installer", "version":VERSION, "source_commit":subprocess.check_output(["git","rev-parse","HEAD"],cwd=source,text=True).strip(),
+    metadata = {"stage":"Snow three-panel HOME, reference pixel icons and channel performance controls", "version":VERSION, "source_commit":subprocess.check_output(["git","rev-parse","HEAD"],cwd=source,text=True).strip(),
                 "source_dirty":bool(subprocess.check_output(["git","status","--porcelain"],cwd=source,text=True).strip()),
                 "package_sha256":package_hash}
     (OUT / "build.json").write_text(json.dumps(metadata,indent=2)+"\n")

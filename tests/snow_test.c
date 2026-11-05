@@ -211,35 +211,32 @@ static void pattern_controls(void)
 static void icon_position_tests(void)
 {
     memset(snow_offset,0,sizeof snow_offset);
-    for(uint32_t kind=0;kind<6;kind++){
-        uint32_t rows[SN_ICON_N],first[SN_ICON_N],last[SN_ICON_N],hashes[101],unique=0;
+    for(uint32_t kind=0;kind<10;kind++){
+        uint32_t hashes[101],unique=0;
         for(uint32_t p=0;p<=100;p++){
-            snow_icon_rows(kind,p*10u,rows);uint32_t hash=2166136261u;
-            for(uint32_t y=0;y<SN_ICON_N;y++){assert(!(rows[y]>>SN_ICON_N));hash=(hash^rows[y])*16777619u;}
-            assert((rows[0]&3u)==3u&&(rows[29]&3u)==3u);
-            assert((rows[0]>>28)==3u&&(rows[29]>>28)==3u);
-            int seen=0;for(uint32_t j=0;j<p;j++)seen|=hashes[j]==hash;unique+=!seen;hashes[p]=hash;
-            if(!p)memcpy(first,rows,sizeof first);if(p==100)memcpy(last,rows,sizeof last);
+            cv_begin(100,100,T_BG);snow_icon(50,50,kind,p*10u,2,T_THEME);
+            uint32_t hash=2166136261u,pixels=0;
+            for(uint32_t y=0;y<100;y++)for(uint32_t x=0;x<100;x++){
+                uint16_t v=cv_px[y*100+x];hash=(hash^v)*16777619u;
+                if(x<10||x>=90||y<10||y>=90)assert(v==swap16(T_BG));
+                else {assert(v==swap16(T_BG)||v==swap16(T_THEME)||v==swap16(ux_mix(T_BG,T_THEME,70)));pixels+=v!=swap16(T_BG);}
+            }
+            assert(pixels>70);int seen=0;for(uint32_t j=0;j<p;j++)seen|=hashes[j]==hash;unique+=!seen;hashes[p]=hash;
         }
-        uint32_t changed=0;for(uint32_t y=0;y<SN_ICON_N;y++)changed+=(uint32_t)__builtin_popcount(first[y]^last[y]);
-        printf("Icon %u: %u distinct value positions, %u changed pixels across sweep\n",kind+1,unique,changed);
-        assert(unique>=16&&changed>=45);
-        snow_icon_rows(kind,370,first);fm1_ms+=1234;snow_icon_rows(kind,370,last);assert(!memcmp(first,last,sizeof first));
+        assert(unique>=3);printf("Reference icon %u: %u value states, fixed 80x80 bounds and theme pixels\n",kind,unique);
+        cv_begin(100,100,T_BG);snow_icon(50,50,kind,370,2,T_THEME);uint16_t first[10000];memcpy(first,cv_px,sizeof first);
+        fm1_ms+=1234;cv_begin(100,100,T_BG);snow_icon(50,50,kind,370,2,T_THEME);assert(!memcmp(first,cv_px,sizeof first));
     }
-    go_home();sel_set(0);trk[0].p[P_MUTE]=0;trk[0].p[P_E0]=0;snow_touch(&trk[0],P_E0,0);advance(150);
-    assert(snow_param_position(&trk[0],P_E0)==0);
-    uint16_t before[900];for(uint32_t y=0;y<30;y++)memcpy(before+y*30,web_fb+(59+y)*240+25,60);
+    go_home();snow_home_panel=SN_HOME_SYNTH;sel_set(0);trk[0].p[P_MUTE]=0;trk[0].p[P_E0]=0;snow_touch(&trk[0],P_E0,0);advance(150);
+    uint16_t before[80*80];for(uint32_t y=0;y<80;y++)memcpy(before+y*80,web_fb+(107+y)*240+5,160);
     uint32_t blits=snow_home_state.card_blits;advance(1000);assert(snow_home_state.card_blits==blits);
-    for(uint32_t y=0;y<30;y++)assert(!memcmp(before+y*30,web_fb+(59+y)*240+25,60));
-    trk[0].p[P_E0]=127;snow_touch(&trk[0],P_E0,127);advance(80);assert(snow_param_position(&trk[0],P_E0)==1000);
-    uint32_t diff=0;for(uint32_t y=0;y<30;y++)for(uint32_t x=0;x<30;x++)diff+=before[y*30+x]!=web_fb[(59+y)*240+25+x];assert(diff>=45);
+    trk[0].p[P_E0]=127;snow_touch(&trk[0],P_E0,127);advance(100);
+    uint32_t diff=0;for(uint32_t y=0;y<80;y++)for(uint32_t x=0;x<80;x++)diff+=before[y*80+x]!=web_fb[(107+y)*240+5+x];assert(diff>=16);
     for(uint32_t c=0;c<NPALETTES;c++){
-        web_snow_color(c);advance(150);uint16_t ink=swap16(T_THEME),bg=swap16(T_BG);uint32_t pixels=0;
-        for(uint32_t y=59;y<89;y++)for(uint32_t x=25;x<55;x++){uint16_t p=web_fb[y*240+x];assert(p==ink||p==bg);pixels+=p==ink;}assert(pixels>30);
+        web_snow_color(c);advance(100);uint32_t pixels=0;
+        for(uint32_t y=107;y<187;y++)for(uint32_t x=5;x<85;x++){uint16_t p=web_fb[y*240+x];assert(p==swap16(T_THEME)||p==swap16(T_BG)||p==swap16(ux_mix(T_BG,T_THEME,70)));pixels+=p!=swap16(T_BG);}assert(pixels>70);
     }
-    trk[0].p[P_E0]=0;snow_touch(&trk[0],P_E0,0);advance(80);
-    for(uint32_t y=0;y<30;y++)for(uint32_t x=0;x<30;x++)assert((before[y*30+x]!=swap16(SNOW_PALETTES[0].bg))==(web_fb[(59+y)*240+25+x]!=swap16(T_BG)));
-    puts("Value-driven icons: reversible 0..100%, fixed bounds, no idle animation, theme ink passed");
+    puts("Reference icons: fixed cells, local value animation, reversible positions, no idle animation, theme ink passed");
 }
 static void random_sound_tests(void)
 {

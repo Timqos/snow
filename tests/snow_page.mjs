@@ -11,6 +11,8 @@ assert.equal((html.match(/<h1\b/g)||[]).length,1);
 assert(!/snow-(?:lab|channels|generator-panel|sound-controls|pattern-grid|preset)|lab-control|<table|<select|type="range"/.test(html));
 const deviceEnd=html.indexOf('<section class="install-strip"');assert(deviceEnd>html.indexOf('id="device"')&&deviceEnd<html.indexOf('<p class="keys">'));
 assert(html.includes('href="install/"'));assert(html.includes('GEN RND'));assert(html.includes('CONTROL ALL'));assert(html.includes('Back up before you install.'));
+for(const text of ['HOME → SELECT','HOME → GEN','HOME → MIX','HOME + OCT+','one generation','0% folds to mono','100% doubles the side','HOME SELECT never changes BPM'])assert(html.includes(text),text);
+assert(!html.includes('Return to six channel cards')&&!html.includes('HOME, MIXER and PATTERNS always show all six'));
 const load=html.slice(html.indexOf('function loadFlash()'),html.indexOf('function saveFlash('));assert(load);
 function migrate(current,old05,old04){
  const records=new Map();if(current)records.set('snow-fm1-prototype-06',current);if(old05)records.set('snow-fm1-prototype-05',old05);if(old04)records.set('snow-fm1-prototype-04',old04);

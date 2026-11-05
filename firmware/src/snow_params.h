@@ -4,6 +4,9 @@
  * one-key chords of existing Snow projects; one plays individual notes. */
 #define SN_PLAY_MODE P_ED_FX
 #define SN_CH_RELEASE 113 /* ESYNC index 22: two bars */
+/* Retired lane DECAY slots were zero in Snow: old projects stay neutral. */
+#define SN_DJ_FILTER P_LDECAY5
+#define SN_WIDTH P_LDECAY6
 /* Append after the original sixteen scales: their stored numbers never move.
  * One definition supplies both the selector names and the pitch-class masks. */
 #define SN_EXTRA_SCALES(X) \

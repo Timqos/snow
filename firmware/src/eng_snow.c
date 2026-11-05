@@ -17,12 +17,16 @@ static struct { uint32_t phase; int32_t value, fade, rng; } snow_l2[NTRK];
 static uint32_t snow_role(const track_t *t) { return (uint32_t)(t-trk)%NTRK; }
 static int16_t snow_offset[NTRK][4];
 static uint8_t snow_mask=63;
-static struct { uint32_t ms,serial;uint16_t id;int16_t value;uint8_t valid; } snow_touch_state[NTRK];
+enum { SN_HOME_SYNTH, SN_HOME_GEN, SN_HOME_MIX };
+static uint8_t snow_home_panel;
+static uint32_t snow_home_gen[NTRK][4];
+static struct { uint32_t ms,serial;uint16_t id;int16_t value;uint8_t valid,macro; } snow_touch_state[NTRK];
 static void snow_touch(track_t *t,uint32_t id,int16_t value)
 {
     uint32_t k=(uint32_t)(t-trk)%NTRK;
     snow_touch_state[k].ms=fm1_ms;snow_touch_state[k].serial++;
     snow_touch_state[k].id=(uint16_t)id;snow_touch_state[k].value=value;snow_touch_state[k].valid=1;
+    if(id>=P_E0&&id<=P_E3)snow_touch_state[k].macro=(uint8_t)(id-P_E0);
 }
 static uint32_t div_samples(uint32_t div);
 static int32_t snow_param(const track_t *t,uint32_t k)

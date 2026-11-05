@@ -15,6 +15,34 @@ typedef struct {
     int32_t side[CTL];
 } snow_fx_t;
 static snow_fx_t snow_fx[NTRK] __attribute__((section(".pool")));
+/* Per-channel performance processing, after the channel's stereo rack and
+ * before its final pan. Zero/zero is an exact bypass for existing projects. */
+static struct { int32_t filter,width,bp[2],lp[2],wet,wgain;tsvf_t coef; } snow_mix_fx[NTRK];
+static int32_t snow_mix_slew(int32_t from,int32_t target)
+{
+    int32_t d=target-from;return from+(d?d/8+(d>0?1:-1):0);
+}
+static int snow_mix_begin(track_t *t)
+{
+    uint32_t k=(uint32_t)(t-trk);int32_t *f=&snow_mix_fx[k].filter,*w=&snow_mix_fx[k].width;
+    *f=snow_mix_slew(*f,t->p[SN_DJ_FILTER]*256);*w=snow_mix_slew(*w,t->p[SN_WIDTH]*256);
+    int32_t a=*f<0?-*f:*f;
+    snow_mix_fx[k].wet=clamp(a/2,0,1024);
+    snow_mix_fx[k].wgain=*w*4/(*w<0?64:63);
+    if(a)tsvf_coef(&snow_mix_fx[k].coef,*f<0?127*256-a*125/64:a*121/63,0);
+    return a||*w;
+}
+static void snow_mix_sample(track_t *t,int32_t *l,int32_t *r)
+{
+    uint32_t k=(uint32_t)(t-trk);int32_t v[2]={*l,*r};
+    for(uint32_t c=0;c<2;c++)if(snow_mix_fx[k].wet){
+        int32_t in=v[c]/8,before=snow_mix_fx[k].bp[c],lo=tsvf_lp(&snow_mix_fx[k].coef,in,&snow_mix_fx[k].bp[c],&snow_mix_fx[k].lp[c]);
+        int32_t out=snow_mix_fx[k].filter<0?lo:in-lo-before-snow_mix_fx[k].bp[c];
+        v[c]+=(out*8-v[c])*snow_mix_fx[k].wet/1024;
+    }
+    int32_t delta=(v[0]-v[1])*snow_mix_fx[k].wgain/2048;
+    *l=v[0]+delta;*r=v[1]-delta;
+}
 static int32_t snow_fx_mul(int32_t x,int32_t gain) { return (x*gain)/32768; }
 static void snow_fx_lowpass(int32_t *state,int32_t x,int32_t gain)
 {

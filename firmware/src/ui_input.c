@@ -2095,6 +2095,20 @@ static void shift_mark(void)
 #if FELUCCA_SNOW
 #include "snow_perform.c"
 #include "snow_random_sound.c"
+/* HOME exposes the existing generators. One encoder detent = one action;
+ * acceleration never changes that relationship. Combined phrase+locks has
+ * one outer undo transaction, preserving the original generator algorithms. */
+static int snow_home_generate(uint32_t knob)
+{
+    uint32_t channel=song.sel;int rc;
+    if(knob==1u){
+        if(bank_next(channel)<NENT)return 2;
+        undo.keep=0;undo_label="GEN SEQ + LOCKS";load_begin(TSEL,UNDO_PAT);
+        rc=snow_generate(channel,1);if(!rc)rc=snow_generate_parameters(channel);load_end(TSEL);
+    }else rc=snow_random_section(channel,knob==0u?FAM_EDIT:knob==2u?FAM_LFO:FAM_FX);
+    if(!rc)snow_home_gen[channel][knob]++;
+    ui.force=1;return rc;
+}
 #endif
 static void ui_input(void)
 {
@@ -2451,6 +2465,11 @@ static void ui_input(void)
         case B_OCTDN:
         case B_OCTUP: {
             uint32_t both = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]);
+#if FELUCCA_SNOW
+            if(b==B_OCTUP&&ui.home&&song.sel==5u&&!lay&&((fm1_in.buttons>>panel.btn[B_HOME])&1u)){
+                TSEL->p[SN_PLAY_MODE]=!TSEL->p[SN_PLAY_MODE];shift_mark();home_long=0;ui.shift=0;ui.force=1;break;
+            }
+#endif
             if (act_cols() || layer_set_open() || ui.ml.on)   /* action pages: enter / back (below); SET layers: OCT-;
                                                          * ((1.3) MIDI LEARN: below) */
                 break;
@@ -2558,6 +2577,13 @@ static void ui_input(void)
                                                          * way); (Skiff phase 8, rule 3) else the pages */
         int sheet = !lay && !ui.home && sheet_of(cur_page()->graph);   /* (Skiff U1) a sheet's rows: SELECT is their
                                                                         * only way, BPM LOCK or not */
+#if FELUCCA_SNOW
+        if(ui.home&&!lay){
+            if(shift_held()){shift_mark();home_long=0;ui.shift=0;}
+            snow_home_panel=(uint8_t)clamp((int32_t)snow_home_panel+s,0,2);
+            ui.force=1;
+        }else
+#endif
         if (glo || (!(ui_prefs & PREF_BPM_LOCK) && !sheet)) {
             song.g[G_BPM] = (int16_t)clamp(song.g[G_BPM] + accel(EN_SELECT, s, 200), GP[G_BPM].min, GP[G_BPM].max);
             ui.bpm_t = 40;                              /* the header's BPM lights up; no message over the header */
@@ -2600,11 +2626,21 @@ static void ui_input(void)
             ui.hot_t = 40;
         }
         if (ui.home) {
+#if FELUCCA_SNOW
+            if(snow_home_panel==SN_HOME_GEN){
+                uint32_t count=(uint32_t)(s<0?-s:s);
+                while(count--){if(snow_home_generate(k))break;}
+                continue;
+            }
+#endif
             int16_t *vp;
             const param_desc_t *d = home_param(k, &vp);
             *vp = (int16_t)param_turn(d, *vp, accel(EN_K1 + k, s, d->fmt == F_ENUM ? 0 : d->max - d->min));
             motion_capture(TSEL, (uint32_t)(vp - TSEL->p), *vp);
             ml_knob(TSEL, (uint32_t)(vp - TSEL->p));
+#if FELUCCA_SNOW
+            snow_touch(TSEL,(uint32_t)(vp-TSEL->p),*vp);
+#endif
         } else {
             edit_param(k, s);
         }
