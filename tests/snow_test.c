@@ -210,45 +210,45 @@ static void pattern_controls(void)
 }
 static void icon_position_tests(void)
 {
-    memset(snow_offset,0,sizeof snow_offset);
-    for(uint32_t kind=0;kind<10;kind++){
-        uint32_t hashes[101],unique=0;
-        for(uint32_t p=0;p<=100;p++){
-            cv_begin(100,100,T_BG);snow_icon(50,50,kind,p*10u,2,T_THEME);
-            uint32_t hash=2166136261u,pixels=0;
-            for(uint32_t y=0;y<100;y++)for(uint32_t x=0;x<100;x++){
-                uint16_t v=cv_px[y*100+x];hash=(hash^v)*16777619u;
-                if(x<10||x>=90||y<10||y>=90)assert(v==swap16(T_BG));
-                else {assert(v==swap16(T_BG)||v==swap16(T_THEME));pixels+=v!=swap16(T_BG);}
-            }
-            assert(pixels>70);int seen=0;for(uint32_t j=0;j<p;j++)seen|=hashes[j]==hash;unique+=!seen;hashes[p]=hash;
+    web_snow_color(0);advance(100);
+    FILE *ref=fopen("assets/snow-animation/reference.frames","rb");assert(ref);
+    uint8_t expected[SN_CHANNEL_BYTES],pixels[SN_CHANNEL_BYTES];
+    for(uint32_t kind=0;kind<5;kind++)for(uint32_t f=0;f<SN_CHANNEL_POSES;f++){
+        assert(fread(expected,1,sizeof expected,ref)==sizeof expected);
+        uint32_t q=(f*1000u+16u)/32u;assert(snow_channel_decode(kind,q,pixels));assert(!memcmp(expected,pixels,sizeof pixels));
+        cv_begin(100,100,T_BG);snow_icon(50,50,kind,q,2,T_THEME);
+        uint32_t light=0,accent=0;
+        for(uint32_t y=0;y<33;y++)for(uint32_t x=0;x<33;x++){
+            uint32_t i=y*33u+x,v=(expected[i/4u]>>(6u-2u*(i%4u)))&3u;assert(v<3);
+            if(!x||!y||x==32u||y==32u)assert(!v);
+            light+=v==1;accent+=v==2;
+            uint16_t ink=swap16(v==1?T_TEXT:v==2?T_THEME:T_BG);
+            for(uint32_t dy=0;dy<2;dy++)for(uint32_t dx=0;dx<2;dx++)assert(cv_px[(18+y*2+dy)*100+18+x*2+dx]==ink);
         }
-        assert(unique>=3);printf("Reference icon %u: %u value states, fixed bounds and binary theme pixels\n",kind,unique);
-        cv_begin(100,100,T_BG);snow_icon(50,50,kind,370,2,T_THEME);uint16_t first[10000];memcpy(first,cv_px,sizeof first);
-        fm1_ms+=1234;cv_begin(100,100,T_BG);snow_icon(50,50,kind,370,2,T_THEME);assert(!memcmp(first,cv_px,sizeof first));
+        assert(light>8&&accent>5);
+        for(uint32_t y=0;y<100;y++)for(uint32_t x=0;x<100;x++)if(x<18||x>=84||y<18||y>=84)assert(cv_px[y*100+x]==swap16(T_BG));
     }
-    /* The HH eyes translate vertically as rigid arches, never wander horizontally. */
-    for(uint32_t p=0;p<=1000;p+=10){
-        for(uint32_t eye=0;eye<2;eye++){
-            uint32_t count=0,minx=40,maxx=0,miny=40,maxy=0;
-            for(uint32_t y=7;y<=16;y++)for(uint32_t x=eye?23u:6u;x<=(eye?33u:16u);x++)if(!snow_icon_pixel(2,x,y,p)){
-                count++;if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y;
-            }
-            assert(count==33&&maxx-minx==10&&maxy-miny==5);
-            assert(minx==(eye?23u:6u)&&miny>=8&&miny<=10);
-        }
-    }
-    puts("HH rigid eye arches: fixed horizontal bounds, unchanged area/shape and only +/-1 vertical movement passed");
+    assert(fgetc(ref)==EOF);fclose(ref);
+    ref=fopen("tests/fixtures/snow-protected-icons.txt","r");assert(ref);
+    uint32_t kind,scale,q,expected_hash,count=0;
+    while(fscanf(ref,"%u %u %u %x",&kind,&scale,&q,&expected_hash)==4){
+        cv_begin(100,100,T_BG);snow_icon(50,50,kind,q,scale,T_THEME);uint32_t hash=2166136261u;
+        for(uint32_t i=0;i<10000;i++)hash=(hash^cv_px[i])*16777619u;
+        assert(hash==expected_hash);count++;
+    }fclose(ref);assert(count==495);
     go_home();snow_home_panel=SN_HOME_SYNTH;sel_set(0);trk[0].p[P_MUTE]=0;trk[0].p[P_E0]=0;snow_touch(&trk[0],P_E0,0);advance(150);
     uint16_t before[80*80];for(uint32_t y=0;y<80;y++)memcpy(before+y*80,web_fb+(107+y)*240+5,160);
     uint32_t blits=snow_home_state.card_blits;advance(1000);assert(snow_home_state.card_blits==blits);
-    trk[0].p[P_E0]=127;snow_touch(&trk[0],P_E0,127);advance(100);
+    trk[0].p[P_E0]=32;snow_touch(&trk[0],P_E0,32);advance(100);
     uint32_t diff=0;for(uint32_t y=0;y<80;y++)for(uint32_t x=0;x<80;x++)diff+=before[y*80+x]!=web_fb[(107+y)*240+5+x];assert(diff>=16);
     for(uint32_t c=0;c<NPALETTES;c++){
-        web_snow_color(c);advance(100);uint32_t pixels=0;
-        for(uint32_t y=107;y<187;y++)for(uint32_t x=5;x<85;x++){uint16_t p=web_fb[y*240+x];assert(p==swap16(T_THEME)||p==swap16(T_BG));pixels+=p!=swap16(T_BG);}assert(pixels>70);
+        web_snow_color(c);advance(100);uint32_t accent=0,light=0;
+        for(uint32_t y=115;y<181;y++)for(uint32_t x=13;x<79;x++){
+            uint16_t p=web_fb[y*240+x];assert(p==swap16(T_THEME)||p==swap16(T_TEXT)||p==swap16(T_BG));accent+=p==swap16(T_THEME);light+=p==swap16(T_TEXT);
+        }assert(accent>20&&light>20);
     }
-    puts("Reference icons: fixed cells, local value animation, reversible positions, no idle animation, binary theme ink passed");
+    puts("GIF channel icons: all 165 reference poses, exact light/theme roles, fixed 66x66 zone with guard pixels, ten themes and no idle animation passed");
+    puts("Protected icons: CH cassette and all four right-panel generators match 495 released snapshots at every scale");
 }
 static void random_sound_tests(void)
 {

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Snow 0.7.1 — six instruments, one Snow identity
+# Snow 0.7.2 — six instruments, one Snow identity
 
-[Open the simulator](https://timqos.github.io/snow/snow/?v=071) ·
+[Open the simulator](https://timqos.github.io/snow/snow/?v=072) ·
 [Install & back up](https://timqos.github.io/snow/snow/install/)
 
 Snow is custom firmware for the M-VAVE FM-1. Its browser simulator runs the
@@ -33,8 +33,9 @@ keeping GLO held is not required. Existing held-GLO shortcuts also remain.
 Panel focus stays unchanged when selecting another channel. MIXER and PATTERNS
 still show all six channels on one screen.
 
-The ten reference motifs are stored as fixed pixel grids; repeated rows share
-storage without losing pixels. The icons use the selected theme colour.
+The five channel animations use compact adapted pose grids. The cassette and
+four generator motifs retain their shared-row pixel grids. Channel contours
+use light ink; their accents and the retained motifs use the selected theme.
 Local details respond to knob position or generator actions, with no idle
 animation or moving icon bounds. Pixel progress bars and three arrows identify
 the controls without adding panel frames. The bottom scope shows the master
@@ -233,17 +234,34 @@ bounded peaks, low-frequency kick/bass bodies and broad high-frequency hats.
 These measurements detect regressions; they do not replace listening or certify
 every possible generated sound.
 
-## Visual refinement in 0.7.1
+## Channel artwork in 0.7.2
 
-Channel and active-pattern badges use 14-pixel-high type within the original
-header cells (including P10–P16). The first five main icons occupy 72×72
-pixels; the cassette keeps its 80×80 cell. All icon animation uses binary
-theme ink with no shaded sweep. The HH eye arches move vertically while
-keeping their shape, its mouth opens vertically, the cat’s ears follow its
-eyes, the planet and globe details turn, and the right-side arrows, flowing
-capsules, envelope and sparkle move their own parts. The SELECT:PANEL hint
-is removed; the three arrows still indicate panel focus. Audio, generators,
-parameters, project format and button mappings are unchanged.
+KK uses the supplied snowflake, SD the robot, HH the shooting stars, PR the
+birds and BS the chart. CH's cassette and all four right-hand generator icons
+retain their released artwork and animation. Button mappings and synthesis are
+unchanged, including CH's startup 2BAR release.
+
+The five new main icons share a fixed 66×66-pixel HOME zone, exactly the outer
+bounds of the former KK snowflake: x=13..78, y=115..180. Every supplied pose is
+fitted using one common crop and scale per icon, with a one-native-pixel guard
+inside that zone. No pose is cropped or resized independently. The native grid
+is 33×33 at 2× on HOME; MIXER uses its existing smaller cells.
+
+Black is the background, light ink draws the original dark contours, and the
+original turquoise elements use the selected system theme colour. Colour changes
+reuse the same pose data. There is no shadow, glow or interpolation that bends
+the artwork. Parameter position 0..100% selects one of 33 ordered adapted poses
+per icon. Turning back retraces the poses; idle knobs do not run a GIF loop.
+
+The source GIFs and reproducible importer live in assets/snow-animation and
+tools/gen_snow_channel_icons.py. The device reads compact XOR deltas, with 273
+bytes of temporary stack storage; no GIF decoder, heap allocation, extra
+framebuffer, flash writing or work in the audio callback is involved. Removing
+Snow's unreachable antialiased fallback font atlas makes room for this data;
+the selected pixel fonts and the Skiff build remain unchanged.
+
+Channel and pattern labels keep their readable 14-pixel height within the
+original header cells, including P10–P16. SELECT:PANEL remains removed.
 
 ## Risk, installation and factory return
 

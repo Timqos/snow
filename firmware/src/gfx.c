@@ -39,9 +39,19 @@ typedef struct { uint16_t off; uint8_t w; const char *label; } kc_t;
 
 /* (Skiff) the theme's faces: Barlow Condensed's, or THEME CRYPT's and NEON's pixel ones (palette_set). From here on AF_S AF_M
  * AF_L AF_V name the theme's, and AF_x_CAP_Y / _CAP_H its capitals' rows (CAP_IN centres by them) */
+/* Snow always selects the pixel faces. Do not retain the unused Barlow atlas
+ * through UF_FACE[0]'s static relocations; non-Snow builds stay unchanged. */
+#if FELUCCA_SNOW
+static const aafont_t *const UF_FACE[2][4] = {{&AF_S_PX, &AF_M_PX, &AF_L_PX, &AF_V_PX}, {&AF_S_PX, &AF_M_PX, &AF_L_PX, &AF_V_PX}};
+#else
 static const aafont_t *const UF_FACE[2][4] = {{&AF_S, &AF_M, &AF_L, &AF_V}, {&AF_S_PX, &AF_M_PX, &AF_L_PX, &AF_V_PX}};
+#endif
 static const uint8_t UF_CAP[2][4][2] = {
+#if FELUCCA_SNOW
+    {{AF_S_PX_CAP_Y, AF_S_PX_CAP_H}, {AF_M_PX_CAP_Y, AF_M_PX_CAP_H}, {AF_L_PX_CAP_Y, AF_L_PX_CAP_H}, {AF_V_PX_CAP_Y, AF_V_PX_CAP_H}},
+#else
     {{AF_S_CAP_Y, AF_S_CAP_H}, {AF_M_CAP_Y, AF_M_CAP_H}, {AF_L_CAP_Y, AF_L_CAP_H}, {AF_V_CAP_Y, AF_V_CAP_H}},
+#endif
     {{AF_S_PX_CAP_Y, AF_S_PX_CAP_H}, {AF_M_PX_CAP_Y, AF_M_PX_CAP_H}, {AF_L_PX_CAP_Y, AF_L_PX_CAP_H},
      {AF_V_PX_CAP_Y, AF_V_PX_CAP_H}}};
 static struct { const aafont_t *const *f; const uint8_t (*cap)[2]; } uf = {UF_FACE[0], UF_CAP[0]};

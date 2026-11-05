@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "snow_font.h"
 #include "snow_icons.h"
+#include "snow_channel_icons.h"
 static int32_t snow_text(int32_t x,int32_t y,const char *s,uint16_t ink,uint32_t max)
 {
     uint32_t n=0;
@@ -15,39 +16,14 @@ static int32_t snow_text(int32_t x,int32_t y,const char *s,uint16_t ink,uint32_t
 #define SN_ICON_N 40u
 static uint32_t snow_sprite_base(uint32_t kind,int32_t x,int32_t y)
 {
-    if((uint32_t)x>=40u||(uint32_t)y>=40u)return 0;
-    return (SN_SPRITE_ROWS[SN_SPRITE_INDEX[kind%10u][y]][(uint32_t)x/8u]>>(7u-(uint32_t)x%8u))&1u;
+    if(kind<5u||(uint32_t)x>=40u||(uint32_t)y>=40u)return 0;
+    return (SN_SPRITE_ROWS[SN_SPRITE_INDEX[(kind-5u)%5u][y]][(uint32_t)x/8u]>>(7u-(uint32_t)x%8u))&1u;
 }
 static const int8_t SN_TURN[32]={0,12,24,36,45,53,59,63,64,63,59,53,45,36,24,12,0,-12,-24,-36,-45,-53,-59,-63,-64,-63,-59,-53,-45,-36,-24,-12};
 static uint32_t snow_icon_pixel(uint32_t kind,uint32_t x,uint32_t y,uint32_t position)
 {
     uint32_t q=position>1000u?1000u:position,at=q*31u/1000u;
     int32_t xx=(int32_t)x,yy=(int32_t)y,wave=SN_TURN[at],on=snow_sprite_base(kind,xx,yy);
-    if(kind==0u){ /* Four snowflake arms flex around a fixed hub. */
-        int32_t flex=(int32_t)q*2/1000;
-        if(xx<14)xx-=flex;else if(xx>25)xx+=flex;
-        if(yy<14)yy-=flex;else if(yy>25)yy+=flex;
-        return snow_sprite_base(kind,xx,yy);
-    }
-    if(kind==1u||kind==3u){
-        int32_t cy=kind==1u?20:16,dx=xx-20,dy=yy-cy;
-        if(kind==1u||dx*dx+dy*dy<169){
-            int32_t co=SN_TURN[(at+8u)&31u];
-            return snow_sprite_base(kind,20+(dx*co+dy*wave)/64,cy+(dy*co-dx*wave)/64);
-        }
-    }
-    if(kind==2u){ /* Eye arches keep their shape and X coordinates. */
-        int32_t lift=wave/48;
-        if(yy>=7&&yy<=16&&((xx>=5&&xx<=17)||(xx>=21&&xx<=33)))return snow_sprite_base(kind,xx,yy-lift);
-        if(yy>=16&&yy<=24&&xx>=17&&xx<=22){int32_t h=2+(int32_t)q*5/1000;return !(yy>=20-h/2&&yy<20+(h+1)/2);}
-    }
-    if(kind==4u){
-        int32_t phase=(int32_t)(q*127u/1000u),eye=phase%12;if(eye>6)eye=12-eye;
-        if(yy<6){int32_t tilt=(eye-3)/2;return snow_sprite_base(kind,xx+(xx<20?tilt:-tilt)*(yy<3?1:0),yy);}
-        if(q&&yy>=15&&yy<=20&&((xx>=9&&xx<=17)||(xx>=25&&xx<=33))){
-            int32_t cx=(xx<20?13:29)+eye-3;return !(yy>=16&&xx>=cx-1&&xx<=cx+1);
-        }
-    }
     if(kind==5u&&q){ /* Cassette transport retained unchanged. */
         int32_t phase=(int32_t)(q*127u/1000u);
         for(uint32_t i=0;i<2;i++){
@@ -92,9 +68,47 @@ static uint32_t snow_icon_pixel(uint32_t kind,uint32_t x,uint32_t y,uint32_t pos
     }
     return (uint32_t)on;
 }
+/* Replay bounded XOR deltas into a small stack buffer. No allocation, timer,
+ * flash writes or audio-thread work. Position 0..1000 chooses a supplied pose. */
+static int snow_channel_decode(uint32_t kind,uint32_t position,uint8_t *pixels)
+{
+    uint32_t q=position>1000u?1000u:position,frame=(q*(SN_CHANNEL_POSES-1u)+500u)/1000u;
+    const uint8_t *p=SN_CHANNEL_DATA+SN_CHANNEL_OFFSET[kind],*end=SN_CHANNEL_DATA+SN_CHANNEL_OFFSET[kind+1u];
+    memset(pixels,0,SN_CHANNEL_BYTES);
+    for(uint32_t f=0;f<=frame;f++){
+        uint32_t at=0;
+        while(at<SN_CHANNEL_BYTES){
+            if(p>=end)return 0;
+            uint32_t op=*p++,n=(op&127u)+1u;
+            if(n>SN_CHANNEL_BYTES-at)return 0;
+            if(!(op&128u)){if((uint32_t)(end-p)<n)return 0;for(uint32_t j=0;j<n;j++)pixels[at+j]^=*p++;}
+            at+=n;
+        }
+    }
+    return 1;
+}
+static uint32_t snow_channel_pixel(const uint8_t *p,uint32_t x,uint32_t y)
+{
+    uint32_t i=y*SN_CHANNEL_SIDE+x;return (p[i/4u]>>(6u-2u*(i%4u)))&3u;
+}
+static void snow_channel_icon(int32_t cx,int32_t cy,uint32_t kind,uint32_t position,uint32_t scale,uint16_t ink)
+{
+    uint8_t pixels[SN_CHANNEL_BYTES];if(!snow_channel_decode(kind,position,pixels))return;
+    uint32_t n=scale==1u?20u:SN_CHANNEL_SIDE,mul=scale==2u?2u:1u;
+    /* 33 native pixels at 2x: exactly the former KK bounds (13,115)..(79,181).
+     * The outer native pixel is empty in every pose, so no stroke touches it. */
+    int32_t origin=-(int32_t)(n/2u*mul);uint16_t light=ink==T_THEME?T_TEXT:T_MID;
+    for(uint32_t y=0;y<n;y++)for(uint32_t x=0;x<n;){
+        uint32_t first=x,v=snow_channel_pixel(pixels,x*SN_CHANNEL_SIDE/n,y*SN_CHANNEL_SIDE/n);
+        if(v){while(x<n&&snow_channel_pixel(pixels,x*SN_CHANNEL_SIDE/n,y*SN_CHANNEL_SIDE/n)==v)x++;
+            cv_rect(cx+origin+(int32_t)(first*mul),cy+origin+(int32_t)(y*mul),(int32_t)((x-first)*mul),(int32_t)mul,v==1u?light:ink);
+        }else x++;
+    }
+}
 static void snow_icon(int32_t cx,int32_t cy,uint32_t kind,uint32_t position,uint32_t scale,uint16_t ink)
 {
-    uint32_t n=scale==1u?20u:scale==2u&&kind<5u?36u:40u,mul=scale==2u?2u:1u;
+    if(kind<5u){snow_channel_icon(cx,cy,kind,position,scale,ink);return;}
+    uint32_t n=scale==1u?20u:40u,mul=scale==2u?2u:1u;
     int32_t origin=-(int32_t)(n*mul)/2;
     for(uint32_t y=0;y<n;y++)for(uint32_t x=0;x<n;){
         uint32_t start=x;
