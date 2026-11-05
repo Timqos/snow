@@ -22,8 +22,8 @@ SELECT has three clamped positions, with three arrows turning together:
 
 Each generator detent, in either direction and without acceleration, generates
 one result for the selected channel. GN/SEQ calls the existing phrase and
-parameter-lock generators in one undo transaction. Hold SAVE to undo; notes,
-locks and seed return together. OCT± remains octave on HOME (the existing undo
+parameter-lock generators in one undo transaction. Hold SAVE to undo the phrase and its locks together. The original random stream keeps advancing,
+so generating after undo does not repeat the cancelled result. OCT± remains octave on HOME (the existing undo
 window still uses OCT−/OCT+ for further undo/redo). The original EDIT/LFO/FX
 OCT+ commands and separate SEQ GEN RND / GEN PARM remain available.
 

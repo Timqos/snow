@@ -1805,10 +1805,6 @@ static int undo_swap(undo_t *c)
             t->p[k] = c->p[k];
             c->p[k] = v;
         }
-#if FELUCCA_SNOW
-        static const uint8_t seeds[]={SN_G_SEED,SN_G_SEED_B,SN_G_SEED_C,SN_G_SEED_D};
-        for(uint32_t j=0;j<4u;j++){uint32_t k=seeds[j];int16_t v=t->p[k];t->p[k]=c->p[k];c->p[k]=v;}
-#endif
         for (i = 0; i < NSTEP; i++) {
             step_t s = t->step[i];
             t->step[i] = c->step[i];

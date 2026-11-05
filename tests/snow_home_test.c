@@ -55,12 +55,15 @@ static void generators(void)
         motion_store_t locks=motion;int16_t settings[P_COUNT];memcpy(settings,t->p,sizeof settings);
         uint32_t seed=snow_seed(t);step_t steps[NSTEP];memcpy(steps,t->step,sizeof steps);
         count=snow_home_gen[ch][1];turn(EN_K2,-1);assert(snow_home_gen[ch][1]==count+1&&snow_seed(t)!=seed);
+        uint32_t advanced=snow_seed(t);step_t rejected[NSTEP];memcpy(rejected,t->step,sizeof rejected);
         assert(memcmp(steps,t->step,sizeof steps));uint32_t generated=0;
         for(uint32_t e=0;e<motion.count;e++)generated+=motion.event[e].generated&&(motion.event[e].place>>6)==ch;assert(generated);
-        /* One held-SAVE undo restores notes, locks and seed together. */
+        /* One undo restores music; the original random stream keeps advancing. */
         web_buttons(1u<<B_SAVE);advance(850);web_buttons(0);advance(100);
-        assert(!memcmp(steps,t->step,sizeof steps)&&!memcmp(settings,t->p,sizeof settings));
+        assert(!memcmp(steps,t->step,sizeof steps)&&snow_seed(t)==advanced);
+        for(uint32_t id=0;id<P_COUNT;id++)if(id!=SN_G_SEED&&id!=SN_G_SEED_B&&id!=SN_G_SEED_C&&id!=SN_G_SEED_D)assert(settings[id]==t->p[id]);
         assert(motion.count==locks.count);for(uint32_t e=0;e<locks.count;e++)assert(!memcmp(&motion.event[e],&locks.event[e],sizeof locks.event[e]));ui.undo_w=0;
+        turn(EN_K2,1);assert(memcmp(rejected,t->step,sizeof rejected)&&snow_seed(t)!=advanced);
         for(uint32_t knob=2;knob<4;knob++){
             memcpy(steps,t->step,sizeof steps);int16_t p[P_COUNT];memcpy(p,t->p,sizeof p);count=snow_home_gen[ch][knob];
             turn(EN_K1+knob,-2);assert(snow_home_gen[ch][knob]==count+2&&memcmp(p,t->p,sizeof p)&&!memcmp(steps,t->step,sizeof steps));
