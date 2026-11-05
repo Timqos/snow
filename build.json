@@ -1,6 +1,6 @@
 {
   "project": "Snow",
-  "stage": "Snow 0.7.1 binary pixel animations, readable HOME badges and CH-only 2BAR startup release + Skiff baseline",
+  "stage": "Snow 0.7.2 GIF channel poses in fixed cells, light contours and system accents + Skiff baseline",
   "baseline_version": "2.2",
   "source_commit": "815358c56ce9307ed1cb4085351cd0fd94c15ee4",
   "source_dirty": false,
@@ -18,20 +18,21 @@
     "snow061": "snow061/",
     "snow062": "snow062/",
     "snow063": "snow063/",
-    "snow070": "snow070/"
+    "snow070": "snow070/",
+    "snow071": "snow071/"
   },
   "snow_build": {
     "stage": "Snow three-panel HOME, reference pixel icons and channel performance controls",
-    "version": "v0.7.1-snow",
-    "source_commit": "19821febe463f95fa465110e3f5ec95f5f9a5cfd",
+    "version": "v0.7.2-snow",
+    "source_commit": "27eca33250209a661cdfc0ca1842c0e593338551",
     "source_dirty": false,
-    "package_sha256": "eb947b95a553d1d344c3461e7eb08df591900f376a9c3cc4c1c9e2c27e829b8d",
+    "package_sha256": "b2a34b56d9d42eec0f234d2480904e5da00ed2a37218245fba1d917b7ef15799",
     "installation_audit": {
-      "audit_source_commit": "19821febe463f95fa465110e3f5ec95f5f9a5cfd",
+      "audit_source_commit": "27eca33250209a661cdfc0ca1842c0e593338551",
       "software_checks": "passed",
       "physical_fm1_validation": "pending",
       "report": "update-audit.json"
     }
   },
-  "website_source_commit": "19821febe463f95fa465110e3f5ec95f5f9a5cfd"
+  "website_source_commit": "27eca33250209a661cdfc0ca1842c0e593338551"
 }

@@ -1,0 +1,7 @@
+{
+  "version": "v0.7.1-snow",
+  "product": "FM-1_700",
+  "package": "../snow-0.7.1.fwsc",
+  "sha256": "eb947b95a553d1d344c3461e7eb08df591900f376a9c3cc4c1c9e2c27e829b8d",
+  "source_commit": "19821febe463f95fa465110e3f5ec95f5f9a5cfd"
+}
