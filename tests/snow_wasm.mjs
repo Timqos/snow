@@ -187,6 +187,7 @@ assert.equal(home.web_snow_tempo_get(),tempo);
 console.log('WASM HOME PASSED: three SELECT panels, exact detent counts for four generators on six channels, preserved focus/BPM and HOME+OCT+ N/CHO');
 
 // A real persisted old session must not override CH's required startup release.
+{
 const saved=await boot();render(saved,1800);
 const release=find('AMP ADSR','RELEASE'),sus=find('AMP ADSR','SUSTAIN');
 assert(release>=0&&sus>=0);
@@ -200,3 +201,4 @@ assert.equal(restored.web_snow_param_value(5,sus),93);
 for(let i=0;i<30;i++){restored.web_snow_random_sound(5);assert.equal(restored.web_snow_param_value(5,release),twoBar);}
 restored.web_snow_set(5,release,103);restored.web_snow_random_sound(5);assert.equal(restored.web_snow_param_value(5,release),103);
 console.log('CH STARTUP RELEASE PASSED: actual persisted session reboot restores 2BAR on CH only; EDIT random keeps release and manual edits remain available.');
+}
