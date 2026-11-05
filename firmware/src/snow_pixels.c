@@ -105,9 +105,63 @@ static void snow_channel_icon(int32_t cx,int32_t cy,uint32_t kind,uint32_t posit
         }else x++;
     }
 }
+/* KK/SD/HH/PR: draw the supplied geometry at the actual output resolution.
+ * No bitmap resize, frame atlas, antialiasing or timer. All four silhouettes
+ * have exactly the same 64x64 ink bounds inside their 66x66 HOME cell. */
+typedef struct { int32_t x,y,n; uint16_t ink; } snow_geo_t;
+static void snow_geo_rect(const snow_geo_t *g,int32_t x,int32_t y,int32_t w,int32_t h)
+{
+    int32_t x0=x*g->n/66,y0=y*g->n/66,x1=(x+w)*g->n/66,y1=(y+h)*g->n/66;
+    if(x1>x0&&y1>y0)cv_rect(g->x+x0,g->y+y0,x1-x0,y1-y0,g->ink);
+}
+static void snow_geo_disk(const snow_geo_t *g,int32_t cx,int32_t cy)
+{
+    for(int32_t y=-5;y<=5;y++){
+        int32_t x=5;while(x*x+y*y>25)x--;
+        snow_geo_rect(g,cx-x,cy+y,x*2+1,1);
+    }
+}
+static void snow_geo_pair(const snow_geo_t *g,int32_t left,int32_t top,int32_t middle,int32_t gap)
+{
+    int32_t upper=middle-gap,lower=middle+gap,bottom=top+30;
+    for(int32_t y=top;y<=upper;y++)snow_geo_rect(g,left,y,1+14*(y-top)/(upper-top),1);
+    for(int32_t y=lower;y<=bottom;y++)snow_geo_rect(g,left,y,1+14*(bottom-y)/(bottom-lower),1);
+}
+static void snow_geometric_icon(int32_t cx,int32_t cy,uint32_t kind,uint32_t position,uint32_t scale,uint16_t ink)
+{
+    int32_t q=position>1000u?1000:(int32_t)position,n=scale==2u?66:scale==1u?20:33;
+    snow_geo_t g={cx-(n/2)+(scale==2u),cy-(n/2)+(scale==2u),n,ink};
+    if(kind==0u){ /* KK: square and three progressively wider filled bars. */
+        int32_t a=12+(q*6+500)/1000,b=26+(q*12+500)/1000,c=46+(q*8+500)/1000;
+        snow_geo_rect(&g,(66-a)/2,1,a,a);snow_geo_rect(&g,(66-b)/2,28,b,8);
+        snow_geo_rect(&g,(66-c)/2,46,c,5);snow_geo_rect(&g,1,62,64,3);
+    }else if(kind==1u){ /* SD: 5x5 checkerboard, fixed centres and corner anchors. */
+        for(int32_t r=0;r<5;r++)for(int32_t c=0;c<5;c++)if(!((r+c)&1)){
+            int32_t pulse=q<=500?q*2:(1000-q)*2;
+            int32_t size=((r==0||r==4)&&(c==0||c==4))?12:((r+c)&2)?12-(q*6+500)/1000:12-(pulse*4+500)/1000;
+            int32_t pad=(12-size)/2;snow_geo_rect(&g,1+c*13+pad,1+r*13+pad,size,size);
+        }
+    }else if(kind==2u){ /* HH: four pairs of filled triangles in each of two rows. */
+        for(int32_t r=0;r<2;r++)for(int32_t c=0;c<4;c++){
+            static const uint8_t left[4]={1,17,34,50};
+            int32_t d=(q*(4+c%3)+500)/1000,top=1+r*33,middle=top+15+(((r+c)&1)?d:-d);
+            snow_geo_pair(&g,left[c],top,middle,1+(q*3+500)/1000);
+        }
+    }else{ /* PR: the supplied staggered dot/dash pattern. */
+        int32_t d=(q*6+500)/1000-3,m=(q*8+500)/1000-4,l=15-(q*5+500)/1000,s=4+(q*6+500)/1000;
+        snow_geo_disk(&g,6,6);snow_geo_disk(&g,42+d,6);
+        snow_geo_disk(&g,24-d,24);snow_geo_disk(&g,59,24);
+        snow_geo_disk(&g,33+m,42);snow_geo_disk(&g,6,59);snow_geo_disk(&g,42-d,59);
+        snow_geo_rect(&g,24-l/2,4,l,4);snow_geo_rect(&g,59-s/2,4,s,4);
+        snow_geo_rect(&g,6-s/2,22,s,4);snow_geo_rect(&g,42-l/2,22,l,4);
+        snow_geo_rect(&g,16-l/2,40,l,4);snow_geo_rect(&g,50-l/2,40,l,4);
+        snow_geo_rect(&g,24-l/2,57,l,4);snow_geo_rect(&g,59-s/2,57,s,4);
+    }
+}
 static void snow_icon(int32_t cx,int32_t cy,uint32_t kind,uint32_t position,uint32_t scale,uint16_t ink)
 {
-    if(kind<5u){snow_channel_icon(cx,cy,kind,position,scale,ink);return;}
+    if(kind<4u){snow_geometric_icon(cx,cy,kind,position,scale,ink);return;}
+    if(kind==4u){snow_channel_icon(cx,cy,0,position,scale,ink);return;}
     uint32_t n=scale==1u?20u:40u,mul=scale==2u?2u:1u;
     int32_t origin=-(int32_t)(n*mul)/2;
     for(uint32_t y=0;y<n;y++)for(uint32_t x=0;x<n;){

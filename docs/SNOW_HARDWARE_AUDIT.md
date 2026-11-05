@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Snow 0.7.2 — installation and rollback audit
+# Snow 0.7.3 — installation and rollback audit
 
 **Software checks passed. Physical FM-1 qualification is still pending.**
 No Snow-specific boot-area overwrite or firmware lock-in was found in the
@@ -42,8 +42,8 @@ and the published Skiff 2.2 package, SHA-256
 - No Snow-specific changes to voltage control, clock switching or GPIO register
   programming were introduced. The same build-time RAM/ROM/HAL guards pass.
 
-The audited image is 575948 bytes, leaving 5616 bytes of the application slot.
-Snow builds now require at least 4096 bytes of flash reserve. The channel
+The audited image is 562448 bytes, leaving 19116 bytes of the application slot.
+Snow builds now require at least 4096 bytes of flash reserve. The retained BS
 animation decoder uses 273 temporary stack bytes, with no resident image cache.
 Snow-only unused antialiased font references were removed; the selected pixel
 fonts and the Skiff baseline stay unchanged. Data+BSS use 86392/98304 bytes; the pool uses
@@ -55,9 +55,9 @@ headroom. Runtime graphics/synthesis differences still need a hardware soak.
 
 | Path | Software evidence | Physical result |
 | --- | --- | --- |
-| Skiff 2.2 → Snow 0.7.2 | Real packages; OTA staging and C loader tests passed | Pending |
-| Snow 0.7.2 → Skiff 2.2 | Real packages; C loader, preserved boot head, interrupted-write/resume and unchanged-sector checks passed | Pending |
-| Snow 0.7.1 ↔ Snow 0.7.2 | Real packages in both directions; no new version lock found | Pending |
+| Skiff 2.2 → Snow 0.7.3 | Real packages; OTA staging and C loader tests passed | Pending |
+| Snow 0.7.3 → Skiff 2.2 | Real packages; C loader, preserved boot head, interrupted-write/resume and unchanged-sector checks passed | Pending |
+| Snow 0.7.2 ↔ Snow 0.7.3 | Real packages in both directions; no new version lock found | Pending |
 | Factory V15/V16 → Snow | Real vendor package bootstrap heads used by the C loader tests; head remains intact | Pending |
 | Snow → factory V15/V16 | Real vendor package validation/staging and matching-head checks passed | Vendor loader execution on a unit is pending |
 | Saved Snow data → Skiff → Snow | Released WASM builds boot, respond to PLAY and render finite audio with persisted flash | Music-format compatibility is not asserted |

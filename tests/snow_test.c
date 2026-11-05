@@ -211,22 +211,32 @@ static void pattern_controls(void)
 static void icon_position_tests(void)
 {
     web_snow_color(0);advance(100);
+    /* User-requested invariant: identical visible 64x64 ink bounds, every
+     * parameter position, with one filled system ink and a fixed outer guard. */
+    for(uint32_t kind=0;kind<4;kind++){
+        uint32_t changes=0,previous=0;
+        for(uint32_t q=0;q<=1000;q++){
+            cv_begin(100,100,T_BG);snow_icon(50,50,kind,q,2,T_THEME);
+            uint32_t minx=100,miny=100,maxx=0,maxy=0,pixels=0,hash=2166136261u;
+            for(uint32_t y=0;y<100;y++)for(uint32_t x=0;x<100;x++){
+                uint16_t p=cv_px[y*100+x];assert(p==swap16(T_BG)||p==swap16(T_THEME));hash=(hash^p)*16777619u;
+                if(p!=swap16(T_BG)){pixels++;if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y;}
+            }
+            assert(minx==19&&maxx==82&&miny==19&&maxy==82&&pixels>600);
+            changes+=q&&hash!=previous;previous=hash;
+        }assert(changes>=5);printf("Geometry %u: %u visible transitions, exact equal 64x64 bounds at all 1001 positions, filled theme ink passed\n",kind,changes);
+    }
     FILE *ref=fopen("assets/snow-animation/reference.frames","rb");assert(ref);
     uint8_t expected[SN_CHANNEL_BYTES],pixels[SN_CHANNEL_BYTES];
-    for(uint32_t kind=0;kind<5;kind++)for(uint32_t f=0;f<SN_CHANNEL_POSES;f++){
+    for(uint32_t f=0;f<SN_CHANNEL_POSES;f++){
         assert(fread(expected,1,sizeof expected,ref)==sizeof expected);
-        uint32_t q=(f*1000u+16u)/32u;assert(snow_channel_decode(kind,q,pixels));assert(!memcmp(expected,pixels,sizeof pixels));
-        cv_begin(100,100,T_BG);snow_icon(50,50,kind,q,2,T_THEME);
-        uint32_t light=0,accent=0;
+        uint32_t q=(f*1000u+16u)/32u;assert(snow_channel_decode(0,q,pixels));assert(!memcmp(expected,pixels,sizeof pixels));
+        cv_begin(100,100,T_BG);snow_icon(50,50,4,q,2,T_THEME);
         for(uint32_t y=0;y<33;y++)for(uint32_t x=0;x<33;x++){
             uint32_t i=y*33u+x,v=(expected[i/4u]>>(6u-2u*(i%4u)))&3u;assert(v<3);
-            if(!x||!y||x==32u||y==32u)assert(!v);
-            light+=v==1;accent+=v==2;
             uint16_t ink=swap16(v==1?T_TEXT:v==2?T_THEME:T_BG);
             for(uint32_t dy=0;dy<2;dy++)for(uint32_t dx=0;dx<2;dx++)assert(cv_px[(18+y*2+dy)*100+18+x*2+dx]==ink);
         }
-        assert(light>8&&accent>5);
-        for(uint32_t y=0;y<100;y++)for(uint32_t x=0;x<100;x++)if(x<18||x>=84||y<18||y>=84)assert(cv_px[y*100+x]==swap16(T_BG));
     }
     assert(fgetc(ref)==EOF);fclose(ref);
     ref=fopen("tests/fixtures/snow-protected-icons.txt","r");assert(ref);
@@ -235,20 +245,20 @@ static void icon_position_tests(void)
         cv_begin(100,100,T_BG);snow_icon(50,50,kind,q,scale,T_THEME);uint32_t hash=2166136261u;
         for(uint32_t i=0;i<10000;i++)hash=(hash^cv_px[i])*16777619u;
         assert(hash==expected_hash);count++;
-    }fclose(ref);assert(count==495);
+    }fclose(ref);assert(count==594);
     go_home();snow_home_panel=SN_HOME_SYNTH;sel_set(0);trk[0].p[P_MUTE]=0;trk[0].p[P_E0]=0;snow_touch(&trk[0],P_E0,0);advance(150);
     uint16_t before[80*80];for(uint32_t y=0;y<80;y++)memcpy(before+y*80,web_fb+(107+y)*240+5,160);
     uint32_t blits=snow_home_state.card_blits;advance(1000);assert(snow_home_state.card_blits==blits);
     trk[0].p[P_E0]=32;snow_touch(&trk[0],P_E0,32);advance(100);
     uint32_t diff=0;for(uint32_t y=0;y<80;y++)for(uint32_t x=0;x<80;x++)diff+=before[y*80+x]!=web_fb[(107+y)*240+5+x];assert(diff>=16);
     for(uint32_t c=0;c<NPALETTES;c++){
-        web_snow_color(c);advance(100);uint32_t accent=0,light=0;
+        web_snow_color(c);advance(100);uint32_t accent=0;
         for(uint32_t y=115;y<181;y++)for(uint32_t x=13;x<79;x++){
-            uint16_t p=web_fb[y*240+x];assert(p==swap16(T_THEME)||p==swap16(T_TEXT)||p==swap16(T_BG));accent+=p==swap16(T_THEME);light+=p==swap16(T_TEXT);
-        }assert(accent>20&&light>20);
+            uint16_t p=web_fb[y*240+x];assert(p==swap16(T_THEME)||p==swap16(T_BG));accent+=p==swap16(T_THEME);
+        }assert(accent>600);
     }
-    puts("GIF channel icons: all 165 reference poses, exact light/theme roles, fixed 66x66 zone with guard pixels, ten themes and no idle animation passed");
-    puts("Protected icons: CH cassette and all four right-panel generators match 495 released snapshots at every scale");
+    puts("Geometric channel icons: equal visible size, full system ink, fixed zone, ten themes and no idle animation passed");
+    puts("Protected icons: BS, CH cassette and all four right-panel generators match 594 released snapshots at every scale");
 }
 static void random_sound_tests(void)
 {

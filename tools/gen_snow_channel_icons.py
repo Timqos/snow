@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Adapt the five owner-supplied GIFs to a fixed 33x33, two-ink pixel grid.
+"""Retain the unchanged BS chart GIF to a fixed 33x33, two-ink pixel grid.
 
 A single crop/scale is shared by every pose of each icon. The outer pixel is
 always empty. 33 evenly spaced source-frame poses follow parameter position,
@@ -14,7 +14,7 @@ from PIL import Image, ImageChops
 
 ROOT = Path(__file__).resolve().parents[1]
 SIDE, POSES = 33, 33
-NAMES = ('KK', 'SD', 'HH', 'PR', 'BS')
+NAMES = ('BS',)  # The four supplied geometric icons are drawn directly in C.
 BYTES = (SIDE * SIDE + 3) // 4
 
 
@@ -89,7 +89,7 @@ def main():
         assert cursor==offsets[-1]
         meta.append(dict(channel=name,source=path.name,source_sha256=hashlib.sha256(path.read_bytes()).hexdigest(),source_size=list(im.size),source_frames=n,source_frame_indices=indices,crop=list(box),fit_size=list(size),origin=list(origin),poses=POSES,distinct_poses=len(set(poses)),bounds=bounds,encoded_bytes=len(stream)-begin))
     assert len(stream)<65536
-    lines=['/* SPDX-License-Identifier: GPL-3.0-only */','/* Generated from the owner-supplied GIFs; see assets/snow-animation/manifest.json. */',f'#define SN_CHANNEL_SIDE {SIDE}u',f'#define SN_CHANNEL_POSES {POSES}u',f'#define SN_CHANNEL_BYTES {BYTES}u','static const uint16_t SN_CHANNEL_OFFSET[6]={'+','.join(map(str,offsets))+'};',f'static const uint8_t SN_CHANNEL_DATA[{len(stream)}]={{']
+    lines=['/* SPDX-License-Identifier: GPL-3.0-only */','/* Generated from the owner-supplied GIFs; see assets/snow-animation/manifest.json. */',f'#define SN_CHANNEL_SIDE {SIDE}u',f'#define SN_CHANNEL_POSES {POSES}u',f'#define SN_CHANNEL_BYTES {BYTES}u','static const uint16_t SN_CHANNEL_OFFSET[2]={'+','.join(map(str,offsets))+'};',f'static const uint8_t SN_CHANNEL_DATA[{len(stream)}]={{']
     for i in range(0,len(stream),20): lines.append(' '+','.join(f'0x{b:02x}' for b in stream[i:i+20])+',')
     lines.append('};')
     (ROOT/'firmware/src/snow_channel_icons.h').write_text('\n'.join(lines)+'\n')
