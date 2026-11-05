@@ -53,7 +53,7 @@ headroom. Runtime graphics/synthesis differences still need a hardware soak.
 | --- | --- | --- |
 | Skiff 2.2 → Snow 0.6.3 | Real packages; OTA staging and C loader tests passed | Pending |
 | Snow 0.6.3 → Skiff 2.2 | Real packages; C loader, preserved boot head, interrupted-write/resume and unchanged-sector checks passed | Pending |
-| Snow 0.6.3 ↔ Snow 0.6.3 | Real packages in both directions; no new version lock found | Pending |
+| Snow 0.6.2 ↔ Snow 0.6.3 | Real packages in both directions; no new version lock found | Pending |
 | Factory V15/V16 → Snow | Real vendor package bootstrap heads used by the C loader tests; head remains intact | Pending |
 | Snow → factory V15/V16 | Real vendor package validation/staging and matching-head checks passed | Vendor loader execution on a unit is pending |
 | Saved Snow data → Skiff → Snow | Released WASM builds boot, respond to PLAY and render finite audio with persisted flash | Music-format compatibility is not asserted |
