@@ -20,6 +20,7 @@ for(const version of ['015','016']){
 }
 const html=fs.readFileSync(path.join(dir,'factory.html'),'utf8');
 assert(html.includes('data-install-mode="factory"')&&!/[\u0400-\u04ff]/.test(html));
+assert(html.includes('src="app.js?v='),'factory page must not run the cached pre-factory Snow installer');
 for(const phrase of ['V15 startup head','V16 head','SHA-256','backup','M-VAVE','Install factory firmware'])assert(html.includes(phrase),phrase);
 const elements=new Map([...html.matchAll(/<[^>]+id="([^"]+)"[^>]*>/g)].map(([tag,id])=>[id,{disabled:/\bdisabled\b/.test(tag),hidden:/\bhidden\b/.test(tag),checked:false,textContent:'',value:0,files:[]}]));
 const el=id=>{assert(elements.has(id),id);return elements.get(id);};
@@ -45,6 +46,7 @@ const context={console,Uint8Array,Date,Blob,setTimeout:()=>0,
  fetch:async()=>{fetches++;throw new Error('Factory page must not fetch a Snow package');},
  Updater:UIUpdater,InstallSession:UISession,verifyFactoryPackage,stockRefusal};
 const app=fs.readFileSync(path.join(dir,'app.js'),'utf8').replace(/^import .*;\n/gm,'');
+assert(fs.readFileSync(path.join(dir,'app.js'),'utf8').includes('./core.js?v='),'factory-capable core must bypass an older cached module');
 await vm.runInNewContext('(async()=>{'+app+'\n})()',context);
 assert.equal(midiRequests,0);assert.equal(fetches,0);assert(el('connect').disabled&&el('install').disabled);
 async function file(bytes){el('factory-file').files=[{size:bytes.length,arrayBuffer:async()=>bytes.slice().buffer}];await el('factory-file').onchange();}

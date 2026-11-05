@@ -110,7 +110,7 @@ def main():
     for name in ("LICENSE", "LICENSING.md"):
         shutil.copy(ROOT / name, OUT / name)
     source = Path(os.environ.get("SNOW_SOURCE_DIR", ROOT))
-    metadata = {"stage":"Snow three-panel HOME, reference pixel icons and channel performance controls", "version":VERSION, "source_commit":subprocess.check_output(["git","rev-parse","HEAD"],cwd=source,text=True).strip(),
+    metadata = {"stage":"Snow runtime candidate: two-core DSP, idle FX sleep and factory recovery", "version":VERSION, "source_commit":subprocess.check_output(["git","rev-parse","HEAD"],cwd=source,text=True).strip(),
                 "source_dirty":bool(subprocess.check_output(["git","status","--porcelain"],cwd=source,text=True).strip()),
                 "package_sha256":package_hash}
     (OUT / "build.json").write_text(json.dumps(metadata,indent=2)+"\n")
