@@ -2,9 +2,9 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
 const bytes = fs.readFileSync(process.argv[2]);
-async function boot() {
+async function boot(flash) {
   const {instance} = await WebAssembly.instantiate(bytes, {});
-  const x=instance.exports; x._initialize(); x.web_nor_erase(); x.web_boot(); return x;
+  const x=instance.exports; x._initialize(); x.web_nor_erase(); if(flash)new Uint8Array(x.memory.buffer,x.web_nor(),x.web_nor_size()).set(flash); x.web_boot(); return x;
 }
 function render(x,ms) { let peak=0, hash=0; for(let i=0;i<ms*44.1;i+=128) { x.web_render(128); for(const s of new Float32Array(x.memory.buffer,x.web_out_l(),128)) { assert(Number.isFinite(s)); peak=Math.max(peak,Math.abs(s)); hash=(Math.imul(hash,31)+Math.round(s*32768))|0; } } return {peak,hash}; }
 const splash=await boot();const screen=x=>Array.from(new Uint16Array(x.memory.buffer,x.web_screen(),240*240));
@@ -185,3 +185,18 @@ assert.equal(home.web_snow_param_base(5,mode),1);assert.equal(home.web_snow_home
 home.web_buttons(1<<6);render(home,70);home.web_buttons((1<<6)|(1<<13));render(home,70);home.web_buttons(1<<6);render(home,70);home.web_buttons(0);render(home,100);assert.equal(home.web_snow_param_base(5,mode),0);
 assert.equal(home.web_snow_tempo_get(),tempo);
 console.log('WASM HOME PASSED: three SELECT panels, exact detent counts for four generators on six channels, preserved focus/BPM and HOME+OCT+ N/CHO');
+
+// A real persisted old session must not override CH's required startup release.
+const saved=await boot();render(saved,1800);
+const release=find('AMP ADSR','RELEASE'),sus=find('AMP ADSR','SUSTAIN');
+assert(release>=0&&sus>=0);
+const twoBar=saved.web_snow_param_value(5,release);
+saved.web_snow_set(5,release,17);saved.web_snow_set(0,release,29);saved.web_snow_set(5,sus,93);
+render(saved,4000);assert(saved.web_flash_writes_count()>0);
+const restored=await boot(new Uint8Array(saved.memory.buffer,saved.web_nor(),saved.web_nor_size()).slice());render(restored,1800);
+assert.equal(restored.web_snow_param_value(5,release),twoBar);
+assert.equal(restored.web_snow_param_value(0,release),29);
+assert.equal(restored.web_snow_param_value(5,sus),93);
+for(let i=0;i<30;i++){restored.web_snow_random_sound(5);assert.equal(restored.web_snow_param_value(5,release),twoBar);}
+restored.web_snow_set(5,release,103);restored.web_snow_random_sound(5);assert.equal(restored.web_snow_param_value(5,release),103);
+console.log('CH STARTUP RELEASE PASSED: actual persisted session reboot restores 2BAR on CH only; EDIT random keeps release and manual edits remain available.');

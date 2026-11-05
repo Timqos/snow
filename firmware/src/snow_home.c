@@ -8,6 +8,13 @@ static void snow_text_big(int32_t x,int32_t y,const char *s,uint16_t ink,uint32_
     for(uint32_t n=0;*s&&n<max;n++,x+=12){uint32_t c=(uint8_t)*s++;if(c>='a'&&c<='z')c-=32;if(c<32||c>95)c='?';
         for(uint32_t row=0;row<7;row++)for(uint32_t b=0;b<5;b++)if((SN_FONT[c-32][row]>>(4-b))&1u)cv_rect(x+(int32_t)b*2,y+(int32_t)row*2,2,2,ink);}
 }
+/* Keep even P16 readable inside the existing 27-pixel badge. */
+static void snow_home_badge(int32_t x,const char *s)
+{
+    uint32_t n=str_len(s),w=n>2u?8u:10u;int32_t left=x+(27-(int32_t)(n*(w+1u)-1u))/2;
+    for(uint32_t i=0;i<n;i++)for(uint32_t y=0;y<7;y++)for(uint32_t b=0;b<w;b++)
+        if((SN_FONT[(uint8_t)s[i]-32u][y]>>(4u-b*5u/w))&1u)cv_rect(left+(int32_t)(i*(w+1u)+b),9+(int32_t)y*2,1,2,T_THEME);
+}
 static uint32_t snow_home_percent(const track_t *t,uint32_t id)
 {
     int32_t v=motion_base_value(t,id);
@@ -57,13 +64,13 @@ static void snow_home_draw(void)
         /* Two strips reuse the existing 240x138 canvas. No new framebuffer. */
         for(uint32_t tile=0;tile<2;tile++){
         cv_begin(240,95,T_BG);cv_oy=-(int32_t)(tile*95u);
-        cv_rect(4,4,23,25,T_SURF);snow_text(10,13,abbr[k],T_THEME,2);
+        cv_rect(4,4,23,25,T_SURF);snow_text_big(5,9,abbr[k],T_THEME,2);
         for(uint32_t j=0;j<4;j++){
             int32_t x=31+(int32_t)j*43;char value[12];str_cpy(value,mix_names[j],sizeof value);fmt_int(value+3,(int32_t)snow_home_percent(t,mix_ids[j]));str_cpy(value+str_len(value),"%",sizeof value-str_len(value));
             snow_text(x,5,value,snow_home_panel==SN_HOME_MIX?T_THEME:T_TEXT,7);
             snow_pixel_bar(x,17,40,12,snow_home_percent(t,mix_ids[j]),j==1u||j==2u,T_THEME);
         }
-        char pat[5]="P";fmt_int(pat+1,(int32_t)pattern+1);cv_rect(207,4,27,25,T_SURF);snow_text(211,13,pat,T_THEME,3);
+        char pat[5]="P";fmt_int(pat+1,(int32_t)pattern+1);cv_rect(207,4,27,25,T_SURF);snow_home_badge(207,pat);
         uint32_t percent=(position+5u)/10u;
         snow_pixel_bar(5,43,47,10,percent,0,T_THEME);char pct[8];fmt_int(pct,(int32_t)percent);str_cpy(pct+str_len(pct),"%",sizeof pct-str_len(pct));snow_text(58,45,pct,T_THEME,4);
         snow_text_big(5,61,track_desc(t,id)->label,T_TEXT,7);
@@ -79,7 +86,6 @@ static void snow_home_draw(void)
             snow_pixel_bar(6,165,35,10,100u,0,T_MID);cv_rect(t->p[SN_PLAY_MODE]?9:26,167,12,6,T_THEME);
             snow_text(48,167,"N",t->p[SN_PLAY_MODE]?T_THEME:T_MID,1);snow_text(54,167,"/",T_MID,1);snow_text(60,167,"CHO",t->p[SN_PLAY_MODE]?T_MID:T_THEME,3);
         }
-        snow_text(114,160,"SELECT:PANEL",T_MID,20);
         snow_text(114,169,k==5u?"HOME+OCT+:N/CHO":"OCT +/-:OCTAVE",T_MID,20);
         const char *hint=snow_home_panel==SN_HOME_GEN?"K1:SND K2:SEQ K3:LFO K4:FX":snow_home_panel==SN_HOME_MIX?"K1:VOL K2:PAN K3:FLR K4:WDT":"K1:TONE K2:SHAPE K3:SWEEP K4:DECAY";
         if(pending)hint="PATTERN QUEUED - WAIT";

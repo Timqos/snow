@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Snow 0.7.0 — six instruments, one Snow identity
+# Snow 0.7.1 — six instruments, one Snow identity
 
-[Open the simulator](https://timqos.github.io/snow/snow/?v=070) ·
+[Open the simulator](https://timqos.github.io/snow/snow/?v=071) ·
 [Install & back up](https://timqos.github.io/snow/snow/install/)
 
 Snow is custom firmware for the M-VAVE FM-1. Its browser simulator runs the
@@ -90,7 +90,9 @@ preset files. The full scale name appears below the on-screen keyboard.
 
 ## CH: a two-bar release
 
-Every CH factory sound defaults to 2BAR release. The actual amplitude tail
+Every CH factory sound defaults to 2BAR release. Each device/simulator startup
+applies 2BAR again after restoring the previous session, so an older autosave
+cannot override that startup default. Only CH is affected. The actual amplitude tail
 follows BPM (or the measured external clock), independently of ENV SYNC;
 attack and decay retain their millisecond controls when ENV SYNC is off.
 EDIT → OCT+ preserves the release, including a manual adjustment. LFO/FX
@@ -230,6 +232,18 @@ are rendered through the C oscillators/filter/envelope: 384 distinct dry renders
 bounded peaks, low-frequency kick/bass bodies and broad high-frequency hats.
 These measurements detect regressions; they do not replace listening or certify
 every possible generated sound.
+
+## Visual refinement in 0.7.1
+
+Channel and active-pattern badges use 14-pixel-high type within the original
+header cells (including P10–P16). The first five main icons occupy 72×72
+pixels; the cassette keeps its 80×80 cell. All icon animation uses binary
+theme ink with no shaded sweep. The HH eye arches move vertically while
+keeping their shape, its mouth opens vertically, the cat’s ears follow its
+eyes, the planet and globe details turn, and the right-side arrows, flowing
+capsules, envelope and sparkle move their own parts. The SELECT:PANEL hint
+is removed; the three arrows still indicate panel focus. Audio, generators,
+parameters, project format and button mappings are unchanged.
 
 ## Risk, installation and factory return
 

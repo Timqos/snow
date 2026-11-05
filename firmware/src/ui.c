@@ -728,6 +728,10 @@ static void unit_g_boot(void)
         ui_set_rev = 2;
         settings_save();
     }
+#if FELUCCA_SNOW
+    /* Boot runs after session restore: an old autosave must not replace CH's 2BAR startup default. */
+    trk[5].p[P_REL] = SN_CH_RELEASE;
+#endif
 }
 
 static uint32_t page_first(uint32_t fam)

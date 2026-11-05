@@ -219,14 +219,26 @@ static void icon_position_tests(void)
             for(uint32_t y=0;y<100;y++)for(uint32_t x=0;x<100;x++){
                 uint16_t v=cv_px[y*100+x];hash=(hash^v)*16777619u;
                 if(x<10||x>=90||y<10||y>=90)assert(v==swap16(T_BG));
-                else {assert(v==swap16(T_BG)||v==swap16(T_THEME)||v==swap16(ux_mix(T_BG,T_THEME,70)));pixels+=v!=swap16(T_BG);}
+                else {assert(v==swap16(T_BG)||v==swap16(T_THEME));pixels+=v!=swap16(T_BG);}
             }
             assert(pixels>70);int seen=0;for(uint32_t j=0;j<p;j++)seen|=hashes[j]==hash;unique+=!seen;hashes[p]=hash;
         }
-        assert(unique>=3);printf("Reference icon %u: %u value states, fixed 80x80 bounds and theme pixels\n",kind,unique);
+        assert(unique>=3);printf("Reference icon %u: %u value states, fixed bounds and binary theme pixels\n",kind,unique);
         cv_begin(100,100,T_BG);snow_icon(50,50,kind,370,2,T_THEME);uint16_t first[10000];memcpy(first,cv_px,sizeof first);
         fm1_ms+=1234;cv_begin(100,100,T_BG);snow_icon(50,50,kind,370,2,T_THEME);assert(!memcmp(first,cv_px,sizeof first));
     }
+    /* The HH eyes translate vertically as rigid arches, never wander horizontally. */
+    for(uint32_t p=0;p<=1000;p+=10){
+        for(uint32_t eye=0;eye<2;eye++){
+            uint32_t count=0,minx=40,maxx=0,miny=40,maxy=0;
+            for(uint32_t y=7;y<=16;y++)for(uint32_t x=eye?23u:6u;x<=(eye?33u:16u);x++)if(!snow_icon_pixel(2,x,y,p)){
+                count++;if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y;
+            }
+            assert(count==33&&maxx-minx==10&&maxy-miny==5);
+            assert(minx==(eye?23u:6u)&&miny>=8&&miny<=10);
+        }
+    }
+    puts("HH rigid eye arches: fixed horizontal bounds, unchanged area/shape and only +/-1 vertical movement passed");
     go_home();snow_home_panel=SN_HOME_SYNTH;sel_set(0);trk[0].p[P_MUTE]=0;trk[0].p[P_E0]=0;snow_touch(&trk[0],P_E0,0);advance(150);
     uint16_t before[80*80];for(uint32_t y=0;y<80;y++)memcpy(before+y*80,web_fb+(107+y)*240+5,160);
     uint32_t blits=snow_home_state.card_blits;advance(1000);assert(snow_home_state.card_blits==blits);
@@ -234,9 +246,9 @@ static void icon_position_tests(void)
     uint32_t diff=0;for(uint32_t y=0;y<80;y++)for(uint32_t x=0;x<80;x++)diff+=before[y*80+x]!=web_fb[(107+y)*240+5+x];assert(diff>=16);
     for(uint32_t c=0;c<NPALETTES;c++){
         web_snow_color(c);advance(100);uint32_t pixels=0;
-        for(uint32_t y=107;y<187;y++)for(uint32_t x=5;x<85;x++){uint16_t p=web_fb[y*240+x];assert(p==swap16(T_THEME)||p==swap16(T_BG)||p==swap16(ux_mix(T_BG,T_THEME,70)));pixels+=p!=swap16(T_BG);}assert(pixels>70);
+        for(uint32_t y=107;y<187;y++)for(uint32_t x=5;x<85;x++){uint16_t p=web_fb[y*240+x];assert(p==swap16(T_THEME)||p==swap16(T_BG));pixels+=p!=swap16(T_BG);}assert(pixels>70);
     }
-    puts("Reference icons: fixed cells, local value animation, reversible positions, no idle animation, theme ink passed");
+    puts("Reference icons: fixed cells, local value animation, reversible positions, no idle animation, binary theme ink passed");
 }
 static void random_sound_tests(void)
 {
@@ -367,7 +379,7 @@ int main(void)
 {
     setvbuf(stdout,0,_IOLBF,0);web_nor_erase();web_boot();advance(SNOW_BOOT_MS+200u);
     synth_tests();generation_tests();ornament_tests();patterns_and_snapshot();fx_tests();pattern_controls();interface_tests();icon_position_tests();random_sound_tests();smart_diversity_tests();section_random_tests();
-    puts("ALL SNOW 0.6 TESTS PASSED");return 0;
+    puts("ALL SNOW TESTS PASSED");return 0;
 }
 
 #endif
