@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Snow 0.7.4-rc1 — installation and rollback audit
+# STATTIC 0.8.0-rc4 — installation and rollback audit
 
 The current candidate is **STATTIC 0.8.0-rc4** (formerly Snow). See
 [the current revision](STATTIC_RELEASE.md) for interface/sound changes and
@@ -56,25 +56,32 @@ and the published Skiff 2.2 package, SHA-256
 - No Snow-specific changes to voltage control, clock switching or GPIO register
   programming were introduced. The same build-time RAM/ROM/HAL guards pass.
 
-The candidate image is 564100 bytes, leaving 17464 bytes of the application slot.
-Snow builds now require at least 4096 bytes of flash reserve. The retained BS
-animation decoder uses 273 temporary stack bytes, with no resident image cache.
-Snow-only unused antialiased font references were removed; the selected pixel
-fonts and the Skiff baseline stay unchanged. Data+BSS use 86392/98304 bytes; the pool uses
-333680/356352; RAM code plus ramx uses 24176/24576. These are static budgets,
-not physical measurements of stack high-water marks, flash timings or audio CPU
-headroom. Runtime graphics/synthesis differences still need a hardware soak.
+The rc4 image is 575468 bytes, leaving 6096 bytes of the application slot.
+STATTIC builds require at least 4096 bytes of flash reserve. Data+BSS use
+88648/98304 bytes; the pool uses 344732/356352; RAM code plus ramx uses
+24176/24576. The generator candidates use bounded pool arrays; they do not
+allocate audio-thread memory. Other editor scopes/graphs remain available;
+unused HOME scope capture stops. These are static budgets, not physical stack,
+flash-timing or CPU-headroom measurements.
+
+The audited package SHA-256 is
+`47c3ab7b1251aa6d86d52bf1b05c6f6f106afd1c6f64e92bfc9edb8d9b2dab1d`,
+from firmware source `381dc0b02c66ec77e815c9eae0cd7a3abd1255a7`.
+Its 28 software checks passed, including the reviewed display-only loader
+change, original V15/V16 validation, interrupted writes, previous rc3
+upgrade/downgrade and sanitizer runs. The published package and 12 site files
+were checked against local hashes on 2026-11-06.
 
 ## Tested transitions
 
 | Path | Software evidence | Physical result |
 | --- | --- | --- |
-| Skiff 2.2 → Snow 0.7.4-rc1 | Real packages; OTA staging and C loader tests | Pending |
-| Snow 0.7.4-rc1 → Skiff 2.2 | Real packages; C loader, preserved boot head, interrupted-write/resume and unchanged-sector checks | Pending |
-| Snow 0.7.3 ↔ Snow 0.7.4-rc1 | Real packages in both directions; version compatibility checks | Pending |
-| Factory V15/V16 → Snow | Real vendor package bootstrap heads used by the C loader tests; head remains intact | Pending |
-| Snow → factory V15/V16 | Real vendor package validation/staging and matching-head checks passed | Vendor loader execution on a unit is pending |
-| Saved Snow data → Skiff → Snow | Released WASM builds boot, respond to PLAY and render finite audio with persisted flash | Music-format compatibility is not asserted |
+| Skiff 2.2 → STATTIC 0.8.0-rc4 | Real packages; OTA staging and C loader tests | Pending |
+| STATTIC 0.8.0-rc4 → Skiff 2.2 | Real packages; C loader, preserved boot head, interrupted-write/resume and unchanged-sector checks | Pending |
+| STATTIC 0.8.0-rc3 ↔ 0.8.0-rc4 | Real packages in both directions; version compatibility checks | Pending |
+| Factory V15/V16 → STATTIC | Real vendor package bootstrap heads used by the C loader tests; head remains intact | Pending |
+| STATTIC → factory V15/V16 | Real vendor package validation/staging and matching-head checks passed | Vendor loader execution on a unit is pending |
+| Saved STATTIC data → Skiff → STATTIC | Released WASM builds boot, respond to PLAY and render finite audio with persisted flash | Music-format compatibility is not asserted |
 
 The loader tests include corrupt payloads, changed bytes during transfer,
 foreign chip keys, writes cut short, the next session completing them, protected
@@ -98,7 +105,8 @@ power-loss certification.
 
 **Skiff:** save a complete Snow backup first, use a verified FM-1 Skiff package
 with its matching installer, then restore the pre-Snow Skiff archive using
-Skiff's tools if needed. The Snow installer installs only Snow. Its successful
+Skiff's tools if needed. The STATTIC installer writes STATTIC; its separate factory-return page accepts
+only the pinned matching V15/V16 package. Its successful
 backup/export tests do not turn it into a general firmware selector.
 
 **Factory:** return to the version matching the device's preserved startup

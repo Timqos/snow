@@ -1,0 +1,19 @@
+# STATTIC-specific loop-work limits. Every unlisted Skiff budget stays intact.
+# Reference: b713784 (0.8.0-rc3), rebuilt with the same JieLi toolchain.
+# Its package reproduced SHA-256 da1c7d9fb99da2e94e716cbd6c4f80e51894d26001726d7d3c0d3c2c67cdcc2e.
+# mix_spread and esync_coef already differ from Skiff (six independent racks,
+# performance mixer, cached tempo envelope); their rc3 costs are unchanged.
+# mix_part_body is rc3's mix_part, now wrapped with timing feedback.
+# New stattic_gen_apply is bounded parameter/event copies at BAR only; 183 is
+# the reviewed initial compiled cost. All checks retain the +10% tolerance.
+# Counts estimate static loop work, not elapsed physical FM-1 cycles.
+mix_spread 101
+esync_coef 8
+mix_part_body 1056
+snow_render 1914
+snow_amp 0
+snow_fx_process 5437
+snow_mix_begin 0
+snow_mix_sample 56
+stattic_bar 25
+stattic_gen_apply 183

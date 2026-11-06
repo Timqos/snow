@@ -55,5 +55,18 @@ counter, visible STATTIC loader branding with strict executable equivalence.
 Non-HOME editor graphs remain; HOME alone stops unused scope capture.
 Native repair contracts and ASan/UBSan passed, including generated-output
 identity, coalescing, undo/cancel/redo, group-lock capacity, actual 4+4 CH
-sequence overlap and exact split tie selection. Final full build, WASM,
-browser, exact-binary rollback audit and publication are still pending.
+sequence overlap, exact split tie selection and measured cost feedback.
+Target build, complete STATTIC native/WASM/audio checks, desktop/mobile browser,
+28 exact-binary update/rollback checks and publication passed. The 12 normal
+site URLs and root landing match local hashes (2026-11-06 18:36 UTC).
+Published: https://timqos.github.io/snow/snow/?v=080rc4
+Package SHA-256: 47c3ab7b1251aa6d86d52bf1b05c6f6f106afd1c6f64e92bfc9edb8d9b2dab1d.
+Broader upstream native functional/golden checks completed. Its target-only
+gate initially used Skiff-only limits and hit a zero-budget divide; the gate
+was corrected and retaken on the shipped ELF, using reproduced rc3 costs and
+retaining unaffected Skiff limits. UI/project/bank sanitizer runs also passed;
+the sandbox's leak-detector probe needed detect_leaks=0 before probing.
+Physical FM-1
+qualification remains pending; do not claim the load-dependent crackle fixed
+without the user's hardware result. SYSTEM CPU now exposes actual late halves
+as L, capped at 999, alongside deadline-inclusive average load.

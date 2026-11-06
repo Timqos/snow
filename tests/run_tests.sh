@@ -464,6 +464,7 @@ fi
 # ASan + UBSan: the stored-data and protocol paths, and short fuzz runs (fixed seeds: the same inputs every run)
 SAN="-O1 -g -fsanitize=address,undefined -fno-sanitize=signed-integer-overflow,shift,bounds,object-size,pointer-overflow"
 SAN="$SAN -fno-sanitize-recover=undefined -w"
+export ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0}"
 san_ok() {
     printf 'int main(void){return 0;}\n' > "$OUT/san_probe.c" &&
         ${CC%% *} $SAN -o "$OUT/san_probe" "$OUT/san_probe.c" 2>/dev/null && "$OUT/san_probe"
@@ -497,6 +498,7 @@ else
     run "ASan/UBSan fuzz: user sample slot headers -> scan -> SAMPLE / GRAIN / SLICE (1000, seed 17)" "$A/fuzz_smp" 1000 17
 fi
 
+run "regression: target budget gate rejects new work from a zero baseline" python3 tests/target_budget_test.py
 run "regression: target cost of the render loops (pi32v2 disassembly)" python3 tests/target_budget.py \
     build/felucca.dis tests/target_budget.txt
 

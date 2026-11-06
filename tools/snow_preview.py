@@ -23,6 +23,8 @@ def main():
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir(parents=True, exist_ok=True)
+    run("python3", "tests/target_budget_test.py")
+    run("python3", "tests/target_budget.py", "build/felucca.dis", "tests/target_budget.txt")
     run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/snow_boot_test", "tests/snow_boot_test.c", "-lm")
     run(str(ROOT / "build/snow_boot_test"))
     run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/snow_test", "tests/snow_test.c", "-lm")

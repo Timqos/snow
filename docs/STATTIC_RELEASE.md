@@ -173,8 +173,31 @@ The target build fits all enforced budgets (pre-publication build):
 
 The loader display alone is renamed, with normalized executable equality
 checked. The startup head, flash map, USB/model checks, update protocol and
-hardware register code are unchanged. The software update/rollback audit
-must be rerun for the published binary, including original V15/V16 recovery.
+hardware register code are unchanged. The published binary passed 28 software update/rollback checks, including
+original V15/V16 validation and rc3 upgrade/downgrade. Its exact package hash is
+`47c3ab7b1251aa6d86d52bf1b05c6f6f106afd1c6f64e92bfc9edb8d9b2dab1d`.
+Firmware source is `381dc0b`; the live site files and package match local
+hashes. Native, ASan/UBSan, WASM, desktop/mobile browser and factory-installer
+checks passed. The six-channel minute of generated playback peaked at 0.2024
+full scale with strong effects; that bound is not a target CPU measurement.
 No physical device is flashed by the development tests. After installing,
 check actual peak/average load, UI response and CH playback/release on the FM-1;
 do not mark the intermittent physical fault resolved on host evidence alone.
+
+## Target regression profile
+
+The broad upstream native run passed its functional/legacy golden checks.
+Its target-only gate initially compared STATTIC to Skiff's shared-effect
+architecture and also divided by a zero loop-work budget. Both pre-existing
+STATTIC differences (mix_spread 101, esync_coef 8) were reproduced from rc3,
+whose rebuilt package exactly matched its published SHA-256. The corrected
+gate now passes on the shipped rc4 ELF, retaining all unaffected Skiff limits
+and checking Snow's previously unlisted hot paths. Static weighted loop work
+falls from 1914 to 1817 in snow_render, 5437 to 5354 in snow_fx_process,
+and 42 to 29 in mix_split. These are not physical cycle measurements.
+
+The sandbox's LeakSanitizer probe initially skipped the generic sanitizer
+stage. Its default environment is corrected; dedicated STATTIC repair,
+OTA/loader, and UI/project/bank ASan+UBSan runs passed with leak detection off.
+The exact-package 28-check rollback audit remains the published binary's
+installation evidence. Physical validation is still pending.
