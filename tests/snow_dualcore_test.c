@@ -16,8 +16,14 @@ static dual_result_t render_scene(uint32_t scene,int dual,const char *mask)
     web_nor_erase();web_boot();advance(SNOW_BOOT_MS+200);
     web_snow_demo();
     if(scene)for(uint32_t k=0;k<NTRK;k++)assert(!snow_random_sound(k));
+    if(scene==2){
+        for(uint32_t k=0;k<NTRK;k++){assert(!snow_pattern_select(k,1));assert(!snow_generate(k,1));assert(!snow_pattern_select(k,0));}
+        go_home();snow_home_panel=SN_HOME_MS;
+    }
     tap(B_PLAY);assert(song.playing);
     for(uint32_t b=0;b<1400;b++){
+        if(scene==2&&b==300){for(uint32_t k=0;k<NTRK;k++)assert(!snow_pattern_select(k,1));layer_keys((1u<<2)|(1u<<13));}
+        if(scene==2&&b==1000)layer_keys((1u<<2)|(1u<<13));
         if(b==600){
             /* The other core has finished this half before panel events. */
             for(uint32_t k=0;k<NTRK;k++)trk[k].p[SN_FX_BYPASS]=1;
@@ -33,6 +39,7 @@ static dual_result_t render_scene(uint32_t scene,int dual,const char *mask)
         }
     }
     r.jobs=c1h_taken;
+    if(scene==2){for(uint32_t k=0;k<NTRK;k++)assert(web_snow_pattern_active(k)==1);assert(!perf_solo&&!trk[1].p[P_MUTE]);}
     return r;
 }
 
@@ -55,7 +62,7 @@ int main(void)
 {
     setvbuf(stdout,0,_IOLBF,0);
     static const char *const splits[]={"1","7","21","42","62","rot","auto"};
-    for(uint32_t scene=0;scene<2;scene++){
+    for(uint32_t scene=0;scene<3;scene++){
         dual_result_t reference=fork_scene(scene,0,0);
         for(uint32_t m=0;m<NELEM(splits);m++){
             dual_result_t got=fork_scene(scene,1,splits[m]);

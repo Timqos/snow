@@ -126,6 +126,8 @@ static void stattic_page_body(uint32_t page)
             uint32_t mute=(uint32_t)trk[ch].p[P_MUTE],solo=(perf_solo>>ch)&1u;
             if(mute)cv_rect(51,y-2,14,21,T_THEME);if(solo)cv_rect(79,y-2,14,21,T_THEME);
             stattic_text(53,y,"M",mute?T_INK:T_TEXT,10,17,1);stattic_text(81,y,"S",solo?T_INK:T_TEXT,10,17,1);
+            if((stattic_ms.mute>>ch)&1u)cv_frame(51,y-2,14,21,mute?T_TEXT:T_THEME);
+            if((stattic_ms.solo>>ch)&1u)cv_frame(79,y-2,14,21,solo?T_TEXT:T_THEME);
             uint32_t pct=snow_home_percent(&trk[ch],P_LEVEL);snow_pixel_bar(100,y-1,92,17,pct,0,T_TEXT);
             char v[5];fmt_int(v,(int32_t)pct);str_cpy(v+str_len(v),"%",sizeof v-str_len(v));stattic_text(196,y,v,T_TEXT,8,17,4);
         }
@@ -153,6 +155,7 @@ static void snow_home_draw(void)
     for(uint32_t ch=0;ch<NTRK;ch++)sig=(sig^snow_touch_state[ch].serial^(uint32_t)trk[ch].p[P_LEVEL]^(uint32_t)trk[ch].p[P_MUTE]<<16^snow_pattern_current(ch))*16777619u;
     if(page<3u)sig^=stattic_scroll[page]*104729u+stattic_focus[page]*349u;
     sig^=(uint32_t)t->p[SN_PLAY_MODE]*32993u;
+    sig^=((uint32_t)stattic_ms.mute|((uint32_t)stattic_ms.solo<<6))*63997u;
     sig^=(uint32_t)(ui.msg_t!=0)*301u+(uint32_t)(ui.undo_w!=0)*619u;
     if((sig!=snow_home_state.body||ui.force)&&(fresh||fm1_ms-snow_home_state.body_ms>=50u)){
         snow_home_state.body=sig;snow_home_state.body_ms=fm1_ms;snow_home_state.card_blits++;

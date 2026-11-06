@@ -8,9 +8,12 @@ Built on Skiff 2.2 and Felucca. Previously named Snow.
 · [Install STATTIC](https://timqos.github.io/snow/snow/install/)
 · [Factory firmware](https://timqos.github.io/snow/snow/install/factory.html)
 
-The 0.8.0-rc2 candidate introduces five HOME pages: sound, generation,
+The 0.8.0-rc3 candidate introduces five HOME pages: sound, generation,
 channel mixing, six-channel P1–P3 patterns, and MUTE/SOLO with volume.
 SELECT browses pages; the lower captions identify the physical controls.
+All six channels start at 64 steps. Four-bar generation varies bars 2 and 4;
+bar 1 may repeat in bar 3. During PLAY, patterns and HOME mute/solo wait for
+the next shared transport bar; stopped changes apply immediately.
 Large native-pixel text, an enlarged transport strip and the supplied
 vertically scrolling static artwork replace the crowded HOME layout.
 

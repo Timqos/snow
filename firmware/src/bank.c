@@ -1120,7 +1120,7 @@ static uint32_t list_sig(uint32_t k)
  * empty entry (song_poll: a rest), (#28) any on a REST: silence, no automation, the track's own LEN DIV SWING GATE DIR,
  * so the rest's REPS count passes of the length the track has; on no pattern (trk_pid 0), so nothing is kept unless it
  * was recorded into */
-static int stage_entry(uint32_t k, uint32_t e, uint32_t m, uint32_t adv, uint32_t reps)
+static int stage_entry_copy(uint32_t k, uint32_t e, uint32_t m, uint32_t adv, uint32_t reps, int arm)
 {
     track_t *t = &trk[k];
     launch_t *q = &launch_q[k];
@@ -1162,9 +1162,13 @@ static int stage_entry(uint32_t k, uint32_t e, uint32_t m, uint32_t adv, uint32_
     q->same = (uint8_t)same;
     q_lsig[k] = list_sig(k);
     RING_PUBLISH();
-    q->armed = 1;
+    q->armed = (uint8_t)arm;
     bk.gen++;
     return full ? 2 : 0;
+}
+static int stage_entry(uint32_t k, uint32_t e, uint32_t m, uint32_t adv, uint32_t reps)
+{
+    return stage_entry_copy(k,e,m,adv,reps,1);
 }
 /* (2.0, #44) a LOOP launch of entry e for track k, playing: on a chain's part before its last, it waits for the chain's
  * end as for a pattern's (song_poll stages it on the last part), one of the user's staged before dropped, the chain's

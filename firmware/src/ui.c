@@ -752,6 +752,7 @@ static void unit_g_boot(void)
 #if FELUCCA_SNOW
     /* Boot runs after session restore: an old autosave must not replace CH's 2BAR startup default. */
     trk[5].p[P_REL] = SN_CH_RELEASE;
+    for(i=0;i<NTRK;i++)trk[i].p[P_SLEN]=64;     /* All six instruments start with a four-bar, 64-step sequence. */
 #endif
 }
 

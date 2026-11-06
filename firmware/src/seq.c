@@ -1334,6 +1334,9 @@ static void seq_stop(void)
 {
     uint32_t i;
     song.playing = 0;
+#if FELUCCA_SNOW
+    stattic_ms_apply();                           /* STOP resolves HOME's pending mixer changes immediately. */
+#endif
     thr_out = 0;                                   /* (Skiff) the throws back at once (throw.c) */
     cin_left = 0;                                  /* (a count-in: cancelled, nothing recorded) */
     cin_flush = 0;

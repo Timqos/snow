@@ -52,6 +52,18 @@ CLEAR ALL clears patterns of all six channels. Avoid deleting saved sound
 settings as a side effect. Retain the bank/storage format for old backups.
 All six channels share page 5, with separate selection and mute/solo states.
 
+Confirmed follow-up: during PLAY, pattern changes and HOME page-5 mute/unmute
+and solo/unsolo all commit on the next shared transport BAR. This supersedes
+the proposed 1/8 grid. Channel length, division and swing must not move that
+boundary. RANDOM PATT publishes its six-channel group atomically; a pending
+M/S press can be cancelled by pressing again. STOP applies pending changes.
+
+All six channels boot with LENGTH 64, even after an older session restore.
+Generation uses the whole current length. At 64, make a varied four-bar phrase,
+never clone the first 32 steps into the last 32. Bar 1 may repeat in bar 3;
+bars 2 and 4 vary. Keep explicit silence/full-density and manual melody-only
+rhythm ownership. Saved-pattern length remains editable after startup.
+
 The user supplied a new STATTIC logo: nine stepped horizontal ribbons
 forming a circular mark. Use it on startup and web/installation branding.
 
@@ -89,5 +101,6 @@ recovery protections; do not call a browser result a hardware measurement.
 Five HOME pages, physical controls, native art, branding/new logo, kick attack,
 stronger dedicated FX and expanded melodic/rhythmic generation are implemented.
 Native, WASM, one-minute playback and real Chromium preflight checks pass.
-Final clean-source update/rollback audit and publication are the remaining
-software steps. Physical CH peak-load/release retesting remains separate.
+Each published candidate requires its own clean-source update/rollback audit
+and live package-hash verification. Physical CH peak-load/release retesting
+remains separate.

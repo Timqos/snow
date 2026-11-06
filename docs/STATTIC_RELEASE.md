@@ -1,8 +1,29 @@
-# STATTIC 0.8.0-rc2
+# STATTIC 0.8.0-rc3
 
 Experimental FM-1 candidate, previously named Snow. The five user HOME
 mockups in `assets/stattic-home/` and the confirmed control captions are
 the interface reference. See [the recorded agreement](STATTIC_WORK_PLAN.md).
+
+## Shared bar and four-bar phrases
+
+HOME pattern launches and page-5 mute/unmute/solo/unsolo now wait for the next
+shared transport bar during PLAY. The audio transport commits them before
+any channel ticks, including tracks with unequal lengths, divisions and swing.
+Incoming patterns start at their first step in the same audio block. RANDOM
+PATT prepares outside the interrupt and publishes its group in one short guard.
+USB/TRS clock uses the same externally clocked transport. STOP applies pending
+commands immediately; repeating a pending M/S press cancels it. Outlined M/S
+cells show pending state; filled cells continue showing the active state.
+Leaving HOME retains the queue; project loading clears it and transient solo.
+
+All six channels boot with LENGTH 64, including restored older sessions.
+64-step generation creates four varied bars; only bar 1 may repeat in bar 3.
+Bars 2 and 4 differ rhythmically, with melodic/harmonic development across the
+phrase. Explicit 0/100% density and melody-only rhythm preservation remain.
+Native tests cover 128 phrases per role across five densities, shared-bar
+launches at 90–180 BPM, external USB clock, replacement/cancel, stopped
+commands and project restore. WASM tests exercise the physical controls and
+an actual restored-short-session reboot.
 
 ## Interface and identity
 
@@ -88,8 +109,8 @@ The target build fits all enforced budgets (pre-publication build):
 
 | Region | Used | Limit | Free |
 | --- | ---: | ---: | ---: |
-| App slot | 570,700 B | 581,564 B | 10,864 B |
-| Data + BSS | 86,584 B | 98,304 B | 11,720 B |
+| App slot | 572,300 B | 581,564 B | 9,264 B |
+| Data + BSS | 86,600 B | 98,304 B | 11,704 B |
 | Pool | 333,680 B | 356,352 B | 22,672 B |
 | RAM code + ramx | 24,176 B | 24,576 B | 400 B |
 

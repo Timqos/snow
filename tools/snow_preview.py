@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "build/snow-preview"
-RELEASE = "0.8.0-rc2"
+RELEASE = "0.8.0-rc3"
 VERSION = f"v{RELEASE}-stattic"
 
 
@@ -31,6 +31,8 @@ def main():
     run(str(ROOT / "build/snow_sel_test"))
     run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/snow_home_test", "tests/snow_home_test.c", "-lm")
     run(str(ROOT / "build/snow_home_test"))
+    run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/stattic_transport_test", "tests/stattic_transport_test.c", "-lm")
+    run(str(ROOT / "build/stattic_transport_test"))
     run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/snow_runtime_test", "tests/snow_runtime_test.c", "-lm")
     run(str(ROOT / "build/snow_runtime_test"))
     run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/stattic_playback_test", "tests/stattic_playback_test.c", "-lm")

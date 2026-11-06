@@ -708,8 +708,10 @@ EXPORT const char *web_snow_preset_name(uint32_t channel,uint32_t preset) { retu
 EXPORT uint32_t web_snow_preset_count(uint32_t channel) { return channel<NTRK?10u:0u; }
 EXPORT const char *web_snow_role(uint32_t channel) { return channel<NTRK?SN_ROLES[channel]:""; }
 EXPORT uint32_t web_snow_pattern_used(uint32_t channel,uint32_t slot) { return snow_pattern_used(channel,slot); }
-EXPORT uint32_t web_snow_pattern_active(uint32_t channel) { return channel<NTRK && lists.cur[channel]<NENT?lists.cur[channel]:0; }
+EXPORT uint32_t web_snow_pattern_active(uint32_t channel) { return channel<NTRK?(launch_q[channel].done?launch_q[channel].slot:lists.cur[channel]<NENT?lists.cur[channel]:0):0; }
 EXPORT uint32_t web_snow_pattern_pending(uint32_t channel) { return channel<NTRK?bank_next(channel):255; }
+EXPORT uint32_t web_snow_transport_step(void) { return launch_steps; }
+EXPORT uint32_t web_snow_solo_get(void) { return perf_solo; }
 EXPORT uint32_t web_snow_scene(uint32_t vary) { return snow_generate_scene(vary!=0); }
 EXPORT uint32_t web_snow_genparm(uint32_t all) { return all?snow_parameter_scene():snow_generate_parameters(song.sel); }
 EXPORT uint32_t web_snow_clear(uint32_t all) { return snow_clear_sequence(all!=0); }

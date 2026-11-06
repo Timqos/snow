@@ -644,7 +644,11 @@ static void layer_keys(uint32_t keys)
 #if FELUCCA_SNOW
             if(home_ms){
                 uint32_t ch=key_black(k)?key_place(k):glo_white(k);
-                if(ch<NTRK){if(key_black(k))stattic_solo^=(uint8_t)(1u<<ch);else trk[ch].p[P_MUTE]=(int16_t)!trk[ch].p[P_MUTE];}
+                if(ch<NTRK){
+                    int solo=key_black(k);fm1_irq_off();stattic_ms_toggle(ch,solo);fm1_irq_on();
+                    if(song.playing)ui_message((solo?stattic_ms.solo:stattic_ms.mute)&(1u<<ch)?
+                        (solo?"SOLO AT NEXT BAR":"MUTE AT NEXT BAR"):(solo?"SOLO CANCELLED":"MUTE CANCELLED"));
+                }
                 ui.force=1;continue;
             }
 #endif
@@ -654,9 +658,10 @@ static void layer_keys(uint32_t keys)
     for (k = 0; k < 27u; k++)
         if ((lys.solo >> k) & 1u)
             s |= 1u << glo_white(k);               /* ((Skiff phase 6) the track it solos) */
-    perf_solo = (uint8_t)s;
 #if FELUCCA_SNOW
-    perf_solo|=stattic_solo;
+    fm1_irq_off();stattic_ms.glo=(uint8_t)s;perf_solo=(uint8_t)s|stattic_solo;fm1_irq_on();
+#else
+    perf_solo = (uint8_t)s;
 #endif
     lys.fill &= kb_layer;                               /* (Skiff) FILL: while its key is held in the layer */
     seq_fill = lys.fill != 0u;
@@ -769,7 +774,7 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
     mine = oct & lys.oct;
 #if FELUCCA_SNOW
     if(lys.l==LAYER_SEQ && mine) {
-        int rc=stattic_random_patterns();ui_message(rc==2?"WAIT PATTERN LAUNCH":rc==3?"NO OTHER PATTERNS":rc?"PATTERNS FULL":"RANDOM PATT");
+        int rc=stattic_random_patterns();ui_message(rc==2?"WAIT PATTERN LAUNCH":rc==3?"NO OTHER PATTERNS":rc==5?"AUTOMATION FULL":rc?"PATTERNS FULL":"RANDOM PATT");
         lys.oct=0;ui.force=1;return oct&~mine;
     }
 #endif

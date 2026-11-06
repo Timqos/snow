@@ -28,7 +28,8 @@ static uint8_t snow_home_panel;
 static uint32_t snow_home_gen[NTRK][4];
 static uint32_t stattic_scroll[3];
 static const uint8_t stattic_art_height[3]={84,78,78};
-static uint8_t stattic_focus[3],stattic_solo;
+static uint8_t stattic_focus[3];
+static volatile uint8_t stattic_solo;
 static void stattic_turn(uint32_t knob,int32_t detents)
 {
     if(snow_home_panel<3u){

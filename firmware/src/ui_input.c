@@ -2497,7 +2497,7 @@ static void ui_input(void)
 #if FELUCCA_SNOW
             if(ui.home&&!lay&&!shift_held()&&!ui.undo_w&&(snow_home_panel==SN_HOME_GEN||snow_home_panel==SN_HOME_PAT)){
                 int rc=snow_home_panel==SN_HOME_PAT?stattic_random_patterns():snow_clear_sequence(b==B_OCTUP);
-                ui_message(rc==2?"WAIT PATTERN LAUNCH":rc==3?"NO OTHER PATTERNS":rc?"PATTERNS FULL":snow_home_panel==SN_HOME_PAT?"RANDOM PATT":b==B_OCTUP?"ALL CHANNELS CLEARED":"PATTERN CLEARED");break;
+                ui_message(rc==2?"WAIT PATTERN LAUNCH":rc==3?"NO OTHER PATTERNS":rc==5?"AUTOMATION FULL":rc?"PATTERNS FULL":snow_home_panel==SN_HOME_PAT?"RANDOM PATT":b==B_OCTUP?"ALL CHANNELS CLEARED":"PATTERN CLEARED");break;
             }
 #endif
             if (act_cols() || layer_set_open() || ui.ml.on)   /* action pages: enter / back (below); SET layers: OCT-;

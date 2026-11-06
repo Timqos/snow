@@ -191,6 +191,8 @@ console.log('WASM HOME PASSED: five SELECT pages, exact detent counts for four g
 {
 const saved=await boot();render(saved,1800);
 const release=find('AMP ADSR','RELEASE'),sus=find('AMP ADSR','SUSTAIN');
+const length=find('SEQUENCE','LENGTH');assert(length>=0);
+for(let ch=0;ch<6;ch++){assert.equal(saved.web_snow_param_value(ch,length),64);saved.web_snow_set(ch,length,16+ch);}
 assert(release>=0&&sus>=0);
 const twoBar=saved.web_snow_param_value(5,release);
 saved.web_snow_set(5,release,17);saved.web_snow_set(0,release,29);saved.web_snow_set(5,sus,93);
@@ -199,7 +201,35 @@ const restored=await boot(new Uint8Array(saved.memory.buffer,saved.web_nor(),sav
 assert.equal(restored.web_snow_param_value(5,release),twoBar);
 assert.equal(restored.web_snow_param_value(0,release),29);
 assert.equal(restored.web_snow_param_value(5,sus),93);
+for(let ch=0;ch<6;ch++)assert.equal(restored.web_snow_param_value(ch,length),64);
 for(let i=0;i<30;i++){restored.web_snow_random_sound(5);assert.equal(restored.web_snow_param_value(5,release),twoBar);}
 restored.web_snow_set(5,release,103);restored.web_snow_random_sound(5);assert.equal(restored.web_snow_param_value(5,release),103);
 console.log('CH STARTUP RELEASE PASSED: actual persisted session reboot restores 2BAR on CH only; EDIT random keeps release and manual edits remain available.');
+console.log('64-STEP STARTUP PASSED: every channel boots with LENGTH 64, including a persisted shorter session.');
+}
+
+// Real panel requests must reach the same bar in the WASM audio transport.
+{
+ const q=await boot();render(q,1800);q.web_snow_tempo(180);
+ const length=find('SEQUENCE','LENGTH'),mute=find('VOICE / MIX','MUTE');assert(length>=0&&mute>=0);
+ for(let ch=0;ch<6;ch++){
+  assert.equal(q.web_snow_generate(ch,1),0);
+  const grid=Array.from(new Uint16Array(q.memory.buffer,q.web_snow_grid(ch),64));
+  assert(grid.slice(32).some(v=>v&256));assert.notDeepEqual(grid.slice(0,32),grid.slice(32));
+  assert.equal(q.web_snow_param_value(ch,length),64);q.web_snow_pattern(ch,1);q.web_snow_pattern(ch,0);
+ }
+ const press=mask=>{q.web_buttons(mask);render(q,40);q.web_buttons(0);render(q,40);};
+ const until=step=>{let ms=0;while(q.web_snow_transport_step()<step&&ms<10000){render(q,3);ms+=3;}assert.equal(q.web_snow_transport_step(),step);};
+ q.web_enc(0,3);render(q,50);assert.equal(q.web_snow_home_panel(),3);press(1<<10);until(3);
+ for(const enc of [3,4,5,6,1,2]){q.web_enc(enc,1);render(q,12);}
+ q.web_enc(0,1);render(q,30);q.web_keys((1<<2)|(1<<13));render(q,40);q.web_keys(0);render(q,30);
+ for(let ch=0;ch<6;ch++){assert.equal(q.web_snow_pattern_active(ch),0);assert.equal(q.web_snow_pattern_pending(ch),1);}
+ assert.equal(q.web_snow_param_value(1,mute),0);assert.equal(q.web_snow_solo_get(),0);
+ until(15);for(let ch=0;ch<6;ch++)assert.equal(q.web_snow_pattern_active(ch),0);
+ until(16);for(let ch=0;ch<6;ch++){assert.equal(q.web_snow_pattern_active(ch),1);assert.equal(q.web_snow_position(ch),0);}
+ assert.equal(q.web_snow_param_value(1,mute),1);assert.equal(q.web_snow_solo_get(),32);
+ q.web_keys((1<<2)|(1<<13));render(q,40);q.web_keys(0);render(q,30);
+ until(31);assert.equal(q.web_snow_param_value(1,mute),1);assert.equal(q.web_snow_solo_get(),32);
+ until(32);assert.equal(q.web_snow_param_value(1,mute),0);assert.equal(q.web_snow_solo_get(),0);
+ console.log('WASM BAR LAUNCH PASSED: six physical pattern selectors and HOME 5 mute/unmute/solo/unsolo switch together at the next shared bar; 64-step generation covers both halves.');
 }

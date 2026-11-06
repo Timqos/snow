@@ -38,6 +38,29 @@ static uint32_t snow_pulses(uint32_t *r,uint32_t low,uint32_t high,uint32_t len,
     return density<=50u?(base*density+25u)/50u:base+((len-base)*(density-50u)+25u)/50u;
 }
 static uint64_t snow_hits(const step_t *s,uint32_t len){uint64_t m=0;for(uint32_t i=0;i<len;i++)if(s[i].time==ST_NOTE&&s[i].n)m|=(uint64_t)1u<<i;return m;}
+/* Four independently varied bars. Only bar 1 -> bar 3 may repeat. Retain
+ * explicit 0/100% density and MELODY's user-owned rhythm in snow_phrase. */
+static void snow_four_bars(step_t *out,uint32_t channel,uint32_t *rng,int repeat13)
+{
+    uint32_t masks[4];
+    for(uint32_t b=0;b<4;b++){
+        step_t *bar=out+b*16u;
+        if(b==2u&&repeat13)memcpy(bar,out,16u*sizeof *out);
+        uint32_t start=snow_int(rng,0,15);
+        for(uint32_t attempt=0;attempt<17u;attempt++){
+            uint32_t mask=(uint32_t)snow_hits(bar,16),same=!mask;
+            for(uint32_t p=0;p<b;p++)if(!(b==2u&&p==0u)&&mask==masks[p])same=1;
+            if(!same){masks[b]=mask;break;}
+            uint32_t at=(start+attempt*5u)&15u;
+            if(channel==5u)at=(at&3u)*4u;
+            if(channel==0u&&!at)at=15u;      /* Keep the kick's downbeat foundation. */
+            memset(&bar[at],0,sizeof bar[at]);
+            if(!(mask&(1u<<at))){bar[at].time=ST_NOTE;bar[at].n=1;bar[at].vel=(uint8_t)snow_int(rng,channel==2u?45:80,115);}
+            else bar[at].time=ST_REST;
+        }
+        masks[b]=(uint32_t)snow_hits(bar,16);
+    }
+}
 static void snow_phrase(track_t *t,uint32_t channel,uint32_t seed,step_t *out)
 {
     uint32_t len=(uint32_t)clamp(t->p[P_SLEN],1,NSTEP),density=(uint32_t)t->p[SN_G_DENS],kind=(uint32_t)t->p[SN_G_KIND];
@@ -95,6 +118,8 @@ static void snow_phrase(track_t *t,uint32_t channel,uint32_t seed,step_t *out)
         if(!density)for(uint32_t i=0;i<len;i++){memset(&out[i],0,sizeof out[i]);out[i].time=ST_REST;}
         if(density==100)for(uint32_t i=0;i<len;i++){out[i].time=ST_NOTE;out[i].n=1;out[i].vel=(uint8_t)snow_int(&rng,55,120);}
     }
+    int repeat13=0;
+    if(!preserve&&len==64u&&density>0&&density<100){repeat13=snow_prob(&rng,35);snow_four_bars(out,channel,&rng,repeat13);}
     int32_t walk=0,span=clamp(t->p[SN_G_SPAN],1,24);uint32_t note_index=0;
     static const int8_t progressions[8][4]={{0,5,3,4},{0,3,4,0},{0,4,5,3},{0,6,3,4},{0,2,5,4},{0,3,0,4},{0,5,1,4},{0,4,3,6}};
     uint32_t progression=snow_int(&rng,0,7),inversion=snow_int(&rng,0,2);
@@ -144,6 +169,7 @@ static void snow_phrase(track_t *t,uint32_t channel,uint32_t seed,step_t *out)
             if(channel==5u)out[i].vel=(uint8_t)snow_int(&rng,78,112);
         }
     }
+    if(repeat13)memcpy(out+32,out,16u*sizeof *out);
 }
 static void snow_remove_auto(motion_store_t *m,uint32_t channel)
 {
@@ -238,6 +264,26 @@ static void snow_sequence_poll(void)
         if(was && pass>1u && mode && (pass-1u)%(1u<<(mode-1u))==0u)(void)snow_generate(k,1);
     }
 }
+/* Decode/stage outside the audio interrupt, then publish a complete group
+ * under one short guard. RANDOM PATT cannot split across two bar lines. */
+static int stattic_pattern_prepare(uint32_t channel,uint32_t slot,uint32_t *ready)
+{
+    launch_t *q=&launch_q[channel];uint32_t b0,b1;
+    if(ent_block(channel,slot,&b0,&b1))slot=b0;
+    q->armed=0;chain_go[channel]=0;RING_PUBLISH();bank_poll_trk(channel);
+    if(bank_cur(channel)==slot)return 0;       /* Selecting the playing pattern cancels the queued change. */
+    int rc=stage_entry_copy(channel,slot,ST_LAUNCH_BAR,0,0,0);
+    if(!(rc&~2))*ready|=1u<<channel;
+    return rc;
+}
+static void stattic_patterns_arm(uint32_t ready)
+{
+    fm1_irq_off();uint32_t at=launch_at(LAUNCH_BAR);
+    for(uint32_t k=0;k<NTRK;k++)if((ready>>k)&1u){
+        launch_q[k].at=at;RING_PUBLISH();launch_q[k].armed=1;
+    }
+    fm1_irq_on();
+}
 static int snow_pattern_select(uint32_t channel,uint32_t slot)
 {
     if(channel>=NTRK || slot>=ST_PATTERNS)return 1;
@@ -246,7 +292,11 @@ static int snow_pattern_select(uint32_t channel,uint32_t slot)
     if(!ent_on(channel,slot)) {
         int rc=song_put(channel,slot,SPICK_NEW);if(rc)return rc;
     }
-    return entry_go(channel,slot);
+    if(!song.playing)return entry_go(channel,slot);
+    uint32_t ready=0;int rc=stattic_pattern_prepare(channel,slot,&ready);
+    stattic_patterns_arm(ready);
+    ui_message(rc==4?"PATTERNS FULL":rc==2?"AUTOMATION FULL":ready?"PATTERN AT NEXT BAR":"PATTERN CANCELLED");
+    return rc;
 }
 static uint32_t snow_pattern_current(uint32_t channel)
 {
@@ -272,11 +322,16 @@ static void snow_pattern_knob(uint32_t channel,int32_t steps)
 static int stattic_random_patterns(void)
 {
     for(uint32_t k=0;k<NTRK;k++)if(bank_next(k)<NENT)return 2;
-    uint32_t changed=0;
+    uint32_t changed=0,ready=0,full=0;
     for(uint32_t k=0;k<NTRK;k++){
         uint32_t choices[ST_PATTERNS],n=0,current=snow_pattern_current(k);
         for(uint32_t p=0;p<ST_PATTERNS;p++)if(p!=current&&ent_on(k,p))choices[n++]=p;
-        if(n){int rc=snow_pattern_select(k,choices[rng()%n]);if(rc)return rc;changed++;}
+        if(n){
+            uint32_t slot=choices[rng()%n];
+            int rc=song.playing?stattic_pattern_prepare(k,slot,&ready):snow_pattern_select(k,slot);
+            if(rc&~2)return rc;full|=rc==2;changed++;
+        }
     }
-    ui.force=1;return changed?0:3;
+    if(song.playing)stattic_patterns_arm(ready);
+    ui.force=1;return changed?(full?5:0):3;
 }

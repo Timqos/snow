@@ -14,6 +14,7 @@ assert(html.includes('href="install/"'));assert(html.includes('GEN RND'));assert
 assert(html.includes('href="install/factory.html"')&&html.includes('Install factory firmware'));
 for(const text of ['HOME → SELECT','HOME 1/5 → SOUND','HOME 2/5 → GENERATE','HOME 3/5 → MIXER','HOME 4/5 → PATTERN SW','HOME 5/5 → M/S VOLUME','hold OCT+ alone for 0.7 seconds','OCT+ HLD N/CHO','A means chords and N means notes','one generation','0% folds to mono','100% doubles the side','HOME SELECT never changes BPM','RANDOM PATT','SLT CH','P1–P3'])assert(html.includes(text),text);
 assert(!html.includes('HOME + OCT+ shortcut'));
+for(const text of ['LENGTH 64','next shared bar','bar 1 may repeat in bar 3','32-step half','Press again before the bar to cancel'])assert(html.includes(text),text);
 assert(!html.includes('Return to six channel cards')&&!html.includes('HOME, MIXER and PATTERNS always show all six'));
 assert(html.includes('at your own risk and responsibility')&&html.includes('install/#responsibility')&&html.includes('install/#factory-return'));
 const load=html.slice(html.indexOf('function loadFlash()'),html.indexOf('function saveFlash('));assert(load);
