@@ -195,9 +195,13 @@ pattern persistence and browser-save compatibility remain in the suite.
 
 ## Current verification
 
-The rc5 build must pass the existing target budgets, complete STATTIC
+The rc5 build passed the existing target budgets, complete STATTIC
 native/WASM/audio suite, layout sweep at default/minimum/maximum values,
 eight-entry Undo and onset-prediction contracts, and ASan/UBSan checks.
+Desktop/mobile browser checks and 28 exact-package update/rollback checks
+passed. All 12 normal site artifacts and the root landing page match local
+hashes; previous rc4 is retained. Broader upstream UI checks retain all 3,458
+golden pictures with zero layout/alignment findings.
 The exact package, source commit and update/rollback results are recorded in
 [the published build](https://timqos.github.io/snow/snow/build.json) and
 [the binary audit](https://timqos.github.io/snow/snow/update-audit.json).
