@@ -39,6 +39,12 @@ ALGORITHM and PRESETS are physical encoders (abbreviated ALG and PRS).
 | 4 Pattern switch | K1 KK; K2 SD; K3 HH; K4 PR; ALG BS; PRS CH. OCT± RANDOM PATT |
 | 5 Mute/solo & volume | First six WHITE keys toggle MUTE; first six BLACK keys toggle SOLO; K1 SLT CH; K2 VOL |
 
+Only on channel CH, HOME 1/5: hold OCT+ alone for 700 ms to toggle notes/chords
+once. No HOME modifier; a short tap changes octave on release. The helper is
+`OCT+ HLD N/CHO`. Beside CH's preset, **A** means chords and **N** means notes,
+synchronized with SEL. Other channels have no A/N letter. HOME hold still
+opens system settings.
+
 Exactly THREE patterns per channel: P1–P3, all visible, all SIX channels on
 page 4. RANDOM PATT selects already saved patterns across all six channels;
 it never generates notes. CLEAR PT clears the selected current pattern;

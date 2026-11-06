@@ -2109,6 +2109,34 @@ static int snow_home_generate(uint32_t knob)
     if(!rc)snow_home_gen[channel][knob]++;
     ui.force=1;return rc;
 }
+/* CH HOME 1: a tap applies octave on release; a 700 ms hold toggles mode
+ * exactly once. Defer the tap so a hold never transposes or opens HOME. */
+static struct { uint32_t ms;uint8_t active,fired,redo; } stattic_octup;
+static uint32_t stattic_octup_poll(uint32_t pressed)
+{
+    uint32_t bit=1u<<panel.btn[B_OCTUP],buttons=fm1_in.buttons;
+    int here=scrn.st==SCR_ON&&!scrn.eat&&ui.home&&snow_home_panel==SN_HOME_SYNTH&&song.sel==5u&&!ui.menu&&!ui.confirm&&
+        !ui.layer&&!ui.ly&&!ui.shift&&!name_on()&&!seq_counting()&&!(buttons&~bit);
+    if(stattic_octup.active){
+        pressed&=~bit;
+        if(!here){stattic_octup.active=0;return pressed;}
+        if(!(buttons&bit)){
+            if(!stattic_octup.fired){
+                if(stattic_octup.redo)undo_step(1);
+                else if(song.octave<3)song.octave++;
+                ui.force=1;
+            }
+            stattic_octup.active=0;
+        }else if(!stattic_octup.fired&&fm1_ms-stattic_octup.ms>=700u){
+            TSEL->p[SN_PLAY_MODE]=(int16_t)!TSEL->p[SN_PLAY_MODE];stattic_octup.fired=1;
+            ui_message(TSEL->p[SN_PLAY_MODE]?"MODE: NOTES":"MODE: CHORDS");ui.force=1;
+        }
+    }else if(here&&(pressed&bit)){
+        stattic_octup.ms=fm1_ms;stattic_octup.active=1;stattic_octup.fired=0;stattic_octup.redo=ui.undo_w!=0;
+        pressed&=~bit;
+    }
+    return pressed;
+}
 #endif
 static void ui_input(void)
 {
@@ -2124,6 +2152,7 @@ static void ui_input(void)
     static uint32_t lock_ms;                            /* BPM LOCK: the last locked SELECT turn (fm1_ms | 1; 0 none) */
     static uint8_t home_long;                           /* Skiff: HOME held past 0.7 s, the menu closed: MENU when let go */
 #if FELUCCA_SNOW
+    pressed=stattic_octup_poll(pressed);
     if (snow_buttons(pressed)) return;
     snow_sequence_poll();
     if(!ui.home&&!ui.menu&&!ui.confirm&&!ui.layer&&!name_on()&&!ui.ly&&!ui.shift&&
@@ -2469,9 +2498,6 @@ static void ui_input(void)
             if(ui.home&&!lay&&!shift_held()&&!ui.undo_w&&(snow_home_panel==SN_HOME_GEN||snow_home_panel==SN_HOME_PAT)){
                 int rc=snow_home_panel==SN_HOME_PAT?stattic_random_patterns():snow_clear_sequence(b==B_OCTUP);
                 ui_message(rc==2?"WAIT PATTERN LAUNCH":rc==3?"NO OTHER PATTERNS":rc?"PATTERNS FULL":snow_home_panel==SN_HOME_PAT?"RANDOM PATT":b==B_OCTUP?"ALL CHANNELS CLEARED":"PATTERN CLEARED");break;
-            }
-            if(b==B_OCTUP&&ui.home&&song.sel==5u&&!lay&&((fm1_in.buttons>>panel.btn[B_HOME])&1u)){
-                TSEL->p[SN_PLAY_MODE]=!TSEL->p[SN_PLAY_MODE];shift_mark();home_long=0;ui.shift=0;ui.force=1;break;
             }
 #endif
             if (act_cols() || layer_set_open() || ui.ml.on)   /* action pages: enter / back (below); SET layers: OCT-;

@@ -9,6 +9,9 @@ the interface reference. See [the recorded agreement](STATTIC_WORK_PLAN.md).
 - Five native 240×240 HOME pages; SELECT changes page, never HOME tempo.
 - Enlarged transport/BPM/position/brand/battery strip on all five pages.
 - Page 1: four macros, large active parameter/percentage, preset and pattern.
+- Only CH: A (chords) / N (notes) beside the preset, synchronized with SEL.
+  On HOME 1/5, hold OCT+ alone for 700 ms to toggle once; a short tap changes
+  octave on release. The helper reads `OCT+ HLD N/CHO`; HOME hold retains settings.
 - Page 2: K1 phrase+locks, K2 sound, K3 LFO, K4 FX; OCT− current pattern clear,
   OCT+ current patterns of all six channels clear. Saved other positions and
   synthesis settings are retained. One physical detent performs one generation.
@@ -85,8 +88,8 @@ The target build fits all enforced budgets (pre-publication build):
 
 | Region | Used | Limit | Free |
 | --- | ---: | ---: | ---: |
-| App slot | 569,552 B | 581,564 B | 12,012 B |
-| Data + BSS | 86,568 B | 98,304 B | 11,736 B |
+| App slot | 570,700 B | 581,564 B | 10,864 B |
+| Data + BSS | 86,584 B | 98,304 B | 11,720 B |
 | Pool | 333,680 B | 356,352 B | 22,672 B |
 | RAM code + ramx | 24,176 B | 24,576 B | 400 B |
 

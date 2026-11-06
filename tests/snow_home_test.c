@@ -31,18 +31,25 @@ static void controls(void)
         assert(snow_home_panel==SN_HOME_MIX);
         turn(EN_ALGO,ch<5?1:-1);assert(snow_home_panel==SN_HOME_MIX);sel_set(ch);
     }
-    sel_set(5);focus(SN_HOME_GEN);uint8_t panel=snow_home_panel;
-    int8_t octave=song.octave;
-    web_buttons(1u<<B_HOME);advance(850);web_buttons((1u<<B_HOME)|(1u<<B_OCTUP));advance(400);assert(song.octave==octave);web_buttons(1u<<B_HOME);advance(60);web_buttons(0);advance(100);
-    assert(trk[5].p[SN_PLAY_MODE]==1&&snow_home_panel==panel&&!ui.menu&&!ui.shift);
-    web_buttons(1u<<B_HOME);advance(60);web_buttons((1u<<B_HOME)|(1u<<B_OCTUP));advance(60);web_buttons(1u<<B_HOME);advance(60);web_buttons(0);advance(100);
-    assert(!trk[5].p[SN_PLAY_MODE]&&snow_home_panel==panel&&!ui.menu&&song.octave==octave);
-    focus(SN_HOME_SYNTH);web_buttons(1u<<B_OCTUP);advance(60);assert(song.octave==octave+1);web_buttons(0);advance(100);assert(!trk[5].p[SN_PLAY_MODE]);tap(B_OCTDN);
-    web_buttons(1u<<B_HOME);advance(850);web_buttons(0);advance(100);assert(ui.menu);ui.menu=0;go_home();
+    sel_set(5);focus(SN_HOME_SYNTH);uint8_t panel=snow_home_panel;
+    int8_t octave=song.octave;assert(!trk[5].p[SN_PLAY_MODE]);
+    web_buttons(1u<<B_OCTUP);advance(600);assert(song.octave==octave&&!trk[5].p[SN_PLAY_MODE]);
+    advance(200);assert(trk[5].p[SN_PLAY_MODE]==1&&song.octave==octave&&!ui.menu&&!ui.shift);
+    advance(1600);assert(trk[5].p[SN_PLAY_MODE]==1&&song.octave==octave);web_buttons(0);advance(100);
+    assert(snow_home_panel==panel&&!ui.menu);
+    web_buttons(1u<<B_OCTUP);advance(800);web_buttons(0);advance(100);assert(!trk[5].p[SN_PLAY_MODE]&&song.octave==octave);
+    web_buttons(1u<<B_OCTUP);advance(60);assert(song.octave==octave);web_buttons(0);advance(100);assert(song.octave==octave+1&&!trk[5].p[SN_PLAY_MODE]);tap(B_OCTDN);
+    web_buttons(1u<<B_OCTUP);advance(300);turn(EN_SELECT,1);advance(600);web_buttons(0);advance(100);
+    assert(!trk[5].p[SN_PLAY_MODE]&&song.octave==octave);focus(SN_HOME_SYNTH);
+    sel_set(0);web_buttons(1u<<B_OCTUP);advance(800);web_buttons(0);advance(100);assert(song.octave==octave+1&&trk[0].p[SN_PLAY_MODE]==1);tap(B_OCTDN);
+    sel_set(5);focus(SN_HOME_MIX);web_buttons(1u<<B_OCTUP);advance(800);web_buttons(0);advance(100);assert(song.octave==octave+1&&!trk[5].p[SN_PLAY_MODE]);tap(B_OCTDN);focus(SN_HOME_SYNTH);
+    web_buttons(1u<<B_HOME);advance(850);web_buttons(0);advance(100);assert(ui.menu&&!trk[5].p[SN_PLAY_MODE]);ui.menu=0;go_home();
+    scrn.st=SCR_OFF;scrn.eat=1;web_buttons(1u<<B_OCTUP);advance(1200);web_buttons(0);advance(500);
+    assert(scrn.st==SCR_ON&&!scrn.eat&&!trk[5].p[SN_PLAY_MODE]&&song.octave==octave);
     for(uint32_t i=0;i<5;i++)assert(trk[i].p[SN_PLAY_MODE]==1);
     assert(!project_save(7));trk[5].p[SN_DJ_FILTER]=0;trk[5].p[SN_WIDTH]=0;project_load(7);
     assert(trk[5].p[SN_DJ_FILTER]&&trk[5].p[SN_WIDTH]);
-    puts("HOME controls: five pages, no BPM change, unheld GLO tempo, four macros/mix knobs, channel focus, N/CHO shortcut and persisted mix passed");
+    puts("HOME controls: five pages, no BPM change, unheld GLO tempo, four macros/mix knobs, channel focus, single OCT+ hold N/CHO and persisted mix passed");
 }
 static void generators(void)
 {

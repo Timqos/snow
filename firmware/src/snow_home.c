@@ -81,7 +81,11 @@ static void stattic_page_body(uint32_t page)
     uint32_t k=song.sel;track_t *t=TSEL;
     if(page<3u){
         cv_rect(15,33,48,27,T_THEME);stattic_text(21,36,ST_ROLES[k],T_INK,16,21,2);
-        char name[20];sound_name(t,name);stattic_text(73,40,name,T_TEXT,6,15,13);
+        char name[20];sound_name(t,name);
+        if(k==5u){
+            stattic_text(73,37,t->p[SN_PLAY_MODE]?"N":"A",T_THEME,11,20,1);
+            for(uint32_t i=0;name[i]&&i<13u;i++){char c[2]={name[i],0};stattic_text(90+(int32_t)i*7,40,c,T_TEXT,6,15,1);}
+        }else stattic_text(73,40,name,T_TEXT,6,15,13);
         char pat[4]="P";fmt_int(pat+1,(int32_t)snow_pattern_current(k)+1);
         cv_frame(184,31,44,31,T_THEME);stattic_text(191,36,pat,T_THEME,13,21,2);
         if(page==0u){
@@ -96,6 +100,7 @@ static void stattic_page_body(uint32_t page)
         }
         stattic_graph(page);
         if(page==1u){snow_text(14,184,"OCT-/CLEAR PT OCT+/CLEAR ALL",T_TEXT,29);snow_text(187,184,"PAGE 2/5",T_THEME,8);}
+        else if(page==0u&&k==5u){snow_text(8,184,"OCT+ HLD N/CHO",T_TEXT,14);snow_text(94,184,"OCT+/-:OCTAVE",T_MID,13);snow_text(180,184,"PAGE 1/5",T_THEME,8);}
         else {snow_text(15,184,"OCT +/-:OCTAVE",T_MID,15);snow_text(143,184,page?"SELECT: PAGE 3/5":"SELECT: PAGE 1/5",T_THEME,16);}
         stattic_hint(14,196,page==0u?"K1:TONE|K2:SHAPE|K3:SWEEP|K4:DECAY":page==1u?"K1:G/SEQ|K2:G/PRM|K3:G/LFO|K4:G/FX":"K1:VOL|K2:PAN|K3:FLR|K4:WDT",T_TEXT);
     }else if(page==3u){
@@ -147,6 +152,7 @@ static void snow_home_draw(void)
     uint32_t sig=ux.gen*977u+k*31u+page*65537u+t->preset*7919u+t->user*131u+bank_gen()*8179u+perf_solo*11717u;
     for(uint32_t ch=0;ch<NTRK;ch++)sig=(sig^snow_touch_state[ch].serial^(uint32_t)trk[ch].p[P_LEVEL]^(uint32_t)trk[ch].p[P_MUTE]<<16^snow_pattern_current(ch))*16777619u;
     if(page<3u)sig^=stattic_scroll[page]*104729u+stattic_focus[page]*349u;
+    sig^=(uint32_t)t->p[SN_PLAY_MODE]*32993u;
     sig^=(uint32_t)(ui.msg_t!=0)*301u+(uint32_t)(ui.undo_w!=0)*619u;
     if((sig!=snow_home_state.body||ui.force)&&(fresh||fm1_ms-snow_home_state.body_ms>=50u)){
         snow_home_state.body=sig;snow_home_state.body_ms=fm1_ms;snow_home_state.card_blits++;
