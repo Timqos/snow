@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import {Updater,stockRefusal} from './fm1ota.js';
-import {verifyPackage,verifyFactoryPackage,InstallSession} from './core.js?v=080rc4';
+import {verifyPackage,verifyFactoryPackage,InstallSession} from './core.js?v=080rc5';
 const $=id=>document.getElementById(id);
 const factory=document.body.dataset?.installMode==='factory';
 let config,image,session,writing=false,connecting=false;
