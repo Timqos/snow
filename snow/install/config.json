@@ -1,7 +1,7 @@
 {
-  "version": "v0.8.0-rc1-stattic",
+  "version": "v0.8.0-rc2-stattic",
   "product": "FM-1_700",
-  "package": "../stattic-0.8.0-rc1.fwsc",
-  "sha256": "9e4d5a03c7281da5e7b90f44ae449ba9d68225d26db911e70784beaf40aa8c92",
-  "source_commit": "7b47cfef9c3323d68aae93949c6dd83fc2fab4c7"
+  "package": "../stattic-0.8.0-rc2.fwsc",
+  "sha256": "0184990058aa55233805b99c0c7f91e253da2db869b337204d6e3033165a4db5",
+  "source_commit": "739d904ae50386eda001f42cc466d4cd5cc06671"
 }
