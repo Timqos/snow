@@ -1,7 +1,7 @@
 {
-  "stage": "Snow runtime candidate: two-core DSP, idle FX sleep and factory recovery",
-  "version": "v0.7.4-rc1-snow",
-  "source_commit": "68888143a634608a9fe3ccf32b01934347b24348",
+  "stage": "STATTIC candidate: five-page HOME, vertical static, role-aware sequences and sound repair",
+  "version": "v0.8.0-rc1-stattic",
+  "source_commit": "7b47cfef9c3323d68aae93949c6dd83fc2fab4c7",
   "source_dirty": false,
-  "package_sha256": "4f28ed4d2534d236de1b418ff97fa67b23c4cdaa27d40f93d20950a3c8a48088"
+  "package_sha256": "9e4d5a03c7281da5e7b90f44ae449ba9d68225d26db911e70784beaf40aa8c92"
 }
