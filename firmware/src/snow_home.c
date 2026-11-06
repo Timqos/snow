@@ -23,6 +23,13 @@ static int32_t stattic_text(int32_t x,int32_t y,const char *s,uint16_t ink,int32
 }
 static void snow_text_big(int32_t x,int32_t y,const char *s,uint16_t ink,uint32_t max)
 {(void)stattic_text(x,y,s,ink,10,14,max);}
+static void stattic_hint(int32_t x,int32_t y,const char *s,uint16_t ink)
+{
+    for(;*s&&x<236;s++,x+=6){
+        if(*s=='|')cv_rect(x+2,y+3,1,1,ink);
+        else {char c[2]={*s,0};snow_text(x,y,c,ink,1);}
+    }
+}
 static uint32_t snow_home_percent(const track_t *t,uint32_t id)
 {
     int32_t v=motion_base_value(t,id);
@@ -88,9 +95,9 @@ static void stattic_page_body(uint32_t page)
             cv_rect(158,65,70,30,T_THEME);stattic_text(172,71,ST_MIX_NAMES[stattic_focus[2]],T_INK,13,21,3);
         }
         stattic_graph(page);
-        if(page==1u){snow_text(14,184,"OCT-:CLEAR PT OCT+:CLEAR ALL",T_TEXT,29);snow_text(187,184,"PAGE 2/5",T_THEME,8);}
+        if(page==1u){snow_text(14,184,"OCT-/CLEAR PT OCT+/CLEAR ALL",T_TEXT,29);snow_text(187,184,"PAGE 2/5",T_THEME,8);}
         else {snow_text(15,184,"OCT +/-:OCTAVE",T_MID,15);snow_text(143,184,page?"SELECT: PAGE 3/5":"SELECT: PAGE 1/5",T_THEME,16);}
-        snow_text(14,196,page==0u?"K1:TONE K2:SHAPE K3:SWEEP K4:DECAY":page==1u?"K1:G/SEQ K2:G/PRM K3:G/LFO K4:G/FX":"K1:VOL  K2:PAN  K3:FLR  K4:WDT",T_TEXT,38);
+        stattic_hint(14,196,page==0u?"K1:TONE|K2:SHAPE|K3:SWEEP|K4:DECAY":page==1u?"K1:G/SEQ|K2:G/PRM|K3:G/LFO|K4:G/FX":"K1:VOL|K2:PAN|K3:FLR|K4:WDT",T_TEXT);
     }else if(page==3u){
         stattic_text(16,37,"PATTERN SW",T_THEME,12,17,10);stattic_small_icon(2,166,34);
         for(uint32_t ch=0;ch<NTRK;ch++){
@@ -105,7 +112,7 @@ static void stattic_page_body(uint32_t page)
             }
         }
         snow_text(16,184,"OCT+/- RANDOM PATT",T_TEXT,21);snow_text(141,184,stattic_overview?"[SEQ] PATTERNS":"SELECT: PAGE 4/5",T_THEME,16);
-        snow_text(16,196,"K1:KK K2:SD K3:HH K4:PR ALG:BS PRS:CH",T_TEXT,38);
+        stattic_hint(16,196,"K1:KK|K2:SD|K3:HH|K4:PR|ALG:BS|PRS:CH",T_TEXT);
     }else{
         stattic_text(16,37,"M/S VOLUME",T_THEME,13,18,10);stattic_small_icon(3,173,31);
         for(uint32_t ch=0;ch<NTRK;ch++){
@@ -118,7 +125,7 @@ static void stattic_page_body(uint32_t page)
             char v[5];fmt_int(v,(int32_t)pct);str_cpy(v+str_len(v),"%",sizeof v-str_len(v));stattic_text(196,y,v,T_TEXT,8,17,4);
         }
         if(stattic_overview){snow_text(16,190,"K1-K4 ALG PRS: CHANNEL LEVELS",T_TEXT,37);snow_text(16,201,"BLACK:MUTE WHITE:SOLO  SELECT:BPM",T_TEXT,37);}
-        else {snow_text(16,196,"M/S:KEY  K1:SLT CH  K2:VOL",T_TEXT,29);snow_text(187,196,"PAGE 5/5",T_THEME,8);}
+        else {stattic_hint(16,196,"M/S:KEY|K1:SLT CH|K2:VOL",T_TEXT);snow_text(187,196,"PAGE 5/5",T_THEME,8);}
     }
     cv_rect(9,222,231,1,T_THEME);
     if(ui.msg_t)snow_text(15,231,ui.msg,T_MID,36);

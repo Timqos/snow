@@ -78,7 +78,7 @@ The target build fits all enforced budgets (pre-publication build):
 
 | Region | Used | Limit | Free |
 | --- | ---: | ---: | ---: |
-| App slot | 569,188 B | 581,564 B | 12,376 B |
+| App slot | 569,252 B | 581,564 B | 12,312 B |
 | Data + BSS | 86,568 B | 98,304 B | 11,736 B |
 | Pool | 333,680 B | 356,352 B | 22,672 B |
 | RAM code + ramx | 24,176 B | 24,576 B | 400 B |
