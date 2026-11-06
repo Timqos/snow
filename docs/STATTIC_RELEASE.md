@@ -1,8 +1,30 @@
-# STATTIC 0.8.0-rc4
+# STATTIC 0.8.0-rc5
 
 Experimental FM-1 candidate, previously named Snow. The five user HOME
 mockups in `assets/stattic-home/` and the confirmed control captions are
 the interface reference. See [the recorded agreement](STATTIC_WORK_PLAN.md).
+
+## Changes in rc5
+
+- All HOME bottom helpers use the same 8×14 pixel face. OCT actions, page
+  navigation and every knob assignment retain their full wording. Comparison
+  against rc4 confirms identical upper pixels on all five HOME pages.
+- Other editors, dialogs, NAME and SYSTEM use enlarged pixel type: 14-pixel
+  helper/compact-label capitals, 18-pixel menu labels, 20-pixel values and
+  28-pixel large values. Spacing adapts to available width without dropping
+  source glyph columns. Settings show three tall rows with labels above values;
+  PRESETS scrolling, tabs and all settings remain available. No larger atlas,
+  framebuffer or audio-thread drawing is added.
+- The compiled oscillator renderer and waveform helper run in fast executable
+  SRAM; every renderer call stays in SRAM. DSP mathematics, gains, effects and
+  voice budgets are unchanged. Two of eight Undo snapshots move to the existing
+  data pool to make room; all eight entries and redo remain available.
+- Before each two-core split, newly active voices add estimated work using the
+  measured per-voice peak. Measured costs rise immediately and decay slowly,
+  avoiding the old smoothing delay at a new KK/BS/CH attack. Split weights affect
+  scheduling only; equal-budget one/two-core PCM remains identical.
+- SYSTEM's L now subtracts the retained counter at application boot. L therefore
+  counts this boot's missed DMA deadlines; raw crash diagnostics remain retained.
 
 ## Repair in rc4
 
@@ -142,13 +164,22 @@ replaced by dirty static strips. The original audio deadline/voice guards remain
 
 ## Physical report and verification limits
 
-The newest user report is **2 cores, up to 80% displayed CPU**: CH distortion
-appears as channels accumulate, irrespective of activation order; STOP was
-previously reported clean. This does not identify a
-single proven cause. Average load does not exclude brief deadline overruns,
-and dense new chords previously replaced release tails within the old four-voice
-CH cap. The rc4 changes above address measured work allocation and that cap;
-the existing two-core 12-voice shared budget and overload guards remain.
+After rc4, the user reports the Ring/resonator distortion gone. Remaining
+short clicks occur on CH note/chord attacks when BS or KK joins it; CH alone
+or with HH/PR is clean. The device shows 2 cores, about 76–80% average load,
+and L increases on the attacks. Turning physical MASTER down to 20% reduces
+volume but retains the click. SLOOP uses the same free-DMA-half check for L.
+
+This supports investigating peak processing deadlines, without proving every
+click is a deadline miss. The digital pair test checks 800 factory combinations
+at default/full levels and pre/post-master attenuation. A loud coherent chord
+can engage the existing protective limiter. With USB LEVEL FIXED, MASTER acts
+*after* the limiter, so reducing physical MASTER cannot by itself rule out
+internal limiting. Default levels with 20% pre-master do not engage the limiter
+in that stress test; the four held CH voices remain intact in every case.
+No automatic bass filtering, gain reduction, voice reduction or effect removal
+is used to mask the report. SRAM placement and onset-aware splitting need an
+FM-1 retest, observing whether L stops increasing at the audible click.
 
 Native/WASM tests cover actual playback, parameter-lock ownership, finite
 stereo output, physical encoder/key routing, and a one-minute six-channel
@@ -162,42 +193,21 @@ the redesigned kick sounds are intentionally excluded from that equality test.
 Long-gap FX/bypass/history tests, musical-scale/mode checks, startup release,
 pattern persistence and browser-save compatibility remain in the suite.
 
-The target build fits all enforced budgets (pre-publication build):
+## Current verification
 
-| Region | Used | Limit | Free |
-| --- | ---: | ---: | ---: |
-| App slot | 575,468 B | 581,564 B | 6,096 B |
-| Data + BSS | 88,648 B | 98,304 B | 9,656 B |
-| Pool | 344,732 B | 356,352 B | 11,620 B |
-| RAM code + ramx | 24,176 B | 24,576 B | 400 B |
+The rc5 build must pass the existing target budgets, complete STATTIC
+native/WASM/audio suite, layout sweep at default/minimum/maximum values,
+eight-entry Undo and onset-prediction contracts, and ASan/UBSan checks.
+The exact package, source commit and update/rollback results are recorded in
+[the published build](https://timqos.github.io/snow/snow/build.json) and
+[the binary audit](https://timqos.github.io/snow/snow/update-audit.json).
+Final region sizes and release verification are recorded in
+[the work log](STATTIC_RC5_WORK.md). Physical audio deadlines require FM-1
+qualification; desktop or browser timing is not a substitute.
 
-The loader display alone is renamed, with normalized executable equality
-checked. The startup head, flash map, USB/model checks, update protocol and
-hardware register code are unchanged. The published binary passed 28 software update/rollback checks, including
-original V15/V16 validation and rc3 upgrade/downgrade. Its exact package hash is
-`47c3ab7b1251aa6d86d52bf1b05c6f6f106afd1c6f64e92bfc9edb8d9b2dab1d`.
-Firmware source is `381dc0b`; the live site files and package match local
-hashes. Native, ASan/UBSan, WASM, desktop/mobile browser and factory-installer
-checks passed. The six-channel minute of generated playback peaked at 0.2024
-full scale with strong effects; that bound is not a target CPU measurement.
-No physical device is flashed by the development tests. After installing,
-check actual peak/average load, UI response and CH playback/release on the FM-1;
-do not mark the intermittent physical fault resolved on host evidence alone.
-
-## Target regression profile
-
-The broad upstream native run passed its functional/legacy golden checks.
-Its target-only gate initially compared STATTIC to Skiff's shared-effect
-architecture and also divided by a zero loop-work budget. Both pre-existing
-STATTIC differences (mix_spread 101, esync_coef 8) were reproduced from rc3,
-whose rebuilt package exactly matched its published SHA-256. The corrected
-gate now passes on the shipped rc4 ELF, retaining all unaffected Skiff limits
-and checking Snow's previously unlisted hot paths. Static weighted loop work
-falls from 1914 to 1817 in snow_render, 5437 to 5354 in snow_fx_process,
-and 42 to 29 in mix_split. These are not physical cycle measurements.
-
-The sandbox's LeakSanitizer probe initially skipped the generic sanitizer
-stage. Its default environment is corrected; dedicated STATTIC repair,
-OTA/loader, and UI/project/bank ASan+UBSan runs passed with leak detection off.
-The exact-package 28-check rollback audit remains the published binary's
-installation evidence. Physical validation is still pending.
+The target regression gate retains all unaffected Skiff limits and the
+byte-reproduced rc3 reference for existing STATTIC paths. Oscillator SRAM
+placement adds no per-sample divisions. The 8/12 shared voice budget,
+256-frame hardware halves, 32-sample control blocks and all synthesis/effect
+parameters remain unchanged from rc4. Installation/loader code is unchanged
+from rc4; every new binary still requires its own update/rollback audit.

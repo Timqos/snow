@@ -57,7 +57,11 @@ static const char *const MI_NAME[MI_COUNT] = {"THEME", "PLAYHEAD", "LARGE", "ANI
  * row joins a tab here, a new tab is appended (its index is what the editor is told) */
 enum { MTAB_DISPLAY, MTAB_CONTROL, MTAB_AUDIO, MTAB_SYSTEM, MTAB_MIDI, MTAB_COUNT };   /* ((Skiff 1.3) MIDI, appended: its
                                                          * rows sit before SYSTEM's in MI order, as value rows must) */
+#if FELUCCA_SNOW
+#define MTAB_ROWS 3u
+#else
 #define MTAB_ROWS 6u
+#endif
 static const char *const MTAB_NAME[MTAB_COUNT] = {"DISPLAY", "CONTROL", "AUDIO", "SYSTEM", "MIDI"};
 static const uint8_t MI_TAB[MI_COUNT] = {
     MTAB_DISPLAY, MTAB_DISPLAY, MTAB_DISPLAY, MTAB_DISPLAY,                 /* COLOR (Skiff #27) PLAYHEAD LARGE ANIM */
@@ -287,7 +291,7 @@ static const char *menu_vname(uint32_t row, uint32_t v)
 #if FELUCCA_SNOW
         if(row==MI_CPU){
             str_cpy(b+str_len(b)," L",sizeof b-str_len(b));
-            fmt_int(b+str_len(b),(int32_t)(felucca_dbg.late>999u?999u:felucca_dbg.late));
+            fmt_int(b+str_len(b),(int32_t)(snow_late_count()>999u?999u:snow_late_count()));
         }
 #endif
         return b;

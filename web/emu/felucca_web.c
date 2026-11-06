@@ -324,6 +324,7 @@ static void web_power_on(void)
     felucca_init();
     master_boot();                        /* main.c (#137): the pot's level from the first block */
     kb_boot_hold = 1;                     /* main.c (#137): the keys silent under the splash */
+    snow_late_base=felucca_dbg.late;
     audio_init();
     boot_leds();                          /* main.c: the power-on LED sweep, from the scan's start */
 #if FELUCCA_LEGACY

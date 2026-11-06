@@ -80,7 +80,7 @@ static int stattic_gen_prepare(uint32_t channel,uint32_t knob)
         q->seq=undo.seq;q->what=0;memset(q->mask,0,sizeof q->mask);q->pid=trk_pid[channel];
     }else {
         int32_t slot=undo_find(q->seq);
-        if(slot>=0)undo_ring[slot].what|=(uint8_t)what;
+        if(slot>=0)(*undo_entry(slot)).what|=(uint8_t)what;
     }
     q->armed=0;q->what|=(uint8_t)what;
     for(uint32_t i=0;i<NELEM(mask);i++)q->mask[i]|=mask[i];
@@ -141,7 +141,7 @@ static int stattic_gen_undo(uint32_t seq)
         if(!q->armed||q->seq!=seq)continue;
         uint32_t f=motion_guard();int32_t slot=undo_find(seq);
         if(!q->armed||slot<0){motion_unguard(f);return 0;}
-        undo_t *u=&undo_ring[slot];track_t *t=&trk[k];
+        undo_t *u=&(*undo_entry(slot));track_t *t=&trk[k];
         for(uint32_t id=0;id<P_COUNT;id++)u->p[id]=((q->mask[id/32u]>>(id%32u))&1u)?q->p[id]:motion_base_value(t,id);
         if(q->what&UNDO_PAT){memcpy(u->step,q->step,sizeof u->step);u->motion_backup=q->motion;}
         else motion_snapshot_track(t,&u->motion_backup);

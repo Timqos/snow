@@ -298,8 +298,8 @@ static void card_mot_of(const int16_t *vp)
 #define LG_MH 18
 #define LG_LY 24                                        /* the label's line: M capitals rows 28..38 */
 #define LG_VB 49                                        /* the value's band: L capitals rows 49..69 */
-#define LG_UY 73                                        /* the unit's line (S capitals rows 76..84) */
-#define LG_GY 92                                        /* the gauge, 3 px */
+#define LG_UY (FELUCCA_SNOW ? 80 : 73)                                        /* the unit's line (S capitals rows 76..84) */
+#define LG_GY (FELUCCA_SNOW ? 98 : 92)                                        /* the gauge, 3 px */
 /* a tall card's value s in L where the sparse L face has its glyphs and it fits with 3 px either side, else M, else S
  * (0, 1, 2; its unit is on a line of its own) */
 static uint32_t tall_face(const char *s, const char *unit)
@@ -618,20 +618,21 @@ static void draw_foot(void)
 #if FELUCCA_SNOW
     if(!ui.home&&!ui.layer&&!ui.shift&&snow_random_first_page(cur_page())){
         uint32_t sig=ux.gen*977u+song.sel*31u+TSEL->preset*4099u+TSEL->user*65537u+127u;
-        if(ui.force||ui.foot_sig!=sig){ui.foot_sig=sig;cv_oy=0;cv_begin(240,38,T_BG);
+        if(ui.force||ui.foot_sig!=sig){ui.foot_sig=sig;cv_oy=0;cv_begin(240,48,T_BG);
             uint32_t family=cur_page()->fam;
-            snow_text(3,4,family==FAM_LFO?"OCT+ : RANDOM ALL LFO":family==FAM_FX?"OCT+ : RANDOM ALL FX":"OCT+ : RANDOM ALL EDIT",T_THEME,38);
-            snow_text(3,14,"HOLD SAVE : UNDO",T_MID,38);
-            char name[24];sound_name(TSEL,name);snow_text(3,28,SN_TARGET_NAMES[song.sel][0],T_THEME,2);snow_text(23,28,name,T_TEXT,26);
+            cv_text(3,1,&AF_S,family==FAM_LFO?"OCT+ : RANDOM ALL LFO":family==FAM_FX?"OCT+ : RANDOM ALL FX":"OCT+ : RANDOM ALL EDIT",T_THEME);
+            cv_text(3,17,&AF_S,"HOLD SAVE : UNDO",T_MID);
+            char name[24],pos[10]="1/";sound_name(TSEL,name);
+            cv_text(3,33,&AF_S,SN_TARGET_NAMES[song.sel][0],T_THEME);cv_free_text(25,33,&AF_S,name,T_TEXT,T_BG,170);
             uint32_t n=0;for(uint32_t p=0;p<NPAGES;p++)n+=PAGES[p].fam==family&&page_visible(p);
-            char page[10]="1/";fmt_int(page+2,(int32_t)n);snow_text(204,28,page,T_MID,5);cv_blit(0,202);}
+            fmt_int(pos+2,(int32_t)n);cv_text_r(235,17,&AF_S,pos,T_MID,T_BG);cv_blit(0,192);}
         return;
     }
     if(!ui.home&&!ui.layer&&!ui.shift&&snow_gen_page(cur_page())){
         uint32_t sig=ux.gen*977u+123u;
         if(ui.force||ui.foot_sig!=sig){ui.foot_sig=sig;cv_oy=0;cv_begin(240,38,T_BG);
-            snow_text(3,4,"O+ GEN RND   O- GEN PARM",T_THEME,38);
-            snow_text(3,17,"SAVE + O- : CLEAR",T_MID,38);cv_blit(0,202);}
+            cv_text(3,1,&AF_S,"O+ GEN RND   O- GEN PARM",T_THEME);
+            cv_text(3,19,&AF_S,"SAVE + O- : CLEAR",T_MID);cv_blit(0,202);}
         return;
     }
 #endif

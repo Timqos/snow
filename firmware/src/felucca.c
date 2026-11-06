@@ -68,6 +68,8 @@
  * inlines nothing into a function of another section by itself, and the helpers (dsp.c clamp, perform.c pf_mix ..)
  * left as calls would be calls to XIP; flatten inlines them there only, the rest of the image as it was */
 #define AUDIO_RAM __attribute__((section(".ram_hot"), flatten))
+#define SNOW_RENDER_RAM __attribute__((section(".ram_hot"), flatten))
+#define SNOW_WAVE_RAM __attribute__((section(".ram_hot"), flatten, noinline))
 static inline __attribute__((always_inline)) void *audio_far(void *p) { void *volatile q = p; return q; }
 #define AUDIO_FAR(fn) ((__typeof__(&fn))audio_far((void *)&fn))
 

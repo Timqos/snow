@@ -76,33 +76,39 @@ static void stattic_small_icon(uint32_t kind,int32_t x,int32_t y)
         }
     }
 }
+/* Every HOME helper uses the same 8x14 native face. The artwork ends at
+ * row 176; four lines fit at 180/195/210/225 without moving the upper UI. */
+#define ST_HINT_W 8
+#define ST_HINT_H 14
 static void stattic_footer(uint32_t page)
 {
-    int32_t y=page==4u?190:182;
+    int32_t y=page==4u?(stattic_overview?181:190):180;
     const char *a="OCT +/-:OCTAVE",*b="";
     if(page==0u&&song.sel==5u){a="OCT+ HLD N/CHO";b="OCT +/-:OCTAVE";}
     if(page==1u){a="OCT- CLEAR PT";b="OCT+ CLEAR ALL";}
     if(page==3u){a="OCT +/-";b="RANDOM PATT";}
     if(page==4u){a=stattic_overview?"BLACK:MUTE":"M/S: KEY";b=stattic_overview?"WHITE:SOLO":"W:MUTE B:SOLO";}
-    char first[19],second[19],label[9]="PAGE 1/5";
+    char first[15],second[17],label[9]="PAGE 1/5";
     if(ui.msg_t){
-        uint32_t len=str_len(ui.msg),n=len<18u?len:18u;
-        if(len>18u){uint32_t end=n;while(end&&ui.msg[end]!=' ')end--;if(end&&len-end-1u<=18u)n=end;}
+        uint32_t len=str_len(ui.msg),n=len<14u?len:14u;
+        if(len>14u){uint32_t end=n;while(end&&ui.msg[end]!=' ')end--;if(end&&len-end-1u<=16u)n=end;}
         memcpy(first,ui.msg,n);first[n]=0;uint32_t at=n+(ui.msg[n]==' ');
         str_cpy(second,ui.msg+at,sizeof second);a=first;b=second;
     }else if(ui.undo_w){a="UNDO OCT- BACK";b="OCT+ REDO";}
-    stattic_text(16,y,a,T_TEXT,6,11,18);stattic_text(16,y+13,b,T_TEXT,6,11,18);
+    stattic_text(6,y,a,T_TEXT,ST_HINT_W,ST_HINT_H,14);
+    stattic_text(6,y+15,b,T_TEXT,ST_HINT_W,ST_HINT_H,16);
     label[5]=(char)('1'+page);
-    stattic_text(167,y,stattic_overview?(page==3u?"[SEQ]":"[GLO]"):label,T_THEME,6,11,8);
-    stattic_text(175,y+13,stattic_overview&&page==4u?"SEL:BPM":"SELECT",T_MID,6,11,7);
+    stattic_text(156,y,stattic_overview?(page==3u?"[SEQ]":"[GLO]"):label,T_THEME,ST_HINT_W,ST_HINT_H,8);
+    stattic_text(166,y+15,stattic_overview&&page==4u?"SEL:BPM":"SELECT",T_MID,ST_HINT_W,ST_HINT_H,7);
     if(page==3u||(page==4u&&stattic_overview)){
         static const char *const keys[]={"K1:KK","K2:SD","K3:HH","K4:PR","ALG:BS","PRS:CH"};
-        for(uint32_t n=0;n<6;n++)stattic_text(16+(int32_t)(n%3u)*76,page==4u?215+(int32_t)(n/3u)*14:208+(int32_t)(n/3u)*15,keys[n],T_TEXT,8,page==4u?10:13,6);
+        for(uint32_t n=0;n<6;n++)stattic_text(6+(int32_t)(n%3u)*80,y+30+(int32_t)(n/3u)*15,keys[n],T_TEXT,ST_HINT_W,ST_HINT_H,6);
     }else if(page==4u){
-        stattic_text(16,219,"K1:SLT CH",T_TEXT,8,16,9);stattic_text(134,219,"K2:VOL",T_TEXT,8,16,6);
+        stattic_text(6,y+30,"K1:SLT CH",T_TEXT,ST_HINT_W,ST_HINT_H,9);
+        stattic_text(134,y+30,"K2:VOL",T_TEXT,ST_HINT_W,ST_HINT_H,6);
     }else{
         static const char *const keys[3][4]={{"K1:TONE","K2:SHAPE","K3:SWEEP","K4:DECAY"},{"K1:G/SEQ","K2:G/PRM","K3:G/LFO","K4:G/FX"},{"K1:VOL","K2:PAN","K3:FLR","K4:WDT"}};
-        for(uint32_t n=0;n<4;n++)stattic_text(n&1u?134:16,n<2u?208:223,keys[page][n],T_TEXT,8,13,9);
+        for(uint32_t n=0;n<4;n++)stattic_text(n&1u?134:6,y+30+(int32_t)(n/2u)*15,keys[page][n],T_TEXT,ST_HINT_W,ST_HINT_H,9);
     }
 }
 static void stattic_page_body(uint32_t page)
@@ -145,7 +151,7 @@ static void stattic_page_body(uint32_t page)
     }else{
         stattic_text(16,37,"M/S VOLUME",T_THEME,13,18,10);stattic_small_icon(3,173,31);
         for(uint32_t ch=0;ch<NTRK;ch++){
-            int32_t y=63+(int32_t)ch*21;if(ch==song.sel)cv_rect(15,y-2,28,21,T_THEME);
+            int32_t y=(stattic_overview?61:63)+(int32_t)ch*(stattic_overview?20:21);if(ch==song.sel)cv_rect(15,y-2,28,21,T_THEME);
             stattic_text(17,y,ST_ROLES[ch],ch==song.sel?T_INK:T_TEXT,10,17,2);
             uint32_t mute=(uint32_t)trk[ch].p[P_MUTE],solo=(perf_solo>>ch)&1u;
             if(mute)cv_rect(51,y-2,14,21,T_THEME);if(solo)cv_rect(79,y-2,14,21,T_THEME);

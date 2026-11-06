@@ -11,6 +11,11 @@ static int32_t snow_text(int32_t x,int32_t y,const char *s,uint16_t ink,uint32_t
     }
     return x;
 }
+static void snow_text_box(int32_t x,int32_t y,int32_t width,int32_t height,const char *text,uint16_t ink)
+{
+    aafont_t f=AF_S;if(height<(int32_t)f.caph)f.caph=(uint8_t)height;
+    f.asc=f.caph;cv_text_fit(x,y,&f,text,ink,cv_bg,width);
+}
 /* Binary pixel art only: moving parts, never a travelling shade or tint.
  * Position is the knob value, not a clock. Drawing stays in the main loop. */
 #define SN_ICON_N 40u
@@ -182,19 +187,19 @@ static int snow_gen_page(const page_t *p){return p->fam==FAM_SEQ&&p->graph==GR_N
 static void snow_gen_grid(const track_t *t,int32_t height)
 {
     uint32_t len=(uint32_t)clamp(t->p[P_SLEN],1,NSTEP),rows=(len+15u)/16u,k=trk_index(t);
-    int32_t rh=(height-12)/(int32_t)rows;
+    int32_t rh=(height-20)/(int32_t)rows;
     uint64_t locks=motion_lock_steps(k);
     for(uint32_t i=0;i<len;i++) {
         const step_t *s=&t->step[i];int32_t x=4+(int32_t)(i%16u)*14,y=3+(int32_t)(i/16u)*rh;
-        int32_t h=rh<20?rh-3:rh-12;if(h>48)h=48;
+        int32_t h=rh<24?rh-3:rh-18;if(h>48)h=48;
         cv_rect(x,y,11,h,T_SURF);
         if(s->time==ST_NOTE&&s->n){int32_t fill=(int32_t)(s->vel?s->vel:96u)*(h-2)/127;if(fill<2)fill=2;cv_rect(x+1,y+h-1-fill,9,fill,T_THEME);}
         else if(s->time==ST_TIE)cv_rect(x+1,y+h/2,9,1,T_MID);
         if((locks>>i)&1u)cv_rect(x+7,y+1,3,3,T_TEXT);
-        if(rh>=20){char num[4];fmt_int(num,(int32_t)i+1);snow_text(x,y+h+2,num,T_DIM,2);}
-        if(step_ratchet(s)>1u){char n[2]={(char)('0'+step_ratchet(s)),0};snow_text(x+3,y+1,n,T_TEXT,1);}
+        if(rh>=20){char num[4];fmt_int(num,(int32_t)i+1);snow_text_box(x,y+h+2,13,14,num,T_DIM);}
+        if(step_ratchet(s)>1u){char n[2]={(char)('0'+step_ratchet(s)),0};snow_text_box(x+3,y+1,7,h-2,n,T_TEXT);}
         if(song.playing&&t->seq_idx%len==i)cv_frame(x-1,y-1,13,h+2,T_TEXT);
     }
     char n[16];fmt_int(n,(int32_t)len);str_cpy(n+str_len(n)," STEPS",sizeof n-str_len(n));
-    snow_text(4,height-8,n,T_MID,12);
+    snow_text_box(4,height-16,232,14,n,T_MID);
 }

@@ -10,6 +10,9 @@
 mix_spread 101
 esync_coef 8
 mix_part_body 1056
+# rc5 onset predictor: bounded six tracks x eight existing voice slots;
+# separate from ISR to retain its existing reviewed loop-work limit.
+snow_cost_onsets 44
 snow_render 1914
 snow_amp 0
 snow_fx_process 5437

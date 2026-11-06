@@ -766,6 +766,30 @@ static int32_t wet[CTL];                                 /* (the dry mix and the
  * DIST / SLICER while it sounds or its tail runs. ENGINES[] order. An estimate: it only steers the split, the sound does
  * not depend on it */
 static uint16_t part_cost[NPART];                       /* the last block's, per track */
+#if FELUCCA_SNOW
+#ifndef SNOW_MIX_TICKS
+#define SNOW_MIX_TICKS() 0u
+#define SNOW_MIX_HAND 40u
+#endif
+static uint16_t snow_peak_voice[NPART];
+static uint8_t snow_rendered_voices[NPART];
+/* A kick/bass onset can add work before last block's timer has seen it.
+ * Predict that first block from current voices and the measured busy cost. */
+static __attribute__((noinline)) void snow_cost_onsets(void)
+{
+    for(uint32_t k=0;k<NPART;k++){
+        uint32_t active=0;
+        for(uint32_t v=0;v<NVOICE;v++)active+=trk[k].v[v].active!=0;
+        if(active>snow_rendered_voices[k]){
+            uint32_t unit=snow_peak_voice[k];
+            if(!unit)unit=SNOW_MIX_HAND*8u; /* first onset: conservative until measured */
+            uint32_t estimate=part_cost[k]+(active-snow_rendered_voices[k])*unit;
+            part_cost[k]=(uint16_t)(estimate>65535u?65535u:estimate);
+        }
+    }
+}
+#endif
+
 static const uint16_t ENG_VCOST[NENGINES] = {163, 0, 162, 67, 70, 174, 144, 143, 189, 309, 113, 134, 181, 129, 120
 #if FELUCCA_SNOW
     , 180, 200, 200, 190, 180, 180 /* conservative split estimates, not hardware measurements */
@@ -1145,6 +1169,9 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
 #if FELUCCA_CPU2
     vs_sm[(uint32_t)(t - trk) % NPART] = sm;            /* ((#21) smx_render's sums) */
     nr = track_render(t, b, n);
+#if FELUCCA_SNOW
+    snow_rendered_voices[(uint32_t)(t-trk)]=(uint8_t)nr;
+#endif
     part_cost[(uint32_t)(t - trk) % NPART] = (uint16_t)(nr * ENG_VCOST[t->engine % NENGINES] + (nr || t->tail ? 60u : 0u));
     if (nr)
 #else
@@ -1239,7 +1266,12 @@ static __attribute__((noinline)) void mix_part(track_t *t,uint32_t n SM_DECL)
     uint32_t ticks=SNOW_MIX_TICKS()-before;
     if(ticks){
         if(ticks>65535u)ticks=65535u;
-        part_cost[k]=(uint16_t)((old*3u+ticks+2u)/4u);
+        part_cost[k]=(uint16_t)(ticks>old?ticks:(old*7u+ticks+4u)/8u);
+        uint32_t voices=snow_rendered_voices[k];
+        if(voices){
+            uint32_t unit=(ticks+voices-1u)/voices,peak=snow_peak_voice[k];
+            snow_peak_voice[k]=(uint16_t)(unit>peak?unit:(peak*31u+unit+16u)/32u);
+        }
     }
 #endif
 }
@@ -1342,6 +1374,9 @@ static void mix_block(int32_t *out, uint32_t n)
     perf = AUDIO_FAR(perf_begin)(n);                    /* the FX hold layer at work (perform.c; its code in RAM) */
 #if FELUCCA_CPU2
     {
+#if FELUCCA_SNOW
+        if(C1_ON())snow_cost_onsets();
+#endif
         uint32_t m = C1_ON() ? C1_SPLIT() & ((1u << NPART) - 1u) : 0u;
         if (m && !C1_RUN(c1_parts, m | n << 8))
             m = 0;

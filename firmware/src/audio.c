@@ -22,6 +22,10 @@ struct felucca_dbg {
     uint32_t prev_stage, prev_page, prev_home, prev_rst, prev_frames;   /* as found at boot */
 } felucca_dbg __attribute__((section(".noinit")));
 static volatile uint32_t audio_halves, audio_max_us;
+#if FELUCCA_SNOW
+static uint32_t snow_late_base; /* retained crash counters are not a per-boot UI counter */
+static uint32_t snow_late_count(void){return felucca_dbg.late-snow_late_base;}
+#endif
 static volatile uint32_t t5_nested_ticks;              /* TIMER4 ticks TIMER5 spent nested in this ISR (main.c) */
 static uint32_t audio_cpu_rem;                         /* keep the fractional IIR step: no low-load bias */
 #define SCOPE_N 512u

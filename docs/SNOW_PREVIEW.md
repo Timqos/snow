@@ -1,4 +1,4 @@
-# STATTIC 0.8.0-rc4 — simulator and manual
+# STATTIC 0.8.0-rc5 — simulator and manual
 
 The firmware previously named Snow is now STATTIC. The repository and
 historical URLs retain `snow` so existing links and backups keep working.
@@ -14,6 +14,9 @@ HOME SELECT now browses five pages. Page 2 uses K1 sequence, K2 sound,
 K3 LFO, K4 FX. Page 4 uses six separate physical encoders for KK/SD/HH/PR/BS/CH
 patterns P1–P3. On page 5, K1 selects channel and K2 changes volume; the first
 six WHITE keys toggle MUTE and first six BLACK keys toggle SOLO.
+The complete lower captions share one enlarged 8×14 pixel face. Upper HOME
+content remains unchanged. Other menus/editors use 14–28-pixel capitals and
+settings show three tall rows with unchanged controls.
 The enlarged lower captions are page-specific; the empty HOME visualizer strip
 is removed. HOME 3 shows the active parameter’s percentage. GLO SELECT retains unheld tempo control.
 All six channels boot at 64 steps. Generation covers four varied bars, with

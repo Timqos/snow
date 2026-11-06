@@ -180,6 +180,9 @@ static void fm1_main(void)
         felucca_dbg.magic = DBG_MAGIC;
     }
     felucca_dbg.boots++;
+#if FELUCCA_SNOW
+    snow_late_base=felucca_dbg.late;
+#endif
     felucca_dbg.max_us = 0;
     felucca_dbg.in_audio = 0;                       /* .noinit: a reset inside the audio ISR left it set, and
                                                        TIMER5 would treat every tick as nested (no USB poll) */

@@ -346,7 +346,7 @@ static void nm_draw_panel(void)
     static const char *const FN[5] = {"F#", "G#", "A#", "C#", "D#"};
     uint32_t i;
     uint16_t gd = T_BG, kf = T_SURF;                   /* ((Skiff) the keys SURF tiles on the ground, no panel) */
-    cv_begin(240, H_GRAPH, T_BG);
+    cv_begin(240, FELUCCA_SNOW?202u-Y_GRAPH:H_GRAPH, T_BG);
     cv_bg = gd;
     if (nm.key) {                                      /* the cycling key's characters: typed THEME, next ACCENT */
         const char *g = nm_group(nm.key - 1u);

@@ -119,7 +119,7 @@ static int32_t menu_text(const char *s, int32_t y, uint16_t col, int draw)
             uint32_t c = (uint8_t)s[n];
             line[n] = s[n];
             line[n + 1u] = 0;
-            pen += (prev ? kern(&AF_S, prev, c) : 0) + AF_S.g[glyph(&AF_S, c)].adv;
+            pen += (prev ? kern(&AF_S, prev, c) : 0) + text_advance(&AF_S,c);
             prev = c;
             if ((pen + 8) >> 4 > 226)
                 break;
@@ -146,23 +146,24 @@ static int32_t menu_document(int32_t y, int draw)
         cv_text(6, y + 2, &AF_L, FELUCCA_SNOW ? "STATTIC" : "SKIFF", T_THEME);
         cv_text(6, y + 38, &AF_S, FELUCCA_SNOW ? "FM-1 CUSTOM FIRMWARE" : "Groovebox on Felucca", T_TEXT);
         cv_text(6, y + 58, &AF_M, FELUCCA_VERSION, T_THEME);
-        cv_text_r(232, y + 61, &AF_S, __DATE__, T_MID, T_BG);
+        cv_text_r(232, y + (FELUCCA_SNOW?82:61), &AF_S, __DATE__, T_MID, T_BG);
         {   /* (Skiff) the core clock now, from the PLL (hal/fm1_clk.h; MENU > SYSTEM > CPU CLOCK) */
             char c[16] = "CPU ?";
             if (CLK_MHZ())
                 fmt_int(c + 4, (int32_t)CLK_MHZ());
             str_cpy(c + str_len(c), " MHZ", sizeof c - str_len(c));
-            cv_text_r(232, y + 82, &AF_S, c, T_MID, T_BG);
+            cv_text_r(232, y + (FELUCCA_SNOW?104:82), &AF_S, c, T_MID, T_BG);
         }
-        cv_text(6, y + 82, &AF_S, "Skiff: illuminus5", T_TEXT);   /* (Skiff 1.0) its source (the QR), Felucca's */
-        cv_text(6, y + 100, &AF_S, "Felucca (C) 2026", T_TEXT);      /* credit; GPL-3.0-only */
-        cv_text(6, y + 118, &AF_S, "Leo Kuroshita, H\xFCgelton", T_TEXT);
-        cv_text(6, y + 138, &AF_S, "GPL-3.0-only", T_TEXT);
-        cv_text(6, y + 160, &AF_S, "github.com/illuminus5", T_MID);
-        cv_text(6, y + 178, &AF_S, "/skiff", T_MID);
-        draw_about_qr(158, y + 122);
+        cv_text(6, y + (FELUCCA_SNOW?126:82), &AF_S, "Skiff: illuminus5", T_TEXT);   /* (Skiff 1.0) its source (the QR), Felucca's */
+        cv_text(6, y + (FELUCCA_SNOW?146:100), &AF_S, "Felucca (C) 2026", T_TEXT);      /* credit; GPL-3.0-only */
+        cv_text(6, y + (FELUCCA_SNOW?166:118), &AF_S, "Leo Kuroshita, H\xFCgelton", T_TEXT);
+        cv_text(6, y + (FELUCCA_SNOW?186:138), &AF_S, "GPL-3.0-only", T_TEXT);
+        cv_text(6, y + (FELUCCA_SNOW?206:160), &AF_S, "github.com/illuminus5", T_MID);
+        cv_text(6, y + (FELUCCA_SNOW?226:178), &AF_S, "/skiff", T_MID);
+        if(!FELUCCA_SNOW)draw_about_qr(158, y + 122);
     }
-    y = menu_text("CREDITS", y + 216, T_THEME, draw) + 8;
+    if(FELUCCA_SNOW&&draw)draw_about_qr(158,y+250);
+    y = menu_text("CREDITS", y + (FELUCCA_SNOW?340:216), T_THEME, draw) + 8;
     for (i = 0; i < NELEM(MENU_CREDITS); i++) {
         const menu_credit_t *c = &MENU_CREDITS[i];
         const char *text = c->text;
@@ -194,7 +195,7 @@ static void menu_head(void)
     GFX_HOOK_ALIGN(0, HEAD_MY + AF_M_CAP_Y, 0, HEAD_MY + AF_M_CAP_Y + AF_M_CAP_H, AL_V, "header icon on its title's line");
     cv_icon_mid(8, H_HEAD / 2, 16, ui.menu == 2 ? ICON_X_INFO : ICON_X_COG, T_THEME, T_BG);   /* (as draw_head's) */
     GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
-    cv_text(30, HEAD_MY, &AF_M, ui.menu == 2 ? "ABOUT / CREDITS" : "MENU", T_TEXT);
+    cv_text_fit(30,HEAD_MY,&AF_M,ui.menu==2?"ABOUT / CREDITS":"MENU",T_TEXT,T_BG,ui.menu==2?106:58);
     if (ui.menu >= 2) {                               /* the way back at the right, the REC mark before it (then */
         const char *w = song.rec ? 0 : "BACK";        /* the keycap goes without its word: no room for both) */
         int32_t x = 232 - kh_w(KC_OCTDN, w);
@@ -236,7 +237,7 @@ static const uint16_t MTAB_ICON[MTAB_COUNT] = {ICON_X_EYE, ICON_X_KNOB, ICON_X_S
 #define MT_GAP 5                                       /* between two tabs, always (the bar centred in MT_X0..MT_X1; (1.3) 5,
                                                         * was 8: five tabs) */
 #define MT_ONE 64                                      /* mt.pos per tab */
-#define MP_Y 59                                        /* the rows' panel */
+#define MP_Y (FELUCCA_SNOW ? 55 : 59)                                        /* the rows' panel */
 #define MP_PAD 3
 #define MR_X 8                                         /* a row */
 #define MR_W 224
@@ -254,8 +255,8 @@ static uint32_t mr_top(void)
     uint32_t k = ui.menu_sel - mtab_first(menu_tab());
     return k < MTAB_ROWS ? 0u : k + 1u - MTAB_ROWS;
 }
-static int32_t mr_h(void) { return menu_large() && mr_n() <= 5u ? 28 : 24; }
-static int32_t mr_gap(void) { return mr_n() <= 5u ? 2 : 1; }
+static int32_t mr_h(void) { return FELUCCA_SNOW ? 43 : menu_large() && mr_n() <= 5u ? 28 : 24; }
+static int32_t mr_gap(void) { return FELUCCA_SNOW ? 2 : mr_n() <= 5u ? 2 : 1; }
 static int32_t mr_y(uint32_t k) { return MP_Y + MP_PAD + (int32_t)k * (mr_h() + mr_gap()); }
 
 /* the tab bar's place: the tab shown at pos tab * MT_ONE; with ANIM ON it follows in halving steps, a frame each
@@ -270,7 +271,7 @@ static void mt_follow(void)
         mt.pos = (int16_t)(mt.pos + d / 2);
     mt.frame = ui.frame;
 }
-static const aafont_t *mt_font(void) { return menu_large() ? &AF_M : &AF_S; }
+static const aafont_t *mt_font(void) { return FELUCCA_SNOW||menu_large() ? &AF_M : &AF_S; }
 /* the tabs at the place mt.pos, MT_GAP apart, centred: each one's share of the shown look (0 .. MT_ONE), x, width */
 static void mt_layout(int32_t *a, int32_t *x, int32_t *w)
 {
@@ -312,7 +313,7 @@ static void menu_tabs(void)                            /* (in screen rows: cv_oy
         cv_icon_in(x[k], MT_Y, MT_IW, MT_H, 16, MTAB_ICON[k], on ? T_INK : T_MID, bg);
         if (a[k] == MT_ONE) {                          /* (settled: its name) */
             GFX_HOOK_ALIGN(0, MT_Y, 0, MT_Y + MT_H, AL_V, "menu tab name centred up/down");
-            cv_text_on(x[k] + MT_NX, MT_Y + (menu_large() ? CAP_IN(M, MT_H) : CAP_IN(S, MT_H)), mt_font(), MTAB_NAME[k],
+            cv_text_on(x[k] + MT_NX, MT_Y + (FELUCCA_SNOW||menu_large() ? CAP_IN(M, MT_H) : CAP_IN(S, MT_H)), mt_font(), MTAB_NAME[k],
                        T_INK, bg);
         }
     }
@@ -331,6 +332,21 @@ static void menu_dots(void)
 /* the tab's row k (menu_items.c row `row`) */
 static void menu_row(uint32_t k, uint32_t row)
 {
+#if FELUCCA_SNOW
+    int32_t y=mr_y(k),h=mr_h();int selected=row==ui.menu_sel;
+    uint16_t bg=selected?T_THEME:T_SURF,fg=selected?T_INK:T_TEXT,vc=selected?T_INK:T_THEME;
+    const char *v=row<MI_VALUES?menu_vname(row,menu_get(row)):"";
+    if(selected)cv_rrect(MR_X,y,MR_W,h,5,bg,T_SURF);
+    cv_text_fit(MR_LX,y+2,&AF_M,MI_NAME[row],fg,bg,MR_VR-MR_LX-16);
+    if(row==MI_COLOR){
+        cv_text_fit(MR_LX,y+23-AF_V_CAP_Y,&AF_V,v,vc,bg,136);
+        const uint16_t *tok=&T_BG;
+        for(uint32_t i=0;i<5;i++)cv_rect(162+(int32_t)i*13,y+27,10,10,tok[i]);
+    }else if(*v)cv_text_fit(MR_LX,y+23-AF_V_CAP_Y,&AF_V,v,vc,bg,MR_VR-MR_LX);
+    if(menu_act(row))cv_icon_in(MR_VR-12,y,0,h,12,ICON_X_RIGHT,vc,bg);
+    return;
+#else
+
     int32_t y = mr_y(k), h = mr_h(), large = menu_large(), x0;
     int32_t ny = y + (large ? CAP_IN(M, h) : CAP_IN(S, h)), vy = y + CAP_IN(M, h);
     int sel = row == ui.menu_sel;
@@ -413,6 +429,7 @@ static void menu_row(uint32_t k, uint32_t row)
             cv_rrect(x0 + 1 + (int32_t)c * 15, sy + 1, 10, 10, -2, tok[c], T_RAISE);
         }
     }
+#endif
 }
 /* the rows' two bands meet at `split`: in the gap above a row (or below the last), each band at most 124 rows */
 static uint32_t menu_split(uint32_t n)
@@ -504,7 +521,13 @@ static void draw_menu(void)
             memcpy(kh, KEYS[menu_act(ui.menu_sel)], sizeof kh);
             if (ui.menu_sel == MI_LEARN || ui.menu_sel == MI_LCLEAR)
                 kh[2].act = ui.menu_sel == MI_LCLEAR ? "CLEAR" : ui.ml.on ? "STOP" : "START";
+#if FELUCCA_SNOW
+            cv_text(8,205,&AF_S,"ALGO: TAB   PRESETS: ROW",T_TEXT);
+            const char *last=ui.menu_sel==MI_LCLEAR?"OCT+: CLEAR":ui.menu_sel==MI_LEARN?(ui.ml.on?"OCT+: STOP":"OCT+: START"):menu_act(ui.menu_sel)?"OCT+: OPEN":"OCT+/-: VALUE";
+            cv_text(8,223,&AF_S,last,T_TEXT);
+#else
             cv_key_row(8, 232, MK_Y, kh, 3, 7u, T_BG);
+#endif
         }
         cv_oy = 0;
         cv_blit(0, (uint32_t)top_y);

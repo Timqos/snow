@@ -295,19 +295,19 @@ static void fmt_kn(char *b, int32_t k, int32_t n)
  * the panel 76..198 (a SURF area; the graphs live in it), footer 202..240; BG between them */
 #define Y_HEAD 0
 #define H_HEAD 24
-#define Y_LABEL 28                    /* the cards */
+#define Y_LABEL (FELUCCA_SNOW ? 24 : 28)                    /* the cards */
 #define Y_SEP_END 72
 #define CARD_W 57
 #define CARD_H 44
 #define CARD_X(c) (3 + 59 * (int32_t)(c))
-#define Y_GRAPH 76                    /* the panel */
+#define Y_GRAPH (FELUCCA_SNOW ? 68 : 76)                    /* the panel */
 #define H_GRAPH 122
 #define Y_FOOT 202
 #define H_FOOT 38
 /* MENU > LARGE (large_kind below): on the value pages the cards are tall (28..132) and the panel a strip
  * (136..198); elsewhere (lists, rolls, layers) the layout above, its card labels in M */
 #define LG_CARD_H 104
-#define LG_Y_GRAPH 136
+#define LG_Y_GRAPH (FELUCCA_SNOW ? 132 : 136)
 #define LG_H_GRAPH 62
 
 static struct {
@@ -588,7 +588,7 @@ static uint32_t card_h(void) { return large_kind() == LK_TALL ? LG_CARD_H : CARD
 static uint32_t graph_y(void) { return large_kind() == LK_TALL ? LG_Y_GRAPH : Y_GRAPH; }
 /* (Skiff) BLOCKS: the footer is one line, as the B mockup's (no step strip): its canvas 16 px lower, the panel 16 px
  * taller (ADSR and LFO grow into it, the fixed layouts sit centred: graph_pad) */
-#define FOOT_LINE 16u
+#define FOOT_LINE (FELUCCA_SNOW ? 4u : 16u)
 static uint32_t foot_less(void) { return FOOT_LINE; }
 #if FELUCCA_SNOW
 static int snow_random_first_page(const page_t *p);
@@ -598,9 +598,13 @@ static uint32_t graph_h(void)
 #if FELUCCA_SNOW
     const page_t *p=cur_page();
     if(!ui.home&&!ui.layer&&((p->fam==FAM_SEQ&&p->graph==GR_NONE)||snow_random_first_page(p)))
-        return 202u-graph_y(); /* keep the action hints clear of the graph blit */
+        return (snow_random_first_page(p)?192u:202u)-graph_y(); /* enlarged action hints */
 #endif
+#if FELUCCA_SNOW
+    return 206u-graph_y();
+#else
     return (large_kind() == LK_TALL ? LG_H_GRAPH : H_GRAPH) + foot_less();
+#endif
 }
 static int32_t graph_pad(void) { return (int32_t)foot_less() / 2; }
 static uint32_t foot_y(void) { return Y_FOOT + foot_less(); }
@@ -1441,11 +1445,22 @@ typedef struct {
  * are used. `undo` is the newest: loads in a row share it as before */
 #define UNDO_N 8u
 #define UNDO_WIN 180u                    /* the undo window, frames (~2.7 s): OCT- back, OCT+ redo (undo_step) */
+#if FELUCCA_SNOW
+/* Keep all eight undo entries. Two cold snapshots move to the data pool,
+ * making room for the oscillator's hot code in executable SRAM. */
+#define UNDO_FAST_N 6u
+static undo_t undo_fast[UNDO_FAST_N] __attribute__((section(".ramx")));
+static undo_t undo_pool[UNDO_N-UNDO_FAST_N] __attribute__((section(".pool")));
+static inline undo_t *undo_entry(uint32_t slot)
+{return slot<UNDO_FAST_N?&undo_fast[slot]:&undo_pool[slot-UNDO_FAST_N];}
+#else
 static undo_t undo_ring[UNDO_N] __attribute__((section(".ramx")));
+static inline undo_t *undo_entry(uint32_t slot){return &undo_ring[slot];}
+#endif
 static uint8_t undo_n, undo_top, undo_back;
 static const char *undo_label;   /* the next copy's name, set just before its load_begin (tl_undo_take,
                                   * motion_undo_take); 0: by what it changes */
-#define undo (undo_ring[undo_top])
+#define undo ((*undo_entry(undo_top)))
 /* (2.0) the copies numbered; pin: the copy a SET layer's first change took (SEQ TOOLS, REC: the track as the layer
  * opened, its OCT- puts that back: ui_tools.c tl_put_back; was a copy of its own, 1.1 KB of the pool), kept while the
  * ring turns (undo_push); pin_next: such a layer open, its first copy not taken yet */
@@ -1463,7 +1478,7 @@ static int32_t undo_find(uint32_t seq)
 {
     uint32_t a;
     for (a = undo_back; seq && a < undo_n; a++)
-        if (undo_ring[(undo_top + UNDO_N - a) % UNDO_N].seq == seq)
+        if ((*undo_entry((undo_top + UNDO_N - a) % UNDO_N)).seq == seq)
             return (int32_t)((undo_top + UNDO_N - a) % UNDO_N);
     return -1;
 }
@@ -1477,7 +1492,7 @@ static void undo_push(uint32_t what)                       /* a new copy: the ca
     if (undo_n < UNDO_N)
         undo_n++;
     else if (upin.pin && undo.seq == upin.pin)             /* ((2.0) the oldest is the put-back's: it takes the next */
-        undo_ring[(undo_top + 1u) % UNDO_N] = undo;        /* oldest's place, that one goes) */
+        (*undo_entry((undo_top + 1u) % UNDO_N)) = undo;        /* oldest's place, that one goes) */
     undo.seq = ++upin.seq ? upin.seq : ++upin.seq;         /* (1.., 0: none) */
     if (upin.pin_next) {
         upin.pin = undo.seq;
@@ -1900,7 +1915,7 @@ static void undo_step(int redo)
     }
     if (redo)
         undo_back--;
-    c = &undo_ring[(undo_top + UNDO_N - undo_back) % UNDO_N];
+    c = &(*undo_entry((undo_top + UNDO_N - undo_back) % UNDO_N));
     if (
 #if FELUCCA_SNOW
         !(!redo && stattic_gen_undo(c->seq)) &&

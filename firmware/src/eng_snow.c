@@ -1,6 +1,10 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Snow 0.6: fixed instrument roles, with the complete open synthesis surface. */
 #include "snow_params.h"
+#ifndef SNOW_RENDER_RAM
+#define SNOW_RENDER_RAM
+#define SNOW_WAVE_RAM
+#endif
 /* Exact division by 2^bits, including C's truncation of negative samples.
  * JieLi's size optimiser otherwise leaves hardware divisions in hot loops. */
 static inline int32_t snow_div2(int32_t x,uint32_t bits)
@@ -128,7 +132,7 @@ static int32_t snow_amp(track_t *t,voice_t *v,int32_t adsr)
     if(p[SN_L2_DEST]==10)amp=mulq15(amp,clamp(32767+snow_l2[snow_role(t)].value*258,0,32767));
     return amp;
 }
-static int32_t snow_wave(uint32_t ph,uint32_t inc,uint32_t wave,uint32_t pw)
+static SNOW_WAVE_RAM int32_t snow_wave(uint32_t ph,uint32_t inc,uint32_t wave,uint32_t pw)
 {
     inc=inc>0x70000000u?0x70000000u:inc;
     switch(wave) {
@@ -140,7 +144,7 @@ static int32_t snow_wave(uint32_t ph,uint32_t inc,uint32_t wave,uint32_t pw)
     default:return sine_i(ph);
     }
 }
-static void snow_render(track_t *t,voice_t *v,int32_t *out,uint32_t n,const vmod_t *m)
+static SNOW_RENDER_RAM void snow_render(track_t *t,voice_t *v,int32_t *out,uint32_t n,const vmod_t *m)
 {
     const int16_t *p=t->p;
     uint32_t a=v->ph[0],b=v->ph[1],c=v->ph[2],alg=(uint32_t)p[SN_ALG]%6u;

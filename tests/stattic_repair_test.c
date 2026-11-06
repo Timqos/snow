@@ -33,11 +33,13 @@ static void exact_math(void)
     /* Exercise the target-only timing feedback: the renderer's measured
      * cost, not its voice-count fallback, becomes the next split's weight. */
     part_cost[0]=400;repair_clock_step=1000;mix_part(&trk[0],CTL,&mx[0]);
-    assert(part_cost[0]==550);repair_clock_step=0;
+    assert(part_cost[0]==1000);
+    part_cost[0]=2000;mix_part(&trk[0],CTL,&mx[0]);assert(part_cost[0]==1875);repair_clock_step=0;
     felucca_dbg.late=3;assert(strstr(menu_vname(MI_CPU,0)," L3"));
     felucca_dbg.late=UINT32_MAX;song.cpu_q8=9999;
     const char *label=menu_vname(MI_CPU,0);assert(strstr(label,"L999")&&strlen(label)<20);
-    felucca_dbg.late=song.cpu_q8=0;
+    snow_late_base=650;felucca_dbg.late=651;assert(snow_late_count()==1&&strstr(menu_vname(MI_CPU,0)," L1"));
+    snow_late_base=felucca_dbg.late=song.cpu_q8=0;
     puts("DSP: exact /127 over the full sample-product range, one million int32 cases and boundaries; Gray split matches exhaustive masks including ties");
 }
 static void queued_generators(void)
@@ -121,8 +123,31 @@ static void overlapping_chords(void)
     assert(t->p[P_REL]==SN_CH_RELEASE&&NVOICE==8);
     puts("CH sequence: all four old released notes remain audible/active alongside the next four-note chord, using existing eight slots; shared voice budget unchanged");
 }
+static void onset_prediction(void)
+{
+    seq_stop();panic_req=63;events_block(CTL);
+    for(uint32_t k=0;k<NPART;k++){memset(trk[k].v,0,sizeof trk[k].v);snow_peak_voice[k]=0;snow_rendered_voices[k]=0;part_cost[k]=k<4?1000:k==5?6000:0;}
+    uint32_t old=mix_split();trk[4].v[0].active=1;snow_peak_voice[4]=4000;
+    snow_cost_onsets();assert(part_cost[4]==4000);
+    uint32_t next=mix_split();assert(((next>>4)^(next>>5))&1u);
+    uint32_t peak[2]={0,0},sum=0;
+    for(uint32_t k=0;k<NPART;k++)sum+=part_cost[k];
+    for(uint32_t k=0;k<NPART;k++){if((old>>k)&1u)peak[0]+=part_cost[k];if((next>>k)&1u)peak[1]+=part_cost[k];}
+    peak[0]=peak[0]>sum-peak[0]?peak[0]:sum-peak[0];peak[1]=peak[1]>sum-peak[1]?peak[1]:sum-peak[1];assert(peak[1]<peak[0]);
+    memset(trk[4].v,0,sizeof trk[4].v);
+    puts("New low-note onset: predict work before worker dispatch; busy CH and new BS are split, peak estimated worker work falls before the first rendered block");
+}
+static void eight_undo_entries(void)
+{
+    seq_stop();launch_drop();undo_clear();upin.pin=upin.pin_next=0;track_t *t=&trk[0];t->p[P_E0]=0;
+    for(uint32_t n=1;n<=20;n++){undo.keep=0;load_begin(t,UNDO_SOUND);t->p[P_E0]=(int16_t)n;load_end(t);}
+    assert(undo_n==8);
+    for(uint32_t n=20;n>12;n--){undo_step(0);assert(t->p[P_E0]==(int16_t)(n-1));}
+    for(uint32_t n=13;n<=20;n++){undo_step(1);assert(t->p[P_E0]==(int16_t)n);}
+    puts("Eight-entry undo ring preserved across wrap and the SRAM/pool boundary, with all eight undo/redo operations");
+}
 int main(void)
 {
     setvbuf(stdout,0,_IOLBF,0);c1h_off=1;web_nor_erase();web_boot();advance(SNOW_BOOT_MS+200);
-    exact_math();queued_generators();overlapping_chords();puts("STATTIC REPAIR CONTRACTS PASSED; physical FM-1 deadline validation remains required");return 0;
+    exact_math();onset_prediction();queued_generators();overlapping_chords();eight_undo_entries();puts("STATTIC REPAIR CONTRACTS PASSED; physical FM-1 deadline validation remains required");return 0;
 }

@@ -58,14 +58,14 @@ static int tl_put_back(track_t *t)
     int32_t s = undo_find(upin.pin);
     if (s < 0)
         return 0;
-    if (undo_ring[s].pid != trk_pid[trk_index(t)]) {
-        undo_other_pattern(undo_ring[s].pid);
+    if ((*undo_entry(s)).pid != trk_pid[trk_index(t)]) {
+        undo_other_pattern((*undo_entry(s)).pid);
         return 0;
     }
     tl_undo_take(t, "PUT BACK");
     s = undo_find(upin.pin);                            /* (it may have moved on in the ring) */
-    memcpy(t->step, undo_ring[s].step, sizeof t->step);
-    if (motion_replace_track(t, &undo_ring[s].motion_backup))
+    memcpy(t->step, (*undo_entry(s)).step, sizeof t->step);
+    if (motion_replace_track(t, &(*undo_entry(s)).motion_backup))
         motion_full = 1;
     return 1;
 }

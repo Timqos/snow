@@ -70,7 +70,7 @@ BOARD_DEFS = {"fm1": [], "smk37": ["-DBOARD_SMK37=1"]}           # the FM-1 buil
 BOARD_STEM = {"fm1": "skiff", "smk37": "skiff-smk37"}            # a release package: STEM-X.Y.fwsc
 # smk37: the keyboard's model name (MODEL env or --model); one hardware, three names. pro adds no flag
 MODELS = {"pro": "SMK-37 Pro", "elite": "SMK-37 Elite", "mke": "MKE-P37"}
-VERSION = "v0.8.0-rc4-stattic" if os.environ.get("FELUCCA_SNOW") == "1" else None
+VERSION = "v0.8.0-rc5-stattic" if os.environ.get("FELUCCA_SNOW") == "1" else None
 # FELUCCA_CPU2 (firmware/src/felucca.c), unset or 1, the default (Skiff 1.3, as Felucca 1.6.1): the second core is built
 # in, its entry and stacks (firmware/hal/fm1_cpu1.S) linked; MENU > SYSTEM > CPU 2 CORES starts it (1 CORE by default:
 # as 1.2). FELUCCA_CPU2=0: none of it is built

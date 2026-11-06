@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "build/snow-preview"
-RELEASE = "0.8.0-rc4"
+RELEASE = "0.8.0-rc5"
 VERSION = f"v{RELEASE}-stattic"
 
 
@@ -25,6 +25,7 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     run("python3", "tests/target_budget_test.py")
     run("python3", "tests/target_budget.py", "build/felucca.dis", "tests/target_budget.txt")
+    run("python3", "tests/stattic_ram_test.py")
     run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/snow_boot_test", "tests/snow_boot_test.c", "-lm")
     run(str(ROOT / "build/snow_boot_test"))
     run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/snow_test", "tests/snow_test.c", "-lm")
@@ -37,6 +38,9 @@ def main():
     run(str(ROOT / "build/stattic_transport_test"))
     run("cc", "-O1", "-w", "-pthread", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/stattic_repair_test", "tests/stattic_repair_test.c", "-lm")
     run(str(ROOT / "build/stattic_repair_test"))
+    for name in ("stattic_type_test", "stattic_pair_audio_test"):
+        run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", f"build/{name}", f"tests/{name}.c", "-lm")
+        run(str(ROOT / f"build/{name}"))
     run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/snow_runtime_test", "tests/snow_runtime_test.c", "-lm")
     run(str(ROOT / "build/snow_runtime_test"))
     run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/stattic_playback_test", "tests/stattic_playback_test.c", "-lm")
