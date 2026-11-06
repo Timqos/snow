@@ -28,7 +28,7 @@ static void long_playback(void)
 {
     panic_req=63;events_block(CTL);web_snow_demo();memset(&motion,0,sizeof motion);
     for(uint32_t k=0;k<NTRK;k++){
-        trk[k].p[SN_G_LIVE]=0;trk[k].p[P_MUTE]=0;trk[k].p[P_LEVEL]=90;
+        trk[k].p[SN_G_LIVE]=0;trk[k].p[P_MUTE]=0;trk[k].p[P_LEVEL]=90;trk[k].p[P_SLEN]=64;
         assert(!snow_generate(k,1));assert(!snow_generate_parameters(k));assert(!snow_random_section(k,FAM_FX));
     }
     int16_t chord[P_COUNT];for(uint32_t id=0;id<P_COUNT;id++)chord[id]=motion_base_value(&trk[5],id);
@@ -47,7 +47,7 @@ static void long_playback(void)
     /* The actual envelope/mixer test is repeated after a minute of six-track
      * playback and effects, rather than assuming a clean startup is enough. */
     chord_release_audio();
-    printf("60-second six-channel playback with generated locks and strong FX: bounded stereo peak %.4f, CH core unchanged after STOP, real two-bar release still passes\n",peak);
+    printf("60-second 64-step six-channel playback with generated locks and strong FX: bounded stereo peak %.4f, CH core unchanged after STOP, real two-bar release still passes\n",peak);
 }
 int main(void)
 {
