@@ -769,7 +769,7 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
     mine = oct & lys.oct;
 #if FELUCCA_SNOW
     if(lys.l==LAYER_SEQ && mine) {
-        int rc=stattic_random_patterns();ui_message(rc?"WAIT PATTERN LAUNCH":"RANDOM PATT");
+        int rc=stattic_random_patterns();ui_message(rc==2?"WAIT PATTERN LAUNCH":rc==3?"NO OTHER PATTERNS":rc?"PATTERNS FULL":"RANDOM PATT");
         lys.oct=0;ui.force=1;return oct&~mine;
     }
 #endif

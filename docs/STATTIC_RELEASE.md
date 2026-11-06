@@ -1,4 +1,4 @@
-# STATTIC 0.8.0-rc1
+# STATTIC 0.8.0-rc2
 
 Experimental FM-1 candidate, previously named Snow. The five user HOME
 mockups in `assets/stattic-home/` and the confirmed control captions are
@@ -27,6 +27,13 @@ the interface reference. See [the recorded agreement](STATTIC_WORK_PLAN.md).
   installation UI, backup download name and firmware download name. Startup
   uses the user’s new nine-ribbon circular logo with a 1.5-second fade/hold.
   Historical internal API/format names and model ID FM-1_700 stay compatible.
+
+## OCT command precedence
+
+The explicit held-SAVE undo window takes priority over HOME page-2 clear
+and page-4 random-pattern commands. OCT+ redoes the undone action rather
+than clearing all channels. Native tests exercise redo/undo on all six roles.
+Pending launches and missing saved alternatives produce explicit messages.
 
 ## Sound and playback
 
@@ -78,7 +85,7 @@ The target build fits all enforced budgets (pre-publication build):
 
 | Region | Used | Limit | Free |
 | --- | ---: | ---: | ---: |
-| App slot | 569,252 B | 581,564 B | 12,312 B |
+| App slot | 569,552 B | 581,564 B | 12,012 B |
 | Data + BSS | 86,568 B | 98,304 B | 11,736 B |
 | Pool | 333,680 B | 356,352 B | 22,672 B |
 | RAM code + ramx | 24,176 B | 24,576 B | 400 B |

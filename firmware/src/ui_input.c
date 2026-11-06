@@ -2466,9 +2466,9 @@ static void ui_input(void)
         case B_OCTUP: {
             uint32_t both = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]);
 #if FELUCCA_SNOW
-            if(ui.home&&!lay&&!shift_held()&&(snow_home_panel==SN_HOME_GEN||snow_home_panel==SN_HOME_PAT)){
+            if(ui.home&&!lay&&!shift_held()&&!ui.undo_w&&(snow_home_panel==SN_HOME_GEN||snow_home_panel==SN_HOME_PAT)){
                 int rc=snow_home_panel==SN_HOME_PAT?stattic_random_patterns():snow_clear_sequence(b==B_OCTUP);
-                ui_message(rc?"WAIT PATTERN LAUNCH":snow_home_panel==SN_HOME_PAT?"RANDOM PATT":b==B_OCTUP?"ALL CHANNELS CLEARED":"PATTERN CLEARED");break;
+                ui_message(rc==2?"WAIT PATTERN LAUNCH":rc==3?"NO OTHER PATTERNS":rc?"PATTERNS FULL":snow_home_panel==SN_HOME_PAT?"RANDOM PATT":b==B_OCTUP?"ALL CHANNELS CLEARED":"PATTERN CLEARED");break;
             }
             if(b==B_OCTUP&&ui.home&&song.sel==5u&&!lay&&((fm1_in.buttons>>panel.btn[B_HOME])&1u)){
                 TSEL->p[SN_PLAY_MODE]=!TSEL->p[SN_PLAY_MODE];shift_mark();home_long=0;ui.shift=0;ui.force=1;break;
@@ -2647,7 +2647,7 @@ static void ui_input(void)
             stattic_turn(k,s);
             if(snow_home_panel==SN_HOME_GEN){
                 uint32_t count=(uint32_t)(s<0?-s:s);
-                while(count--){if(snow_home_generate(k))break;}
+                while(count--){int rc=snow_home_generate(k);if(rc){ui_message(rc==2?"WAIT PATTERN LAUNCH":"GENERATION FAILED");break;}}
                 continue;
             }
 #endif

@@ -8,7 +8,7 @@ Built on Skiff 2.2 and Felucca. Previously named Snow.
 · [Install STATTIC](https://timqos.github.io/snow/snow/install/)
 · [Factory firmware](https://timqos.github.io/snow/snow/install/factory.html)
 
-The 0.8.0-rc1 candidate introduces five HOME pages: sound, generation,
+The 0.8.0-rc2 candidate introduces five HOME pages: sound, generation,
 channel mixing, six-channel P1–P3 patterns, and MUTE/SOLO with volume.
 SELECT browses pages; the lower captions identify the physical controls.
 Large native-pixel text, an enlarged transport strip and the supplied

@@ -18,8 +18,8 @@ const image=await verifyPackage(bytes,config);assert(image.length>100000);
 const bad=bytes.slice();bad[bad.length-10]^=1;await assert.rejects(()=>verifyPackage(bad,config),/checksum/);
 await assert.rejects(()=>verifyPackage(bytes,{...config,product:'SMK-37 Pro_700'}),/FM-1/);
 const data=Uint8Array.from([1,2,3,4]);
-const archive={format:'felucca-backup',version:1,firmware:'STATTIC v0.8.0-rc1-stattic',objects:BACKUP_IDS.map(id=>({id,size:id<2?4:0,crc:id<2?bkCrc(data):0,data:id<2?Buffer.from(data).toString('base64'):''}))};
-function info(supported=true,prefix='STATTIC v0.8.0-rc1-stattic'){return [...Buffer.from(prefix),0,0,0,0,0,0,0,...(supported?[16,0x55,1,0,0x4d,1,0,0,0x42,1,1]:[])];}
+const archive={format:'felucca-backup',version:1,firmware:'STATTIC v0.8.0-rc2-stattic',objects:BACKUP_IDS.map(id=>({id,size:id<2?4:0,crc:id<2?bkCrc(data):0,data:id<2?Buffer.from(data).toString('base64'):''}))};
+function info(supported=true,prefix='STATTIC v0.8.0-rc2-stattic'){return [...Buffer.from(prefix),0,0,0,0,0,0,0,...(supported?[16,0x55,1,0,0x4d,1,0,0,0x42,1,1]:[])];}
 assert(archiveInfo(info()).supported);assert(archiveInfo(info(true,'FELUCCA v0.7.4-rc1-snow')).supported);
 const makeDevice=(model='FM-1',input='input-a')=>({id:{model,text:model==='FM-1'?'FM-1_700':model==='ota-FM-1'?'ota-FM-1_700':'SMK-37 Pro_700'},link:{input:{id:input},output:{id:'output-a'},close(){}}});
 function fixture({supported=true,failBackup=false,failDownload=false,model='FM-1'}={}){

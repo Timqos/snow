@@ -1,4 +1,4 @@
-# STATTIC 0.8.0-rc1 — simulator and manual
+# STATTIC 0.8.0-rc2 — simulator and manual
 
 The firmware previously named Snow is now STATTIC. The repository and
 historical URLs retain `snow` so existing links and backups keep working.

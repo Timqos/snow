@@ -272,10 +272,11 @@ static void snow_pattern_knob(uint32_t channel,int32_t steps)
 static int stattic_random_patterns(void)
 {
     for(uint32_t k=0;k<NTRK;k++)if(bank_next(k)<NENT)return 2;
+    uint32_t changed=0;
     for(uint32_t k=0;k<NTRK;k++){
         uint32_t choices[ST_PATTERNS],n=0,current=snow_pattern_current(k);
         for(uint32_t p=0;p<ST_PATTERNS;p++)if(p!=current&&ent_on(k,p))choices[n++]=p;
-        if(n){int rc=snow_pattern_select(k,choices[rng()%n]);if(rc)return rc;}
+        if(n){int rc=snow_pattern_select(k,choices[rng()%n]);if(rc)return rc;changed++;}
     }
-    ui.force=1;return 0;
+    ui.force=1;return changed?0:3;
 }
