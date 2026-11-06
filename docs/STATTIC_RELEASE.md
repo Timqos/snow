@@ -214,11 +214,11 @@ pattern persistence and browser-save compatibility remain in the suite.
 
 ## Current verification
 
-The rc6 build must pass the existing target budgets, complete STATTIC
+The rc6 build passed the existing target budgets, complete STATTIC
 native/WASM/audio suite, layout sweep at default/minimum/maximum values,
 eight-entry Undo and onset-prediction contracts, and ASan/UBSan checks.
-Desktop/mobile browser checks and a new 28-check exact-package update/rollback
-audit are required before publication, retaining previous rc5. Broader upstream UI checks retain all 3,458
+Desktop/mobile browser checks and a fresh 28-check exact-package update/rollback
+audit passed, retaining previous rc5. Broader upstream UI checks retain all 3,458
 golden pictures with zero layout/alignment findings.
 The exact package, source commit and update/rollback results are recorded in
 [the published build](https://timqos.github.io/snow/snow/build.json) and

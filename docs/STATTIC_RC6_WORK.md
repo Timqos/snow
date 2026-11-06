@@ -41,3 +41,42 @@ Verification before release:
 No physical FM-1 is connected here. Reduced redundant work is an additional
 performance candidate, not proof the remaining click has been reproduced or
 cured. Retest CH + BS/KK and whether L increases at the residual attack click.
+
+Completed validation:
+
+- Entire STATTIC native/WASM/audio pipeline passed, including immutable
+  factories/FX, eight new rc5 onset-capture hashes, 512 retriggers, 300,000
+  waveform comparisons, LFO clock cache changes/hits, ASan/UBSan, preserved
+  two-bar release, generators, shared-BAR controls and seven real worker splits.
+- Actual target placement/HAL checks and existing loop-work limits passed.
+  `snow_render`'s static loop score is 2054 against the unchanged 1914 +10%
+  limit: inlining exposes work previously counted in its callee. The common
+  dynamic path avoids helper dispatch; no physical CPU saving is claimed.
+- Real AudioWorklet/Chromium desktop/mobile controls and factory return passed.
+- Exact new binary passed 28 OTA/loader/rollback tests, including previous rc5
+  in both directions, original V15/V16 heads and OTA/loader sanitizers.
+- The broad suite's previously failing generic-emulator stage now passes:
+  native song/reboot, WASM/native equality and converter checks complete with
+  ALL HOST TESTS PASSED; earlier stages were already completed in the rc5 run.
+
+Final static regions:
+
+| Region | Used | Limit | Free |
+| --- | ---: | ---: | ---: |
+| Application | 575,000 B | 581,564 B | 6,564 B |
+| Data + BSS | 88,760 B | 98,304 B | 9,544 B |
+| Data pool | 348,148 B | 356,352 B | 8,204 B |
+| Executable RAM + ramx | 23,740 B | 24,576 B | 836 B |
+
+The 4 KiB application and 8 KiB pool minimum reserves remain enforced.
+
+Published candidate: https://timqos.github.io/snow/snow/?v=080rc6
+
+- Firmware source: `198eee5bd585f62004619d874ce264b4e06c0481`.
+- File: `stattic-0.8.0-rc6.fwsc`, 610,430 bytes.
+- SHA-256: `38f551d861c58946378247b8534c72b23432965a0e06afe4cb134c4673b6ab8c`.
+- gh-pages: `050e237`; successful Pages run: `42309635383`.
+- Previous packages, including rc5, are retained. PR #3 remains unmerged.
+
+All 12 normal site artifact URLs plus the root landing match local hashes;
+WASM MIME is correct. Verified 2026-11-07 01:13:19 Europe/Kyiv.
