@@ -184,7 +184,8 @@ home.web_snow_select(5);home.web_buttons(1<<6);render(home,850);home.web_buttons
 assert.equal(home.web_snow_param_base(5,mode),1);assert.equal(home.web_snow_home_panel(),1);
 home.web_buttons(1<<6);render(home,70);home.web_buttons((1<<6)|(1<<13));render(home,70);home.web_buttons(1<<6);render(home,70);home.web_buttons(0);render(home,100);assert.equal(home.web_snow_param_base(5,mode),0);
 assert.equal(home.web_snow_tempo_get(),tempo);
-console.log('WASM HOME PASSED: three SELECT panels, exact detent counts for four generators on six channels, preserved focus/BPM and HOME+OCT+ N/CHO');
+rotate(0,3);assert.equal(home.web_snow_home_panel(),4);assert.equal(home.web_snow_tempo_get(),tempo);rotate(0,-1);assert.equal(home.web_snow_home_panel(),3);for(const encoder of [3,4,5,6,1,2])rotate(encoder,20);for(let ch=0;ch<6;ch++)assert.equal(home.web_snow_pattern_get(ch),2);
+console.log('WASM HOME PASSED: five SELECT pages, exact detent counts for four generators on six channels, preserved focus/BPM and HOME+OCT+ N/CHO');
 
 // A real persisted old session must not override CH's required startup release.
 {

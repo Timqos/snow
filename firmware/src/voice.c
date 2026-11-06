@@ -596,6 +596,11 @@ static void engine_block(track_t *t)
  * 2.5 %). Value 0 (and a time below a block) takes the tables' 0. OFF: the tables' values, as before (looked up once a
  * block here instead of once a voice in env_tick: the same numbers) */
 static uint32_t beat_samples(void);                /* (fx.c) */
+#if FELUCCA_SNOW
+/* Only synchronized envelopes need arithmetic. Keep per-track coefficients
+ * across blocks, including restoration into a newly loaded track's state. */
+static struct { uint32_t quarter,k[3];int16_t a,d,r,sync;uint8_t valid; } stattic_env_cache[NTRK];
+#endif
 _Static_assert(CTL == 32, "esync_one: 4.6 CTL in Q16 is 9646899");
 static uint32_t esync_one(uint32_t quarter, int32_t v, uint32_t i)
 {
@@ -617,6 +622,17 @@ static __attribute__((noinline)) void esync_coef(track_t *t)   /* (not inlined: 
                                                                     * audio ISR's loop over the voices) */
 {
     const int16_t *p = t->p;
+#if FELUCCA_SNOW
+    uint32_t ck=(uint32_t)(t-trk),quarter=0;int32_t decay=p[P_DEC];
+    if(p[P_ESYNC]||snow_role(t)==5u){
+        quarter=beat_samples();if(snow_role(t)==5u&&p[P_ESYNC])decay=clamp(p[P_DEC]+snow_param(t,3)-64,0,127);
+        if(stattic_env_cache[ck].valid&&stattic_env_cache[ck].quarter==quarter&&
+           stattic_env_cache[ck].a==p[P_ATK]&&stattic_env_cache[ck].d==decay&&
+           stattic_env_cache[ck].r==p[P_REL]&&stattic_env_cache[ck].sync==p[P_ESYNC]){
+            memcpy(t->esync_k,stattic_env_cache[ck].k,sizeof t->esync_k);return;
+        }
+    }
+#endif
     if (p[P_ESYNC]) {
         uint32_t q = beat_samples();
         t->esync_k[0] = esync_one(q, p[P_ATK], 0);
@@ -635,6 +651,13 @@ static __attribute__((noinline)) void esync_coef(track_t *t)   /* (not inlined: 
         if(snow_role(t)==5u)t->esync_k[2]=esync_one(beat_samples(),p[P_REL],2);
 #endif
     }
+#if FELUCCA_SNOW
+    if(quarter){
+        stattic_env_cache[ck].quarter=quarter;stattic_env_cache[ck].a=p[P_ATK];stattic_env_cache[ck].d=(int16_t)decay;
+        stattic_env_cache[ck].r=p[P_REL];stattic_env_cache[ck].sync=p[P_ESYNC];stattic_env_cache[ck].valid=1;
+        memcpy(stattic_env_cache[ck].k,t->esync_k,sizeof t->esync_k);
+    }
+#endif
 }
 
 static int32_t env_tick(track_t *t, voice_t *v)

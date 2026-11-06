@@ -70,8 +70,10 @@ static void unchanged_audio(void)
     static const uint32_t synth[] = {0x289a1769,0x708a8a58,0xc6515e20,
         0x4c085da8,0xc240851f,0x04764298};
     for (uint32_t m = 0; m < NELEM(fx); m++) assert(fx_capture(m) == fx[m]);
-    for (uint32_t k = 0; k < NTRK; k++) assert(synth_capture(k) == synth[k]);
-    puts("Audio optimisation: all 60 factory sounds and nine active/dry FX paths match 0.7.3 exactly");
+    /* Kick factory patches are intentionally redesigned in STATTIC.
+     * All other factories retain the original immutable audio hashes. */
+    for (uint32_t k = 1; k < NTRK; k++) assert(synth_capture(k) == synth[k]);
+    puts("Audio optimisation: 50 unchanged factory sounds and nine active/dry FX paths match 0.7.3 exactly");
 }
 
 static void glo_routes(void)

@@ -60,6 +60,11 @@ def main():
             low = sum(power[:math.ceil(1000 * n / 44100)]) / total
             peak_bin = max(power) / total
             profile = dict(preset=p + 1, energy95_ms=round(end * 1000 / 44100, 2), centroid_hz=round(centroid), below_1k=round(low, 4), strongest_bin=round(peak_bin, 4))
+            if role == 'kick':
+                attack = x[:882]  # first 20 ms, before the low body/tail
+                profile['attack_peak'] = max(map(abs, attack))
+                profile['attack_rms'] = round(math.sqrt(sum(v*v for v in attack)/len(attack)))
+                assert profile['attack_peak'] > 700 and profile['attack_rms'] > 300, profile
             if role == 'hat':
                 assert low < .05, profile
                 assert peak_bin < .035, profile  # no dominant glass/bell tone

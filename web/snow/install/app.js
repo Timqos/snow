@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import {Updater,stockRefusal} from './fm1ota.js';
-import {verifyPackage,verifyFactoryPackage,InstallSession} from './core.js?v=074rc1';
+import {verifyPackage,verifyFactoryPackage,InstallSession} from './core.js?v=080rc1';
 const $=id=>document.getElementById(id);
 const factory=document.body.dataset?.installMode==='factory';
 let config,image,session,writing=false,connecting=false;
@@ -9,7 +9,7 @@ const say=text=>{$('install-status').textContent=text;};
 const log=text=>{$('log').textContent+=text+'\n';};
 function saveArchive(archive){
  const url=URL.createObjectURL(new Blob([JSON.stringify(archive,null,2)],{type:'application/json'}));
- const a=document.createElement('a');a.href=url;a.download=`Snow-backup-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ const a=document.createElement('a');a.href=url;a.download=`STATTIC-backup-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 function update(){
  const ready=!!session?.mode&&!writing&&!connecting;
@@ -41,10 +41,10 @@ $('install').onclick=async()=>{
  try{
   const done=await session.install({backupConfirmed:$('backup-confirmed').checked,riskConfirmed:$('risk-confirmed').checked,externalConfirmed:$('external-confirmed').checked,onStep:(step,value)=>{
    log(`${step}${value===undefined?'':' '+value}`);
-   const text={start:'Starting the model-checked update. Keep USB and power connected.',verify:'The running firmware is checking the package.',loader:'Waiting for the FM-1 update loader to reconnect…',write:factory?'Writing original factory firmware. Do not unplug, refresh or close this tab.':'Writing Snow. Do not unplug, refresh or close this tab.',dropped:'The connection dropped. Waiting for the same loader to resume…',resume:'Resuming the interrupted write…',reboot:'Firmware written. Waiting for the FM-1 to restart…',done:'Installation completed. Check the version in MENU / ABOUT and keep your backup.'};say(text[step]||step);
+   const text={start:'Starting the model-checked update. Keep USB and power connected.',verify:'The running firmware is checking the package.',loader:'Waiting for the FM-1 update loader to reconnect…',write:factory?'Writing original factory firmware. Do not unplug, refresh or close this tab.':'Writing STATTIC. Do not unplug, refresh or close this tab.',dropped:'The connection dropped. Waiting for the same loader to resume…',resume:'Resuming the interrupted write…',reboot:'Firmware written. Waiting for the FM-1 to restart…',done:'Installation completed. Check the version in MENU / ABOUT and keep your backup.'};say(text[step]||step);
    if(step==='verify')$('progress').value=Math.min(5,+value*5/80);if(step==='write')$('progress').value=5+(+value)*.95;if(step==='done')$('progress').value=100;
   }});
-  if(done){$('progress').value=100;say(factory?'Original factory firmware installed. Keep your Snow backup: factory firmware cannot open Snow projects.':'Snow installation completed. Check MENU / ABOUT on the FM-1. Keep your backup for rollback.');}
+  if(done){$('progress').value=100;say(factory?'Original factory firmware installed. Keep your STATTIC backup: factory firmware cannot open STATTIC projects.':'STATTIC installation completed. Check MENU / ABOUT on the FM-1. Keep your backup for rollback.');}
  }catch(error){
   const refusal=factory?stockRefusal(config.product,error):null;
   const detail=refusal==='stockNeedsV15'?'This FM-1 needs original V15, not V16. No firmware was written.':refusal==='stockNeedsV16'?'This FM-1 needs original V16, not V15. No firmware was written.':error.message;

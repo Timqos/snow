@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Build and check the Snow prototype preview after FELUCCA_SNOW=1 sh build.sh."""
+"""Build and check the STATTIC prototype preview after FELUCCA_SNOW=1 sh build.sh."""
 import hashlib
 import json
 import os
@@ -11,8 +11,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "build/snow-preview"
-RELEASE = "0.7.4-rc1"
-VERSION = f"v{RELEASE}-snow"
+RELEASE = "0.8.0-rc1"
+VERSION = f"v{RELEASE}-stattic"
 
 
 def run(*args):
@@ -33,6 +33,8 @@ def main():
     run(str(ROOT / "build/snow_home_test"))
     run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/snow_runtime_test", "tests/snow_runtime_test.c", "-lm")
     run(str(ROOT / "build/snow_runtime_test"))
+    run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/stattic_playback_test", "tests/stattic_playback_test.c", "-lm")
+    run(str(ROOT / "build/stattic_playback_test"))
     run("cc", "-O1", "-w", "-pthread", "-DVOICES_2CORE=8", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/snow_dualcore_test", "tests/snow_dualcore_test.c", "-lm")
     run(str(ROOT / "build/snow_dualcore_test"))
     run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/snow_audition", "tests/snow_audition.c", "-lm")
@@ -49,14 +51,14 @@ def main():
         "-sSTANDALONE_WASM", "-sSTACK_SIZE=1048576", "-sINITIAL_MEMORY=33554432", "-sFILESYSTEM=0",
         "-o", str(OUT / "felucca.wasm"), "web/emu/felucca_web.c")
     run("node", "tests/snow_wasm.mjs", str(OUT / "felucca.wasm"))
-    package_name = f"snow-{RELEASE}.fwsc"
+    package_name = f"stattic-{RELEASE}.fwsc"
     package_hash = hashlib.sha256((ROOT / "build/felucca.fwsc").read_bytes()).hexdigest()
     source = Path(os.environ.get("SNOW_SOURCE_DIR", ROOT))
     commit = subprocess.check_output(["git","rev-parse","HEAD"],cwd=source,text=True).strip()
     html = (ROOT / "web/emu/index.html").read_text().replace("@VERSION@", VERSION).replace("@PREVIEW@", " (experimental)")
-    html = html.replace('<title>Try Skiff</title>', f'<title>Snow Firmware {RELEASE} · FM-1 groovebox</title>')
+    html = html.replace('<title>Try Skiff</title>', f'<title>STATTIC Firmware {RELEASE} · FM-1 groovebox</title>')
     html = re.sub(r'<link rel="icon"[^>]*>', '<link rel="icon" href="logo.svg" type="image/svg+xml">', html, count=1)
-    html = html.replace('Skiff, the six-track groovebox firmware for the M-VAVE FM-1, running in your browser: the same code the unit runs.', 'Snow for the M-VAVE FM-1: six instruments, smart sound generation, generative patterns and a browser simulator. Install, back up and learn the controls.')
+    html = html.replace('Skiff, the six-track groovebox firmware for the M-VAVE FM-1, running in your browser: the same code the unit runs.', 'STATTIC for the M-VAVE FM-1: six instruments, smart sound generation, generative patterns and a browser simulator. Install, back up and learn the controls.')
     html = html.replace('"skiff-emu-flash"', '"snow-fm1-prototype-06"')
     html = html.replace('const raw = JSON.parse(localStorage.getItem(STORE) || "{}"), out = {};',
         'const current = localStorage.getItem(STORE), old05 = current ? null : localStorage.getItem("snow-fm1-prototype-05"), old04 = current || old05 ? null : localStorage.getItem("snow-fm1-prototype-04");\n    snowLegacy04 = !!old04;\n    const raw = JSON.parse(current || old05 || old04 || "{}"), out = {};')
@@ -75,7 +77,8 @@ def main():
     keys = html[keys_start:html.index('</p>', keys_start) + len('</p>')]
     footer = html[html.index('<footer>'):html.index('</footer>') + len('</footer>')]
     footer = re.sub(r'<nav>.*?</nav>', '', footer, flags=re.S)
-    footer = footer.replace('Skiff is not affiliated', 'Snow is not affiliated')
+    footer = footer.replace('Skiff is not affiliated', 'STATTIC is not affiliated')
+    html = html.replace('Skiff: this browser', 'STATTIC: this browser').replace('Skiff: the browser', 'STATTIC: the browser')
     heading = (ROOT / "web/snow/header.html").read_text().replace("@VERSION@", RELEASE)
     html = html[:main_start] + '<main>\n' + heading + device + install + keys + '<section class="snow-guide"' + guide + footer + '\n</main>' + html[main_end:]
     send_line = 'const send = (m) => { if (node) node.port.postMessage(m); };'
@@ -110,12 +113,12 @@ def main():
     for name in ("LICENSE", "LICENSING.md"):
         shutil.copy(ROOT / name, OUT / name)
     source = Path(os.environ.get("SNOW_SOURCE_DIR", ROOT))
-    metadata = {"stage":"Snow runtime candidate: two-core DSP, idle FX sleep and factory recovery", "version":VERSION, "source_commit":subprocess.check_output(["git","rev-parse","HEAD"],cwd=source,text=True).strip(),
+    metadata = {"stage":"STATTIC candidate: five-page HOME, vertical static, role-aware sequences and sound repair", "version":VERSION, "source_commit":subprocess.check_output(["git","rev-parse","HEAD"],cwd=source,text=True).strip(),
                 "source_dirty":bool(subprocess.check_output(["git","status","--porcelain"],cwd=source,text=True).strip()),
                 "package_sha256":package_hash}
     (OUT / "build.json").write_text(json.dumps(metadata,indent=2)+"\n")
     run("node", "tests/snow_page.mjs", str(OUT / "index.html"))
-    print(f"Snow prototype: {OUT}")
+    print(f"STATTIC prototype: {OUT}")
 
 
 if __name__ == "__main__":

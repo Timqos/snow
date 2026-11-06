@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Snow's backup-first flow uses the existing, model-checked FM-1 updater.
+// STATTIC's backup-first flow uses the existing, model-checked FM-1 updater.
 import {productOf,logicalImage,sha256hex,validateStockPackage} from './fm1pkg.js';
 import {sameModel,IS_OTA} from './fm1ota.js';
 import {captureBackup,BackupConnection,readBackup} from './fm1backup.js';
 export async function verifyPackage(bytes,config){
- if(productOf(bytes)!==config.product||config.product!=='FM-1_700')throw new Error('This package is not the Snow FM-1 package. Nothing was written.');
+ if(productOf(bytes)!==config.product||config.product!=='FM-1_700')throw new Error('This package is not the STATTIC FM-1 package. Nothing was written.');
  if(await sha256hex(bytes)!==config.sha256)throw new Error('Firmware checksum mismatch. Reload the installer. Nothing was written.');
  return logicalImage(bytes);
 }
@@ -20,7 +20,7 @@ export function archiveInfo(a){
  const engines=a[pos];pos+=5;
  for(let i=0;i<engines;i++){const end=a.indexOf(0,pos);if(end<0)throw new Error('Invalid firmware INFO reply');pos=end+1;}
  const ext=a.slice(pos+1);
- const supported=/^FELUCCA /i.test(version)&&ext[0]===16&&ext[1]===0x55&&ext[2]===1&&ext[4]===0x4d&&ext[5]===1&&ext[8]===0x42&&ext[9]===1&&!!(ext[10]&1);
+ const supported=/^(?:FELUCCA|STATTIC) /i.test(version)&&ext[0]===16&&ext[1]===0x55&&ext[2]===1&&ext[4]===0x4d&&ext[5]===1&&ext[8]===0x42&&ext[9]===1&&!!(ext[10]&1);
  return {version,supported};
 }
 export class InstallSession{
@@ -33,7 +33,7 @@ export class InstallSession{
   try{
    const dev=await this.updater.find();if(!dev)throw new Error('FM-1 not found. Check USB, stop playback and close other MIDI apps.');
    const input=dev.link.input,output=dev.link.output;dev.link.close();
-   if(!sameModel(dev.id.model,'FM-1'))throw new Error('Snow is for the FM-1 only. No update was started.');
+   if(!sameModel(dev.id.model,'FM-1'))throw new Error('STATTIC is for the FM-1 only. No update was started.');
    if(this.config.factory&&dev.id.text===this.config.product)throw new Error('This FM-1 already runs the selected factory firmware. Nothing was written.');
    if(this.config.factory&&IS_OTA(dev.id))throw new Error('Finish the interrupted update first. Factory return needs running firmware to check the matching startup head. Nothing was written.');
    this.ports={input:input.id,output:output.id};this.device=dev.id.text;

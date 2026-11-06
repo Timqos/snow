@@ -70,9 +70,9 @@ static void snow_design_sound(const track_t *t,uint32_t channel,uint32_t seed,co
         p[SN_ALG]=body==3?1:body==5?4:0;p[P_E0]=ss_range(&r,0,body==3?58:42);
         p[SN_NOISE]=ss_range(&r,0,5);p[SN_RATIO3]=ss_chance(&r,65)?8:16;
         p[SN_SUB]=ss_range(&r,0,body==0?30:18);p[SN_MIX]=ss_range(&r,0,12);
-        p[P_E5]=ss_range(&r,0,8);p[SN_PAMT]=ss_range(&r,5,23);p[SN_PDEC]=ss_range(&r,7,21);
+        p[P_E5]=ss_range(&r,0,8);p[SN_PAMT]=ss_range(&r,20,38);p[SN_PDEC]=ss_range(&r,6,14);
         p[SN_FMDEC]=ss_range(&r,18,49);p[SN_FILTER]=1;p[SN_RESO]=ss_range(&r,0,12);
-        p[P_E6]=ss_range(&r,58,103);p[P_DEC]=ss_range(&r,body==0?83:49,body==0?96:73);
+        p[P_E6]=ss_range(&r,83,115);p[P_DEC]=ss_range(&r,body==0?83:49,body==0?96:73);
         p[P_ATK]=ss_range(&r,0,7);
     } else if(channel==1u){ /* Snare: pitched skin plus a coloured noise spring. */
         int brush=ss_chance(&r,12),band=ss_chance(&r,20);
@@ -173,9 +173,20 @@ static int snow_random_section(uint32_t channel,uint32_t family)
         if(family==FAM_LFO)snow_design_lfo(channel,&r,next);
         else {
             snow_design_fx(channel,&r,next);
-            next[P_DLY]=ss_range(&r,4,channel==0?24:42);next[P_REV]=ss_range(&r,4,channel==0?28:48);
-            next[P_CHOR]=ss_range(&r,0,channel<4?20:35);next[P_DTYPE]=ss_range(&r,0,1);
-            next[P_SLCR]=ss_chance(&r,25)?ss_range(&r,1,2):0;
+            /* Dedicated FX generation has an audible lead processor. EDIT's
+             * instrument designer retains its gentle, body-preserving rack. */
+            uint32_t lead=(uint32_t)ss_range(&r,0,5);
+            next[P_DLY]=ss_range(&r,10,44);next[P_REV]=ss_range(&r,10,48);
+            next[P_CHOR]=ss_range(&r,0,32);next[P_DTYPE]=ss_range(&r,0,1);
+            next[SN_DFB]=ss_range(&r,35,83);next[SN_RSIZE]=ss_range(&r,55,108);
+            next[SN_CDEPTH]=ss_range(&r,27,72);next[SN_CFB]=ss_range(&r,0,29);
+            if(lead==0)next[P_DLY]=ss_range(&r,65,106);
+            if(lead==1)next[P_REV]=ss_range(&r,68,112);
+            if(lead==2)next[P_CHOR]=ss_range(&r,60,106);
+            if(lead==3){next[SN_TMIX]=ss_range(&r,65,112);next[SN_TDRIVE]=ss_range(&r,30,76);next[SN_TWOW]=ss_range(&r,4,20);}
+            if(lead==4){next[SN_BMIX]=ss_range(&r,40,86);next[SN_BBITS]=ss_range(&r,7,12);next[SN_BRATE]=ss_range(&r,2,9);}
+            if(lead==5){next[P_IMIX]=ss_range(&r,50,98);next[P_DIST]=ss_range(&r,12,32);}
+            next[P_SLCR]=channel<4u&&ss_chance(&r,20)?ss_range(&r,1,2):0;
             next[P_SLPAT]=ss_range(&r,1,16);next[P_SLRATE]=ss_range(&r,0,4);next[P_SLDEPTH]=ss_range(&r,12,42);
             next[P_DKSRC]=ss_chance(&r,25)?(int16_t)((channel+(uint32_t)ss_range(&r,1,5))%NTRK+1u):0;
             next[P_DKAMT]=ss_range(&r,12,48);next[P_DKREL]=ss_range(&r,40,84);

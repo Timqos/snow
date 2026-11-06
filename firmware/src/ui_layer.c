@@ -145,6 +145,9 @@ static void layer_masks(void)
     kb_mask = m;
     perf_mask = m & ly_bit(LAYER_FX);
     kb_lock = (uint8_t)(m && ui.lock ? 1u | (ui.lock == LAYER_FX ? 2u : 0u) : 0u);   /* (no button held: the ISR's) */
+#if FELUCCA_SNOW
+    if(ui.home&&snow_home_panel==SN_HOME_MS&&!ui.menu&&!ui.confirm&&!ui.ly&&!ui.shift){kb_mask=ly_bit(LAYER_GLO);kb_lock=1;}
+#endif
 }
 
 /* a layer button pressed (its edge) while none is armed: it is now, a dead one where no layer opens */
@@ -607,7 +610,7 @@ static void layer_key(uint32_t l, uint32_t k)
             perf_slot_key(k, p);                        /* ((2.0) the black keys: mute_keys) */
     } else if (l == LAYER_SEQ) {
 #if FELUCCA_SNOW
-        if(!key_black(k) && p<8u)(void)snow_pattern_select(song.sel,snow_pattern_half*8u+p);
+        if(!key_black(k) && p<ST_PATTERNS)(void)snow_pattern_select(song.sel,p);
         else if(key_black(k) && p<NTRK)sel_set(p);
 #else
         if (!key_black(k))
@@ -623,15 +626,38 @@ static void layer_key(uint32_t l, uint32_t k)
 static void layer_keys(uint32_t keys)
 {
     uint32_t k, l = layer_open() ? layer_open() : ui.layer, s = 0;
-    mute_keys(l, keys);
+#if FELUCCA_SNOW
+    int home_ms=ui.home&&snow_home_panel==SN_HOME_MS&&!ui.menu&&!ui.confirm&&!ui.ly&&!ui.shift;
+    if(home_ms)l=LAYER_GLO;
+#endif
+    mute_keys(
+#if FELUCCA_SNOW
+        home_ms?LAYER_NONE:
+#endif
+        l,
+#if FELUCCA_SNOW
+        home_ms?0u:
+#endif
+        keys);
     for (k = 0; keys && k < 27u; k++)
-        if ((keys >> k) & 1u)
+        if ((keys >> k) & 1u){
+#if FELUCCA_SNOW
+            if(home_ms){
+                uint32_t ch=key_black(k)?key_place(k):glo_white(k);
+                if(ch<NTRK){if(key_black(k))stattic_solo^=(uint8_t)(1u<<ch);else trk[ch].p[P_MUTE]=(int16_t)!trk[ch].p[P_MUTE];}
+                ui.force=1;continue;
+            }
+#endif
             layer_key(l, k);
+        }
     lys.solo &= kb_layer;
     for (k = 0; k < 27u; k++)
         if ((lys.solo >> k) & 1u)
             s |= 1u << glo_white(k);               /* ((Skiff phase 6) the track it solos) */
     perf_solo = (uint8_t)s;
+#if FELUCCA_SNOW
+    perf_solo|=stattic_solo;
+#endif
     lys.fill &= kb_layer;                               /* (Skiff) FILL: while its key is held in the layer */
     seq_fill = lys.fill != 0u;
 }
@@ -743,7 +769,7 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
     mine = oct & lys.oct;
 #if FELUCCA_SNOW
     if(lys.l==LAYER_SEQ && mine) {
-        snow_pattern_half^=1u;
+        int rc=stattic_random_patterns();ui_message(rc?"WAIT PATTERN LAUNCH":"RANDOM PATT");
         lys.oct=0;ui.force=1;return oct&~mine;
     }
 #endif
@@ -851,8 +877,8 @@ static uint32_t layer_leds(uint32_t *br)
             can = 1;
         } else if (l == LAYER_SEQ) {                    /* the tools breathe; DRUM: the lane */
 #if FELUCCA_SNOW
-            on=b?p==song.sel:p<8u && snow_pattern_current(song.sel)==snow_pattern_half*8u+p;
-            can=b?p<NTRK:p<8u && snow_pattern_used(song.sel,snow_pattern_half*8u+p);
+            on=b?p==song.sel:p<ST_PATTERNS && snow_pattern_current(song.sel)==p;
+            can=b?p<NTRK:p<ST_PATTERNS && snow_pattern_used(song.sel,p);
 #else
             on = (b && p < NLANE && drum_track(TSEL) && p == ui.lane) || (!b && p == TL_EUCLID && eu.on);   /* lit,
                                                          * the other lanes breathe ((1.3) EUCLID open: lit) */

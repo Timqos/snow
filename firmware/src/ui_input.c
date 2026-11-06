@@ -2101,11 +2101,11 @@ static void shift_mark(void)
 static int snow_home_generate(uint32_t knob)
 {
     uint32_t channel=song.sel;int rc;
-    if(knob==1u){
+    if(knob==0u){
         if(bank_next(channel)<NENT)return 2;
         undo.keep=0;undo_label="GEN SEQ + LOCKS";load_begin(TSEL,UNDO_PAT);
         rc=snow_generate(channel,1);if(!rc)rc=snow_generate_parameters(channel);load_end(TSEL);
-    }else rc=snow_random_section(channel,knob==0u?FAM_EDIT:knob==2u?FAM_LFO:FAM_FX);
+    }else rc=snow_random_section(channel,knob==1u?FAM_EDIT:knob==2u?FAM_LFO:FAM_FX);
     if(!rc)snow_home_gen[channel][knob]++;
     ui.force=1;return rc;
 }
@@ -2466,6 +2466,10 @@ static void ui_input(void)
         case B_OCTUP: {
             uint32_t both = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]);
 #if FELUCCA_SNOW
+            if(ui.home&&!lay&&!shift_held()&&(snow_home_panel==SN_HOME_GEN||snow_home_panel==SN_HOME_PAT)){
+                int rc=snow_home_panel==SN_HOME_PAT?stattic_random_patterns():snow_clear_sequence(b==B_OCTUP);
+                ui_message(rc?"WAIT PATTERN LAUNCH":snow_home_panel==SN_HOME_PAT?"RANDOM PATT":b==B_OCTUP?"ALL CHANNELS CLEARED":"PATTERN CLEARED");break;
+            }
             if(b==B_OCTUP&&ui.home&&song.sel==5u&&!lay&&((fm1_in.buttons>>panel.btn[B_HOME])&1u)){
                 TSEL->p[SN_PLAY_MODE]=!TSEL->p[SN_PLAY_MODE];shift_mark();home_long=0;ui.shift=0;ui.force=1;break;
             }
@@ -2556,7 +2560,8 @@ static void ui_input(void)
 #endif
     if (!lay && (s = panel_enc(EN_PRESET)) != 0) {
 #if FELUCCA_SNOW
-        if(!ui.home&&(cur_page()->graph==GR_SNOW_PAT||cur_page()->graph==GR_TRK))edit_param(5,s);
+        if(ui.home&&snow_home_panel==SN_HOME_PAT)snow_pattern_knob(5,s);
+        else if(!ui.home&&(cur_page()->graph==GR_SNOW_PAT||cur_page()->graph==GR_TRK))edit_param(5,s);
         else
 #endif
         if (shift_held() && sel_shift(s)) {             /* ((2.0) SHIFT + PRESETS on NOTES, FEEL: the selection, a */
@@ -2568,7 +2573,8 @@ static void ui_input(void)
     }
     if (!lay && (s = panel_enc(EN_ALGO)) != 0) {
 #if FELUCCA_SNOW
-        if(!ui.home&&(cur_page()->graph==GR_SNOW_PAT||cur_page()->graph==GR_TRK))edit_param(4,s);else
+        if(ui.home&&snow_home_panel==SN_HOME_PAT)snow_pattern_knob(4,s);
+        else if(!ui.home&&(cur_page()->graph==GR_SNOW_PAT||cur_page()->graph==GR_TRK))edit_param(4,s);else
 #endif
         /* ALGORITHM: the selected track, on every page */
         track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));
@@ -2580,7 +2586,8 @@ static void ui_input(void)
 #if FELUCCA_SNOW
         if(ui.home&&!lay){
             if(shift_held()){shift_mark();home_long=0;ui.shift=0;}
-            snow_home_panel=(uint8_t)clamp((int32_t)snow_home_panel+s,0,2);
+            snow_home_panel=(uint8_t)clamp((int32_t)snow_home_panel+s,0,SN_HOME_COUNT-1);
+            layer_masks();
             ui.force=1;
         }else
 #endif
@@ -2631,6 +2638,13 @@ static void ui_input(void)
         }
         if (ui.home) {
 #if FELUCCA_SNOW
+            if(snow_home_panel==SN_HOME_PAT){snow_pattern_knob(k,s);continue;}
+            if(snow_home_panel==SN_HOME_MS){
+                if(k==0u)track_select((uint32_t)clamp((int32_t)song.sel+s,0,NTRK-1));
+                else if(k==1u){int32_t v=param_turn(&TP[P_LEVEL],motion_base_value(TSEL,P_LEVEL),s);TSEL->p[P_LEVEL]=(int16_t)v;motion_capture(TSEL,P_LEVEL,v);snow_touch(TSEL,P_LEVEL,(int16_t)v);}
+                ui.force=1;continue;
+            }
+            stattic_turn(k,s);
             if(snow_home_panel==SN_HOME_GEN){
                 uint32_t count=(uint32_t)(s<0?-s:s);
                 while(count--){if(snow_home_generate(k))break;}

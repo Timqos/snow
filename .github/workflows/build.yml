@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-name: Snow firmware and simulator
+name: STATTIC firmware and simulator
 
 on:
   push:
@@ -58,7 +58,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: snow-build-logs-${{ github.sha }}
+          name: stattic-build-logs-${{ github.sha }}
           path: |
             build/*-build.log
             build/host-tests.log
@@ -70,7 +70,7 @@ jobs:
       - name: Downloadable firmware and simulator
         uses: actions/upload-artifact@v4
         with:
-          name: snow-firmware-and-simulator-${{ github.sha }}
+          name: stattic-firmware-and-simulator-${{ github.sha }}
           path: build/site/
           retention-days: 30
           if-no-files-found: error

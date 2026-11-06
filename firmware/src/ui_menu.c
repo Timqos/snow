@@ -7,6 +7,17 @@
 /* ------------------------------------------------------------ menu --- */
 /* (the rows, their values and names, usb_serial_apply: menu_items.c) */
 
+#if FELUCCA_SNOW
+/* https://timqos.github.io/snow/snow/, QR version 3, correction M, mask 2 (tools/gen_qr.py).
+ * One row per word, leftmost module in bit 0; the constant matrix needs no encoder or RAM. */
+static const uint32_t ABOUT_QR[29] = {
+    0x1FDF8A7Fu, 0x10440041u, 0x1759555Du, 0x174A075Du, 0x174EE55Du, 0x1043E341u,
+    0x1FD5557Fu, 0x00092100u, 0x07C6407Du, 0x11FE1239u, 0x01D396C3u, 0x0B514B3Du,
+    0x069386EDu, 0x11D96D8Du, 0x07A7E5D1u, 0x08C1263Cu, 0x062A5949u, 0x15FF05B9u,
+    0x05C28869u, 0x087545B5u, 0x1DF2164Du, 0x1F1F6B00u, 0x075BEC7Fu, 0x11183141u,
+    0x0DF3D55Du, 0x1E09355Du, 0x0FF3E15Du, 0x0B115A41u, 0x07CE6B7Fu,
+};
+#else
 /* https://github.com/illuminus5/skiff, QR version 3, correction M, mask 3 (tools/gen_qr.py).
  * One row per word, leftmost module in bit 0; the constant matrix needs no encoder or RAM. */
 static const uint32_t ABOUT_QR[29] = {
@@ -16,6 +27,7 @@ static const uint32_t ABOUT_QR[29] = {
     0x05D19951u, 0x05C68D8Cu, 0x07F7BD7Au, 0x1F117700u, 0x0B593D7Fu, 0x0B158341u,
     0x0DF7C45Du, 0x13AFDB5Du, 0x14940F5Du, 0x0AB12C41u, 0x0878B97Fu,
 };
+#endif
 
 static void draw_about_qr(int32_t x, int32_t y)
 {
@@ -131,8 +143,8 @@ static int32_t menu_document(int32_t y, int draw)
 {
     uint32_t i;
     if (draw) {
-        cv_text(6, y + 2, &AF_L, "SKIFF", T_THEME);
-        cv_text(6, y + 38, &AF_S, "Groovebox on Felucca", T_TEXT);
+        cv_text(6, y + 2, &AF_L, FELUCCA_SNOW ? "STATTIC" : "SKIFF", T_THEME);
+        cv_text(6, y + 38, &AF_S, FELUCCA_SNOW ? "FM-1 CUSTOM FIRMWARE" : "Groovebox on Felucca", T_TEXT);
         cv_text(6, y + 58, &AF_M, FELUCCA_VERSION, T_THEME);
         cv_text_r(232, y + 61, &AF_S, __DATE__, T_MID, T_BG);
         {   /* (Skiff) the core clock now, from the PLL (hal/fm1_clk.h; MENU > SYSTEM > CPU CLOCK) */

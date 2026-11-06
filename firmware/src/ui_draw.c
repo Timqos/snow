@@ -1455,8 +1455,9 @@ static void ui_draw_page(uint32_t counting)
 #if FELUCCA_SNOW
     int snow_overview=!ui.menu&&!ui.confirm&&!name_on()&&!counting&&!ui.shift&&
         ((ui.layer&&(ui.ly==LAYER_GLO||ui.ly==LAYER_SEQ))||(!ui.layer&&!ui.home&&(cur_page()->graph==GR_TRK||cur_page()->graph==GR_SNOW_PAT)));
-    if(snow_overview){snow_home_active=0;snow_channels_draw(ui.layer?ui.ly==LAYER_SEQ:cur_page()->graph==GR_SNOW_PAT);return;}
-    snow_channels_active=0;
+    if(snow_overview){snow_channels_draw(ui.layer?ui.ly==LAYER_SEQ:cur_page()->graph==GR_SNOW_PAT);return;}
+    if(snow_channels_active)snow_home_active=0;
+    snow_channels_active=0;stattic_overview=0;
     if(!ui.home||ui.menu||ui.confirm||ui.layer||ui.shift||name_on()||counting)snow_home_active=0;
     if(ui.home&&!ui.menu&&!ui.confirm&&!ui.layer&&!ui.shift&&!name_on()&&!counting){snow_home_draw();return;}
 #endif

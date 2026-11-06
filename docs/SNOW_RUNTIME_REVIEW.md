@@ -1,5 +1,9 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Snow runtime repair — not yet qualified on FM-1 hardware
+# Earlier Snow 0.7.4 runtime repair — historical analysis
+
+Current STATTIC changes and the newer 2-core/80%-playback report are recorded
+in [STATTIC_RELEASE.md](STATTIC_RELEASE.md). The earlier deferred HOME redesign
+is implemented there; the analysis below records the earlier candidate.
 
 The first physical-device report for Snow describes distorted audio even
 with STOP, low MASTER and one note, sluggish menus, and an unexpectedly short

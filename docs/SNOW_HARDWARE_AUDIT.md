@@ -1,6 +1,13 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Snow 0.7.4-rc1 — installation and rollback audit
 
+The current candidate is **STATTIC 0.8.0-rc1** (formerly Snow). See
+[the current revision](STATTIC_RELEASE.md) for interface/sound changes and
+physical qualification limits. The current published package's machine-readable
+`update-audit.json` supplies its exact hash and update/rollback evidence.
+The protocol/flash-map analysis below remains applicable.
+
+
 **Software checks passed. Physical FM-1 qualification is still pending.**
 No Snow-specific boot-area overwrite or firmware lock-in was found in the
 reviewed paths. This is evidence about code and simulated updates, not a

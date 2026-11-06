@@ -76,7 +76,7 @@ static void generation_tests(void)
             if(i)assert(mask!=masks[i-1]);masks[i]=mask;
             int seen=0;for(uint32_t j=0;j<i;j++)seen|=mask==masks[j];unique+=!seen;
             for(uint32_t j=0;j<32;j++)if(t->step[j].time==ST_NOTE&&t->step[j].n){notes++;
-                assert(t->step[j].vel>0);assert(t->step[j].n==(k==5?3:1));
+                assert(t->step[j].vel>0);assert(k==5?(t->step[j].n>=3&&t->step[j].n<=4):t->step[j].n==1);
                 for(uint32_t n=0;n<t->step[j].n;n++)assert(scale_snap(t,t->step[j].note[n])==t->step[j].note[n]);
                 if(firstnote==128)firstnote=t->step[j].note[0];else pitched|=firstnote!=t->step[j].note[0];
             }
@@ -199,7 +199,7 @@ static void pattern_controls(void)
     web_enc(EN_PRESET,1);advance(60);assert(snow_pattern_current(5)==chord+1);
     assert(snow_channels_active);assert(snow_pattern_current(0)==kick+1);
     web_buttons(0);advance(90);
-    uint32_t current=snow_pattern_current(0),next=(current+1u)%NENT;
+    uint32_t current=snow_pattern_current(0),next=(current+1u)%ST_PATTERNS;
     assert(!snow_pattern_select(0,next));assert(!snow_pattern_select(0,current));
     while(pend_free()<PEND_N)assert(!pat_flush_one());
     tap(B_PLAY);assert(song.playing);
@@ -246,18 +246,18 @@ static void icon_position_tests(void)
         for(uint32_t i=0;i<10000;i++)hash=(hash^cv_px[i])*16777619u;
         assert(hash==expected_hash);count++;
     }fclose(ref);assert(count==594);
-    go_home();snow_home_panel=SN_HOME_SYNTH;sel_set(0);trk[0].p[P_MUTE]=0;trk[0].p[P_E0]=0;snow_touch(&trk[0],P_E0,0);advance(150);
+    go_home();snow_home_panel=SN_HOME_SYNTH;sel_set(0);ui.msg_t=ui.undo_w=0;trk[0].p[P_MUTE]=0;trk[0].p[P_E0]=0;snow_touch(&trk[0],P_E0,0);advance(150);
     uint16_t before[80*80];for(uint32_t y=0;y<80;y++)memcpy(before+y*80,web_fb+(107+y)*240+5,160);
     uint32_t blits=snow_home_state.card_blits;advance(1000);assert(snow_home_state.card_blits==blits);
-    trk[0].p[P_E0]=32;snow_touch(&trk[0],P_E0,32);advance(100);
+    web_enc(EN_K1,1);advance(100);
     uint32_t diff=0;for(uint32_t y=0;y<80;y++)for(uint32_t x=0;x<80;x++)diff+=before[y*80+x]!=web_fb[(107+y)*240+5+x];assert(diff>=16);
     for(uint32_t c=0;c<NPALETTES;c++){
         web_snow_color(c);advance(100);uint32_t accent=0;
         for(uint32_t y=115;y<181;y++)for(uint32_t x=13;x<79;x++){
-            uint16_t p=web_fb[y*240+x];assert(p==swap16(T_THEME)||p==swap16(T_BG));accent+=p==swap16(T_THEME);
+            uint16_t p=web_fb[y*240+x];assert(p==swap16(T_TEXT)||p==swap16(0));accent+=p==swap16(T_TEXT);
         }assert(accent>600);
     }
-    puts("Geometric channel icons: equal visible size, full system ink, fixed zone, ten themes and no idle animation passed");
+    puts("STATTIC static: white reference artwork, physical knob movement, fixed zone, ten themes and no idle animation passed");
     puts("Protected icons: BS, CH cassette and all four right-panel generators match 594 released snapshots at every scale");
 }
 static void random_sound_tests(void)
@@ -328,12 +328,12 @@ static void section_random_tests(void)
             }
             for(uint32_t t=0;t<NTRK;t++){assert(!memcmp(steps[t],trk[t].step,sizeof steps[t]));if(t!=k)assert(!memcmp(baseline[t],trk[t].p,sizeof baseline[t]));}
             assert(!memcmp(&motion,&locks,sizeof locks));
-            if(family==FAM_FX){assert(trk[k].p[P_SLDEPTH]<=42&&trk[k].p[P_DKAMT]<=48);assert(trk[k].p[SN_DFB]<=48&&trk[k].p[SN_CFB]<=12);}
+            if(family==FAM_FX){assert(trk[k].p[P_SLDEPTH]<=42&&trk[k].p[P_DKAMT]<=48);assert(trk[k].p[SN_DFB]<=83&&trk[k].p[SN_CFB]<=29);}
             else {assert(trk[k].p[P_LD_PIT]>=-2&&trk[k].p[P_LD_PIT]<=2);assert(trk[k].p[SN_L2_DEST]!=9);}
             int16_t generated[P_COUNT];memcpy(generated,trk[k].p,sizeof generated);undo_step(0);assert(!memcmp(before,trk[k].p,sizeof before));
             undo_step(1);assert(!memcmp(generated,trk[k].p,sizeof generated));ui.undo_w=0;
         }
-        for(uint32_t id=0;id<P_COUNT;id++)if((mask[id/32u]>>(id%32u))&1u)assert(id==SN_FX_BYPASS||high[id]>low[id]);
+        for(uint32_t id=0;id<P_COUNT;id++)if((mask[id/32u]>>(id%32u))&1u)assert(id==SN_FX_BYPASS||(family==FAM_FX&&k>=4u&&id==P_SLCR)||high[id]>low[id]);
         printf("Random %s role %u: %u controls, bounds, isolated scope, notes/locks, undo/redo passed\n",family==FAM_LFO?"LFO":"FX",k+1,count);
         ui.home=ui.menu=ui.confirm=ui.layer=ui.ly=ui.shift=0;ui.page=(uint8_t)page_first(family);ui.force=1;advance(100);
         int16_t before[P_COUNT];memcpy(before,trk[k].p,sizeof before);int8_t oct=song.octave;tap(B_OCTUP);

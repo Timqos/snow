@@ -6,20 +6,21 @@ import {pathToFileURL} from 'node:url';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 const dir=path.resolve(process.argv[2]);
-const {InstallSession,verifyPackage}=await import(pathToFileURL(path.join(dir,'core.js')));
+const {InstallSession,verifyPackage,archiveInfo}=await import(pathToFileURL(path.join(dir,'core.js')));
 const {BACKUP_IDS,bkCrc}=await import(pathToFileURL(path.join(dir,'fm1backup.js')));
 const config=JSON.parse(fs.readFileSync(path.join(dir,'config.json'),'utf8'));
 const notice=fs.readFileSync(path.join(dir,'index.html'),'utf8');
 assert(notice.indexOf('id="responsibility"')>=0&&notice.indexOf('id="responsibility"')<notice.indexOf('id="install"'));
-for(const text of ['at your own risk','cannot lawfully be excluded','id="factory-return"','matching original V15','V16 head','installs Snow only','python tools/fm1_install.py','Do not use --force'])assert(notice.includes(text),text);
+for(const text of ['at your own risk','cannot lawfully be excluded','id="factory-return"','matching original V15','V16 head','installs STATTIC only','python tools/fm1_install.py','Do not use --force'])assert(notice.includes(text),text);
 assert.equal((notice.match(/id="risk-confirmed"/g)||[]).length,1);
 const bytes=new Uint8Array(fs.readFileSync(path.resolve(dir,config.package)));
 const image=await verifyPackage(bytes,config);assert(image.length>100000);
 const bad=bytes.slice();bad[bad.length-10]^=1;await assert.rejects(()=>verifyPackage(bad,config),/checksum/);
 await assert.rejects(()=>verifyPackage(bytes,{...config,product:'SMK-37 Pro_700'}),/FM-1/);
 const data=Uint8Array.from([1,2,3,4]);
-const archive={format:'felucca-backup',version:1,firmware:'FELUCCA v0.5-snow',objects:BACKUP_IDS.map(id=>({id,size:id<2?4:0,crc:id<2?bkCrc(data):0,data:id<2?Buffer.from(data).toString('base64'):''}))};
-function info(supported=true){return [...Buffer.from('FELUCCA v0.5-snow'),0,0,0,0,0,0,0,...(supported?[16,0x55,1,0,0x4d,1,0,0,0x42,1,1]:[])];}
+const archive={format:'felucca-backup',version:1,firmware:'STATTIC v0.8.0-rc1-stattic',objects:BACKUP_IDS.map(id=>({id,size:id<2?4:0,crc:id<2?bkCrc(data):0,data:id<2?Buffer.from(data).toString('base64'):''}))};
+function info(supported=true,prefix='STATTIC v0.8.0-rc1-stattic'){return [...Buffer.from(prefix),0,0,0,0,0,0,0,...(supported?[16,0x55,1,0,0x4d,1,0,0,0x42,1,1]:[])];}
+assert(archiveInfo(info()).supported);assert(archiveInfo(info(true,'FELUCCA v0.7.4-rc1-snow')).supported);
 const makeDevice=(model='FM-1',input='input-a')=>({id:{model,text:model==='FM-1'?'FM-1_700':model==='ota-FM-1'?'ota-FM-1_700':'SMK-37 Pro_700'},link:{input:{id:input},output:{id:'output-a'},close(){}}});
 function fixture({supported=true,failBackup=false,failDownload=false,model='FM-1'}={}){
  const events=[];let device=makeDevice(model);

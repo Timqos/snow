@@ -39,7 +39,7 @@ static void scales(void)
         for(uint32_t mode=0;mode<2;mode++){
             t->p[SN_PLAY_MODE]=mode;assert(!snow_generate(5,1));
             for(uint32_t i=0;i<(uint32_t)t->p[P_SLEN];i++){
-                assert(t->step[i].n==(mode?1u:3u));
+                assert(mode?t->step[i].n==1u:(t->step[i].n>=3u&&t->step[i].n<=4u));
                 for(uint32_t j=0;j<t->step[i].n;j++)assert((expected>>(t->step[i].note[j]%12))&1u);
             }
         }

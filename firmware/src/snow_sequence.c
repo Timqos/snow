@@ -41,7 +41,7 @@ static uint64_t snow_hits(const step_t *s,uint32_t len){uint64_t m=0;for(uint32_
 static void snow_phrase(track_t *t,uint32_t channel,uint32_t seed,step_t *out)
 {
     uint32_t len=(uint32_t)clamp(t->p[P_SLEN],1,NSTEP),density=(uint32_t)t->p[SN_G_DENS],kind=(uint32_t)t->p[SN_G_KIND];
-    uint32_t family=snow_hash(seed)%4u,rng=snow_hash(seed^(channel+1u)*0x9e3779b9u)|1u;
+    uint32_t family=snow_hash(seed)%12u,rng=snow_hash(seed^(channel+1u)*0x9e3779b9u)|1u;
     uint32_t reach=2u+(uint32_t)t->p[SN_G_VARIANT]*len/127u;if(reach>=len)reach=len-1u;
     uint32_t rotate=(uint32_t)t->p[SN_G_ROTATE],offset=snow_int(&rng,0,reach),complex=(uint32_t)t->p[SN_G_COMPLEX];
     int preserve=kind==1u&&snow_hits(t->step,len)!=0;
@@ -49,13 +49,30 @@ static void snow_phrase(track_t *t,uint32_t channel,uint32_t seed,step_t *out)
     if(!preserve) {
         for(uint32_t i=0;i<len;i++){memset(&out[i],0,sizeof out[i]);out[i].time=ST_REST;}
         uint32_t pulses=0;
-        if(channel==0u)pulses=snow_pulses(&rng,family==1?3:5,family==1?7:11,len,density);
+        if(channel==0u)pulses=snow_pulses(&rng,family==1||family==7?2:family==5?8:4,family==1||family==7?6:family==5?17:12,len,density);
         if(channel==1u)pulses=snow_pulses(&rng,2,7,len,density);
         if(channel==2u)pulses=snow_pulses(&rng,9,28,len,density);
         if(channel==3u){static const uint8_t primes[]={3,5,7,11,13,17};uint32_t p=primes[snow_int(&rng,0,5)];pulses=(p*len+16u)/32u;if(!pulses)pulses=1;pulses=density<=50?(pulses*density+25)/50:pulses+((len-pulses)*(density-50)+25)/50;}
-        if(channel==4u)pulses=snow_pulses(&rng,4,13,len,density);
-        if(channel==5u)pulses=snow_pulses(&rng,1,6,len,density);
+        if(channel==4u)pulses=snow_pulses(&rng,family<4?3:6,family<4?9:16,len,density);
+        if(channel==5u)pulses=snow_pulses(&rng,1,family<9?4:8,len,density);
         snow_euclid(out,len,pulses,(offset+rotate+(uint32_t)t->p[SN_G_SYNC]/20u)%len,&rng,channel==2u?35:channel==1u?85:65,channel==2u?105:124);
+        if(channel==0u&&density>0&&density<100){
+            /* Metered foundation, broken syncopation, half-time and sparse
+             * phrases are independent constructions, not one stored beat. */
+            if(family==0u||family==3u||family==8u){
+                for(uint32_t i=0;i<len;i++){memset(&out[i],0,sizeof out[i]);out[i].time=ST_REST;}
+                uint32_t stride=family==3u?8u:4u;
+                for(uint32_t pos=0;pos<len;pos+=stride){
+                    if(pos&&snow_prob(&rng,100u-density))continue;
+                    uint32_t at=(pos+rotate)%len;out[at].time=ST_NOTE;out[at].n=1;out[at].vel=(uint8_t)snow_int(&rng,105,125);
+                    if(pos+stride<len&&snow_prob(&rng,15u+complex/3u)){
+                        at=(pos+snow_int(&rng,1,stride-1u)+rotate)%len;out[at].time=ST_NOTE;out[at].n=1;out[at].vel=(uint8_t)snow_int(&rng,62,105);
+                    }
+                }
+            }else if(snow_prob(&rng,80)){
+                uint32_t at=rotate%len;out[at].time=ST_NOTE;out[at].n=1;out[at].vel=(uint8_t)snow_int(&rng,109,127);
+            }
+        }
         /* Musical families are internal choices, with fresh probability/rotation, never a genre menu. */
         if(density>0&&density<100&&family==2u&&(channel==0u||channel==1u)) {
             for(uint32_t i=0;i<len;i++){memset(&out[i],0,sizeof out[i]);out[i].time=ST_REST;}
@@ -79,6 +96,8 @@ static void snow_phrase(track_t *t,uint32_t channel,uint32_t seed,step_t *out)
         if(density==100)for(uint32_t i=0;i<len;i++){out[i].time=ST_NOTE;out[i].n=1;out[i].vel=(uint8_t)snow_int(&rng,55,120);}
     }
     int32_t walk=0,span=clamp(t->p[SN_G_SPAN],1,24);uint32_t note_index=0;
+    static const int8_t progressions[8][4]={{0,5,3,4},{0,3,4,0},{0,4,5,3},{0,6,3,4},{0,2,5,4},{0,3,0,4},{0,5,1,4},{0,4,3,6}};
+    uint32_t progression=snow_int(&rng,0,7),inversion=snow_int(&rng,0,2);
     for(uint32_t i=0;i<len;i++)if(out[i].time==ST_NOTE&&out[i].n) {
         if(kind!=0u&&(channel>=3u||kind==1u)) {
             int32_t degree=0;walk=clamp(walk+(int32_t)snow_int(&rng,0,2u+(uint32_t)t->p[SN_G_VARIANT]/21u)-(int32_t)(1u+(uint32_t)t->p[SN_G_VARIANT]/42u),-span,span);
@@ -89,10 +108,20 @@ static void snow_phrase(track_t *t,uint32_t channel,uint32_t seed,step_t *out)
             case 4:degree=(int32_t)(snow_hash(seed+(note_index%8u)*977u)%(uint32_t)(span*2+1))-span;break;
             default:degree=walk;break;
             }
-            if(channel==4u&&i%8u==0u&&snow_prob(&rng,65))degree=0;
-            if(channel==5u)degree=(int32_t)snow_int(&rng,0,6);
-            out[i].n=(uint8_t)(channel==5u&&!t->p[SN_PLAY_MODE]?3:1);
-            for(uint32_t n=0;n<out[i].n;n++)out[i].note[n]=(uint8_t)snow_degree(t,t->p[SN_G_BASE],degree+(int32_t)n*2);
+            if(channel==4u){
+                static const int8_t riff[]={0,0,4,2,0,7,4,-3};
+                if(family<4u)degree=riff[(note_index+(seed&7u))&7u];
+                else degree=clamp(degree,-(span<5?span:5),span<9?span:9);
+                if(i%8u==0u&&snow_prob(&rng,80))degree=0;
+                degree=clamp(degree,-span,span);
+            }
+            if(channel==5u)degree=progressions[progression][i*4u/len]+(int32_t)(seed%3u)-1;
+            out[i].n=(uint8_t)(channel==5u&&!t->p[SN_PLAY_MODE]?(family>=8u&&snow_prob(&rng,25)?4:3):1);
+            for(uint32_t n=0;n<out[i].n;n++){
+                int32_t nd=degree+(int32_t)n*2;
+                if(channel==5u&&out[i].n>1u&&n<inversion)nd+=7;
+                out[i].note[n]=(uint8_t)snow_degree(t,t->p[SN_G_BASE],nd);
+            }
         } else if(kind==0u&&t->step[i].n) {out[i].n=t->step[i].n;memcpy(out[i].note,t->step[i].note,sizeof out[i].note);}
         else {out[i].n=1;out[i].note[0]=(uint8_t)snow_degree(t,t->p[SN_G_BASE],0);}
         if(!preserve) {
@@ -102,6 +131,18 @@ static void snow_phrase(track_t *t,uint32_t channel,uint32_t seed,step_t *out)
             if(snow_prob(&rng,(uint32_t)t->p[SN_G_ACCENT]))out[i].vel=(uint8_t)snow_int(&rng,106,127);
         }
         note_index++;
+    }
+    if(!preserve&&channel>=4u&&density>0&&density<100){
+        /* Real sequencer ties carry note-offs across steps. Do not turn a
+         * bass line or a harmonic phrase into a row of drum-length triggers. */
+        for(uint32_t i=0;i<len;i++)if(out[i].time==ST_NOTE&&out[i].n){
+            uint32_t hold=channel==5u?snow_int(&rng,family>=9u?1u:3u,family>=9u?4u:16u):snow_int(&rng,1u,family<6u?7u:3u);
+            for(uint32_t j=1;j<hold&&i+j<len&&out[i+j].time==ST_REST;j++){
+                memset(&out[i+j],0,sizeof out[i+j]);out[i+j].time=ST_TIE;
+            }
+            if(channel==4u&&snow_prob(&rng,15))out[i].flags|=SF_SLIDE;
+            if(channel==5u)out[i].vel=(uint8_t)snow_int(&rng,78,112);
+        }
     }
 }
 static void snow_remove_auto(motion_store_t *m,uint32_t channel)
@@ -145,12 +186,14 @@ static int snow_generate_parameters(uint32_t channel)
         if(steps[i].cond==TC_ORNAMENT){steps[i].cond=TC_NONE;step_set_ratchet(&steps[i],1);}
         if(!amt||steps[i].time!=ST_NOTE||!steps[i].n||made>=cap||!snow_prob(&rng,amt*45u/100u))continue;
         uint32_t pick=snow_int(&rng,0,3),id=pick==0&&channel<3?SN_TUNE:pick==1?P_DEC:pick==2?P_E0:P_REV;
+        if(channel>=4u)id=pick==0?P_E6:pick==1?P_PAN:pick==2?P_REV:channel==5u?P_E7:P_E0;
         int32_t base=motion_base_value(t,id),spread=id==SN_TUNE?(int32_t)(2u+amt/20u):id==P_REV?35:10+(int32_t)amt/4;
+        if(channel>=4u)spread=id==P_E6?8+(int32_t)amt/7:id==P_REV?12+(int32_t)amt/4:id==P_PAN?2+(int32_t)amt/10:5+(int32_t)amt/20;
         int32_t v=base+(int32_t)snow_int(&rng,0,(uint32_t)spread*2u)-spread;
         uint32_t before=next.count;snow_auto_lock(&next,t,i,id,v);made+=next.count!=before;
         if(id==P_DEC&&made<cap&&snow_prob(&rng,40)){before=next.count;snow_auto_lock(&next,t,i,P_REV,(int32_t)snow_int(&rng,15,65));made+=next.count!=before;}
     }
-    if(amt&&cap&&!made)for(uint32_t i=0;i<len;i++)if(steps[i].time==ST_NOTE&&steps[i].n){snow_auto_lock(&next,t,i,P_E0,clamp(motion_base_value(t,P_E0)+((seed&1u)?18:-18),0,127));break;}
+    if(amt&&cap&&!made)for(uint32_t i=0;i<len;i++)if(steps[i].time==ST_NOTE&&steps[i].n){uint32_t id=channel>=4u?P_E6:P_E0;snow_auto_lock(&next,t,i,id,clamp(motion_base_value(t,id)+((seed&1u)?18:-18),0,127));break;}
     if(amt&&channel>=2u&&channel<=3u&&snow_prob(&rng,65)) {
         uint32_t candidate[NSTEP],n=0,period=div_samples((uint32_t)t->p[P_SDIV]),bar=beat_samples()*4u;
         for(uint32_t i=0;i<len;i++)if(steps[i].time==ST_NOTE&&steps[i].n&&!steps[i].cond) {
@@ -197,7 +240,7 @@ static void snow_sequence_poll(void)
 }
 static int snow_pattern_select(uint32_t channel,uint32_t slot)
 {
-    if(channel>=NTRK || slot>=NENT)return 1;
+    if(channel>=NTRK || slot>=ST_PATTERNS)return 1;
     bank_poll();
     if(!song.playing&&trk_keep(channel))return 4;
     if(!ent_on(channel,slot)) {
@@ -220,8 +263,19 @@ static void snow_pattern_knob(uint32_t channel,int32_t steps)
 {
     if(channel>=NTRK)return;
     uint32_t current=snow_pattern_current(channel);
-    int rc=snow_pattern_select(channel,(uint32_t)clamp((int32_t)current+steps,0,NENT-1));
-    snow_pattern_half=(uint8_t)(snow_pattern_current(channel)/8u);
+    int rc=snow_pattern_select(channel,(uint32_t)clamp((int32_t)current+steps,0,ST_PATTERNS-1));
+    snow_pattern_half=0;
     if(rc==4)ui_message("PATTERNS FULL");
     ui.force=1;
+}
+/* Pick existing music only. No generation, empty-slot creation or preset load. */
+static int stattic_random_patterns(void)
+{
+    for(uint32_t k=0;k<NTRK;k++)if(bank_next(k)<NENT)return 2;
+    for(uint32_t k=0;k<NTRK;k++){
+        uint32_t choices[ST_PATTERNS],n=0,current=snow_pattern_current(k);
+        for(uint32_t p=0;p<ST_PATTERNS;p++)if(p!=current&&ent_on(k,p))choices[n++]=p;
+        if(n){int rc=snow_pattern_select(k,choices[rng()%n]);if(rc)return rc;}
+    }
+    ui.force=1;return 0;
 }

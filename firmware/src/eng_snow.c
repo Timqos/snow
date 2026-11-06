@@ -23,9 +23,21 @@ static struct { uint32_t phase; int32_t value, fade, rng; } snow_l2[NTRK];
 static uint32_t snow_role(const track_t *t) { return (uint32_t)(t-trk)%NTRK; }
 static int16_t snow_offset[NTRK][4];
 static uint8_t snow_mask=63;
-enum { SN_HOME_SYNTH, SN_HOME_GEN, SN_HOME_MIX };
+enum { SN_HOME_SYNTH, SN_HOME_GEN, SN_HOME_MIX, SN_HOME_PAT, SN_HOME_MS, SN_HOME_COUNT };
 static uint8_t snow_home_panel;
 static uint32_t snow_home_gen[NTRK][4];
+static uint32_t stattic_scroll[3];
+static const uint8_t stattic_art_height[3]={84,78,78};
+static uint8_t stattic_focus[3],stattic_solo;
+static void stattic_turn(uint32_t knob,int32_t detents)
+{
+    if(snow_home_panel<3u){
+        stattic_focus[snow_home_panel]=(uint8_t)(knob&3u);
+        int32_t next=(int32_t)stattic_scroll[snow_home_panel]+detents*6;
+        int32_t h=stattic_art_height[snow_home_panel];
+        stattic_scroll[snow_home_panel]=(uint32_t)((next%h+h)%h);
+    }
+}
 static struct { uint32_t ms,serial;uint16_t id;int16_t value;uint8_t valid,macro; } snow_touch_state[NTRK];
 static void snow_touch(track_t *t,uint32_t id,int16_t value)
 {
@@ -149,12 +161,12 @@ static void snow_render(track_t *t,voice_t *v,int32_t *out,uint32_t n,const vmod
         if(alg>=3)shift=0;
         int32_t x=snow_wave(a+shift,inc,(uint32_t)p[SN_WAVE1],pw);
         if(alg==3)x=mulq15(x,mod);
-        if(alg==4)x=(x*(127-mix)+mod*mix)/127;
+        if(alg==4&&mix)x=(x*(127-mix)+mod*mix)/127;
         if(alg==5)x=sine_i((uint32_t)x*(uint32_t)(32768+tone*4096));
         if(alg<4 && mix)x=(x*(127-mix)+mod*mix)/127;
-        x=(x*(127-p[SN_SUB])+third*p[SN_SUB])/127;
+        if(p[SN_SUB])x=(x*(127-p[SN_SUB])+third*p[SN_SUB])/127;
         int32_t noise=(int32_t)(noise32(&rng)>>16)-32768;
-        x=(x*(127-p[SN_NOISE])+noise*p[SN_NOISE])/127;
+        if(p[SN_NOISE])x=(x*(127-p[SN_NOISE])+noise*p[SN_NOISE])/127;
         prev=p[SN_FB_ROUTE]==1?x:p[SN_FB_ROUTE]==2?third:mod;
         if(p[SN_FILTER]) {
             int32_t lp=tsvf_lp(&filter,x,&bp,&lo);

@@ -67,6 +67,7 @@ static int snow_generate_scene(int vary);
 static int snow_generate_parameters(uint32_t channel);
 static int snow_parameter_scene(void);
 static int snow_clear_sequence(int all);
+static int stattic_random_patterns(void);
 static void snow_sequence_poll(void);
 #endif
 static uint32_t pool_len(uint32_t id);         /* (Skiff phase 5) SAVE > PATTERNS, the pool view (bank.c) */
