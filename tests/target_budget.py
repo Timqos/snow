@@ -52,7 +52,7 @@ FUNCS = ["analog_render", "digital_render", "digital_render_legacy", "digital_re
 # they are skipped; present, checked against these (their budget lines until the engine was retired in 1.0)
 OPTIONAL = {"digital_render": 12, "digital_render_legacy": 333, "digital_render_custom": 558,
             "uac_tap48": 504}           # (absent from a FELUCCA_UAC_48K=0 or FELUCCA_UAC=0 build)
-SNOW_FUNCS = ["snow_render", "snow_amp", "snow_fx_process", "snow_mix_begin", "snow_mix_sample",
+SNOW_FUNCS = ["snow_render", "snow_amp", "snow_fx_process", "snow_mix_begin", "snow_mix_sample", "snow_sync_inc",
               "mix_part_body", "snow_cost_onsets", "stattic_gen_apply", "stattic_bar"]
 # Absent in the reproduced rc3 fixed-role image: PHYS is stubbed there,
 # racks are per channel, and mono slicer_track is inlined into mix_part.

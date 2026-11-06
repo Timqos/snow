@@ -69,6 +69,21 @@ static void snow_touch(track_t *t,uint32_t id,int16_t value)
     if(id>=P_E0&&id<=P_E3)snow_touch_state[k].macro=(uint8_t)(id-P_E0);
 }
 static uint32_t div_samples(uint32_t div);
+/* A synchronized LFO's period changes only with its tempo/division. Reuse
+ * the exact increment between changes instead of dividing for every block.
+ * The two clocks have independent cache entries, never shared phase/state. */
+static struct { uint32_t period,inc; } snow_lfo_clock[NTRK][2];
+static __attribute__((noinline)) uint32_t snow_sync_inc(const track_t *t,uint32_t clock,uint32_t period)
+{
+    period=period?period:1u;
+    uint32_t k=(uint32_t)(t-trk);
+    if(snow_lfo_clock[k][clock].period!=period){
+        uint32_t q=0xffffffffu/period,r=0xffffffffu%period;
+        snow_lfo_clock[k][clock].inc=q*CTL+(r*CTL+CTL)/period;
+        snow_lfo_clock[k][clock].period=period;
+    }
+    return snow_lfo_clock[k][clock].inc;
+}
 static int32_t snow_param(const track_t *t,uint32_t k)
 {
     int32_t v=t->p[P_E0+k]+(k<4u?snow_offset[snow_role(t)][k]:0);
@@ -82,8 +97,7 @@ static void snow_block(track_t *t)
     if(t->p[SN_L2_SYNC]) {
         static const uint8_t divs[11]={0,9,8,7,6,0,1,4,2,5,3};
         uint32_t period=div_samples(divs[(uint32_t)t->p[SN_L2_SYNC]%11u]);
-        period=period?period:1u;
-        inc=(0xffffffffu/period)*CTL+((0xffffffffu%period)*CTL+CTL)/period;
+        inc=snow_sync_inc(t,1u,period);
     }
     snow_l2[k].phase+=inc;
     if(!snow_l2[k].rng)snow_l2[k].rng=(int32_t)(0x293471u+k*977u);
@@ -144,6 +158,14 @@ static SNOW_WAVE_RAM int32_t snow_wave(uint32_t ph,uint32_t inc,uint32_t wave,ui
     default:return sine_i(ph);
     }
 }
+/* Sine/triangle are common in KK/BS/CH. Keep their exact arithmetic in the
+ * caller so each sample avoids the waveform switch and helper call.
+ * Other shapes retain the complete original waveform path. */
+static inline __attribute__((always_inline)) int32_t snow_wave_fast(uint32_t ph,uint32_t inc,uint32_t wave,uint32_t pw)
+{
+    if(wave<2u)return wave?osc_tri(ph):sine_i(ph);
+    return snow_wave(ph,inc,wave,pw);
+}
 static SNOW_RENDER_RAM void snow_render(track_t *t,voice_t *v,int32_t *out,uint32_t n,const vmod_t *m)
 {
     const int16_t *p=t->p;
@@ -174,15 +196,15 @@ static SNOW_RENDER_RAM void snow_render(track_t *t,voice_t *v,int32_t *out,uint3
     uint32_t third_on=alg==1u||alg==2u||p[SN_SUB]||p[SN_FB_ROUTE]==2;
     for(uint32_t i=0;i<n;i++) {
         int32_t idx=index0+(((index-index0)*(int32_t)(i+1u))>>CTL_LOG2);
-        int32_t third=third_on?snow_wave(c,inc3,(uint32_t)p[SN_WAVE3],pw):0;
+        int32_t third=third_on?snow_wave_fast(c,inc3,(uint32_t)p[SN_WAVE3],pw):0;
         int32_t feedback=prev*feedback_gain;
-        int32_t mod=snow_wave(b+(uint32_t)feedback,incm,(uint32_t)p[SN_WAVE2],pw);
+        int32_t mod=snow_wave_fast(b+(uint32_t)feedback,incm,(uint32_t)p[SN_WAVE2],pw);
         uint32_t shift=(uint32_t)mod*(uint32_t)idx;
-        if(alg==1)mod=snow_wave(b+(uint32_t)third*(uint32_t)idx+(uint32_t)feedback,incm,(uint32_t)p[SN_WAVE2],pw);
+        if(alg==1)mod=snow_wave_fast(b+(uint32_t)third*(uint32_t)idx+(uint32_t)feedback,incm,(uint32_t)p[SN_WAVE2],pw);
         if(alg==1)shift=(uint32_t)mod*(uint32_t)idx;
         if(alg==2)shift=(uint32_t)snow_div2(mod+third,1)*(uint32_t)idx;
         if(alg>=3)shift=0;
-        int32_t x=snow_wave(a+shift,inc,(uint32_t)p[SN_WAVE1],pw);
+        int32_t x=snow_wave_fast(a+shift,inc,(uint32_t)p[SN_WAVE1],pw);
         if(alg==3)x=mulq15(x,mod);
         if(alg==4&&mix)x=snow_div127(x*(127-mix)+mod*mix);
         if(alg==5)x=sine_i((uint32_t)x*(uint32_t)(32768+tone*4096));

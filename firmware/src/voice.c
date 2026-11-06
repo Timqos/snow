@@ -60,12 +60,15 @@ static uint32_t div_samples(uint32_t div);         /* (fx.c) */
 static __attribute__((noinline)) uint32_t lfo_sync_inc(const track_t *t)   /* (not inlined: its divides stay out of
                                                                            * the audio ISR's loop over the tracks) */
 {
-    uint32_t c = LSYNC_DIV[(uint32_t)t->p[P_LSYNC] % NELEM(LSYNC_DIV)], s = (uint32_t)t->p[P_SDIV] % 10u, cyc, q, r;
+    uint32_t c = LSYNC_DIV[(uint32_t)t->p[P_LSYNC] % NELEM(LSYNC_DIV)], s = (uint32_t)t->p[P_SDIV] % 10u, cyc;
     cyc = DIV_48[c] % DIV_48[s] ? div_samples(c) : DIV_48[c] / DIV_48[s] * div_samples(s);
     cyc = cyc ? cyc : 1u;
-    q = 0xFFFFFFFFu / cyc;
-    r = 0xFFFFFFFFu % cyc;
+#if FELUCCA_SNOW
+    return snow_sync_inc(t,0u,cyc);
+#else
+    uint32_t q = 0xFFFFFFFFu / cyc, r = 0xFFFFFFFFu % cyc;
     return q * CTL + (r * CTL + CTL) / cyc;
+#endif
 }
 static uint32_t lfo_inc(const track_t *t) { return t->p[P_LSYNC] ? lfo_sync_inc(t) : LFO_INC[t->p[P_LRATE] & 127]; }
 

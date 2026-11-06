@@ -18,5 +18,7 @@ snow_amp 0
 snow_fx_process 5437
 snow_mix_begin 0
 snow_mix_sample 56
+# rc6 synchronized clocks reuse an exact cached increment; no loop work.
+snow_sync_inc 0
 stattic_bar 25
 stattic_gen_apply 183

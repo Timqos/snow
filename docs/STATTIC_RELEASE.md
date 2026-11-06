@@ -1,8 +1,25 @@
-# STATTIC 0.8.0-rc5
+# STATTIC 0.8.0-rc6
 
 Experimental FM-1 candidate, previously named Snow. The five user HOME
 mockups in `assets/stattic-home/` and the confirmed control captions are
 the interface reference. See [the recorded agreement](STATTIC_WORK_PLAN.md).
+
+## Changes in rc6
+
+- Keep the complete rc5 interface, typography, controls, presets, random
+  streams, synthesis architecture, effects, gains and 8/12 voice budget.
+- Inline the exact sine/triangle arithmetic in the SRAM oscillator loop,
+  avoiding helper calls and waveform dispatch for these common shapes. Every
+  other shape retains its original path. The existing target budgets remain.
+- Cache each synchronized LFO's exact phase increment until its period
+  changes. All six tracks and both clocks remain independent; rate, phase,
+  trigger, fade and tempo/division changes retain their previous behavior.
+- Compare 512 low-note retriggers under held CH against unmodified rc5 PCM,
+  including generated sounds, effects, quiet MASTER, USB fixed level and
+  tempo/LFO-division changes. All eight captured scenarios must match exactly.
+- Fix a missing conditional around STATTIC's per-boot diagnostic initializer
+  in the generic, non-STATTIC browser build. The broad host suite's remaining
+  song, browser/native equivalence and converter checks pass after the fix.
 
 ## Changes in rc5
 
@@ -164,11 +181,13 @@ replaced by dirty static strips. The original audio deadline/voice guards remain
 
 ## Physical report and verification limits
 
-After rc4, the user reports the Ring/resonator distortion gone. Remaining
-short clicks occur on CH note/chord attacks when BS or KK joins it; CH alone
-or with HH/PR is clean. The device shows 2 cores, about 76–80% average load,
-and L increases on the attacks. Turning physical MASTER down to 20% reduces
-volume but retains the click. SLOOP uses the same free-DMA-half check for L.
+After rc4, the user reported the Ring/resonator distortion gone. After rc5,
+the user reports substantially fewer clicks: CH + BS remains more susceptible,
+CH + KK rarely clicks and the result varies with the generated kick sound.
+Clicks are at the low-note attack and remain audible with very low physical
+MASTER. The user has not yet checked whether L rises on those residual clicks.
+Earlier hardware reports showed 2 cores, 76–80% average load and L rising on
+attacks; SLOOP uses the same free-DMA-half diagnostic.
 
 This supports investigating peak processing deadlines, without proving every
 click is a deadline miss. The digital pair test checks 800 factory combinations
@@ -178,7 +197,7 @@ can engage the existing protective limiter. With USB LEVEL FIXED, MASTER acts
 internal limiting. Default levels with 20% pre-master do not engage the limiter
 in that stress test; the four held CH voices remain intact in every case.
 No automatic bass filtering, gain reduction, voice reduction or effect removal
-is used to mask the report. SRAM placement and onset-aware splitting need an
+is used to mask the report. Further common-wave/LFO work reduction needs an
 FM-1 retest, observing whether L stops increasing at the audible click.
 
 Native/WASM tests cover actual playback, parameter-lock ownership, finite
@@ -195,23 +214,22 @@ pattern persistence and browser-save compatibility remain in the suite.
 
 ## Current verification
 
-The rc5 build passed the existing target budgets, complete STATTIC
+The rc6 build must pass the existing target budgets, complete STATTIC
 native/WASM/audio suite, layout sweep at default/minimum/maximum values,
 eight-entry Undo and onset-prediction contracts, and ASan/UBSan checks.
-Desktop/mobile browser checks and 28 exact-package update/rollback checks
-passed. All 12 normal site artifacts and the root landing page match local
-hashes; previous rc4 is retained. Broader upstream UI checks retain all 3,458
+Desktop/mobile browser checks and a new 28-check exact-package update/rollback
+audit are required before publication, retaining previous rc5. Broader upstream UI checks retain all 3,458
 golden pictures with zero layout/alignment findings.
 The exact package, source commit and update/rollback results are recorded in
 [the published build](https://timqos.github.io/snow/snow/build.json) and
 [the binary audit](https://timqos.github.io/snow/snow/update-audit.json).
 Final region sizes and release verification are recorded in
-[the work log](STATTIC_RC5_WORK.md). Physical audio deadlines require FM-1
+[the work log](STATTIC_RC6_WORK.md). Physical audio deadlines require FM-1
 qualification; desktop or browser timing is not a substitute.
 
 The target regression gate retains all unaffected Skiff limits and the
 byte-reproduced rc3 reference for existing STATTIC paths. Oscillator SRAM
 placement adds no per-sample divisions. The 8/12 shared voice budget,
 256-frame hardware halves, 32-sample control blocks and all synthesis/effect
-parameters remain unchanged from rc4. Installation/loader code is unchanged
+parameters remain unchanged from rc5. Installation/loader code is unchanged
 from rc4; every new binary still requires its own update/rollback audit.

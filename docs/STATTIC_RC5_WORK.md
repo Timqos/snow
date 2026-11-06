@@ -65,7 +65,10 @@ Release validation:
 - Broader upstream UI verification retains all 3,458 golden pictures,
   1,917,352 alignment measurements and zero layout findings. Functional
   checks outside STATTIC also pass through UI, storage and protocol stages;
-  the remaining broad native audio/CLI suite is running independently.
+  the broad run later stopped at the generic non-STATTIC simulator: an
+  unguarded diagnostic initializer failed to compile there. rc6 adds the
+  missing build guard and reruns the remaining native-song, WASM/native
+  equality and converter tests successfully. The STATTIC build was unaffected.
 
 Final static regions:
 

@@ -8,7 +8,7 @@ Built on Skiff 2.2 and Felucca. Previously named Snow.
 · [Install STATTIC](https://timqos.github.io/snow/snow/install/)
 · [Factory firmware](https://timqos.github.io/snow/snow/install/factory.html)
 
-The 0.8.0-rc5 candidate retains five HOME pages: sound, generation,
+The 0.8.0-rc6 candidate retains five HOME pages: sound, generation,
 channel mixing, six-channel P1–P3 patterns, and MUTE/SOLO with volume.
 SELECT browses pages; the lower captions identify the physical controls.
 All six channels start at 64 steps. Four-bar generation varies bars 2 and 4;
@@ -28,8 +28,10 @@ existing fault fallback and audio deadline protection. Hardware scheduling
 uses measured track costs and a 256-frame buffer. CH uses its existing eight
 voice slots for overlapping release tails, within the unchanged shared budget.
 The oscillator loop executes in fast RAM and the split anticipates new voices
-before their first rendered block. Remaining CH clicks when KK/BS joins it
-still require a physical-device retest.
+before their first rendered block. Common sine/triangle waveforms now avoid
+repeated helper dispatch, and synchronized LFO increments are reused until
+their period changes. Low-note attack captures remain sample-identical to
+rc5. Remaining CH clicks when KK/BS joins it still need a physical retest.
 
 HOME bottom helpers share one enlarged 8×14 pixel face, retaining their full
 wording and the exact upper layout. Other editors and system menus use larger
