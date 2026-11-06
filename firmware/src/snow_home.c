@@ -76,6 +76,35 @@ static void stattic_small_icon(uint32_t kind,int32_t x,int32_t y)
         }
     }
 }
+static void stattic_footer(uint32_t page)
+{
+    int32_t y=page==4u?190:182;
+    const char *a="OCT +/-:OCTAVE",*b="";
+    if(page==0u&&song.sel==5u){a="OCT+ HLD N/CHO";b="OCT +/-:OCTAVE";}
+    if(page==1u){a="OCT- CLEAR PT";b="OCT+ CLEAR ALL";}
+    if(page==3u){a="OCT +/-";b="RANDOM PATT";}
+    if(page==4u){a=stattic_overview?"BLACK:MUTE":"M/S: KEY";b=stattic_overview?"WHITE:SOLO":"W:MUTE B:SOLO";}
+    char first[19],second[19],label[9]="PAGE 1/5";
+    if(ui.msg_t){
+        uint32_t len=str_len(ui.msg),n=len<18u?len:18u;
+        if(len>18u){uint32_t end=n;while(end&&ui.msg[end]!=' ')end--;if(end&&len-end-1u<=18u)n=end;}
+        memcpy(first,ui.msg,n);first[n]=0;uint32_t at=n+(ui.msg[n]==' ');
+        str_cpy(second,ui.msg+at,sizeof second);a=first;b=second;
+    }else if(ui.undo_w){a="UNDO OCT- BACK";b="OCT+ REDO";}
+    stattic_text(16,y,a,T_TEXT,6,11,18);stattic_text(16,y+13,b,T_TEXT,6,11,18);
+    label[5]=(char)('1'+page);
+    stattic_text(167,y,stattic_overview?(page==3u?"[SEQ]":"[GLO]"):label,T_THEME,6,11,8);
+    stattic_text(175,y+13,stattic_overview&&page==4u?"SEL:BPM":"SELECT",T_MID,6,11,7);
+    if(page==3u||(page==4u&&stattic_overview)){
+        static const char *const keys[]={"K1:KK","K2:SD","K3:HH","K4:PR","ALG:BS","PRS:CH"};
+        for(uint32_t n=0;n<6;n++)stattic_text(16+(int32_t)(n%3u)*76,page==4u?215+(int32_t)(n/3u)*14:208+(int32_t)(n/3u)*15,keys[n],T_TEXT,8,page==4u?10:13,6);
+    }else if(page==4u){
+        stattic_text(16,219,"K1:SLT CH",T_TEXT,8,16,9);stattic_text(134,219,"K2:VOL",T_TEXT,8,16,6);
+    }else{
+        static const char *const keys[3][4]={{"K1:TONE","K2:SHAPE","K3:SWEEP","K4:DECAY"},{"K1:G/SEQ","K2:G/PRM","K3:G/LFO","K4:G/FX"},{"K1:VOL","K2:PAN","K3:FLR","K4:WDT"}};
+        for(uint32_t n=0;n<4;n++)stattic_text(n&1u?134:16,n<2u?208:223,keys[page][n],T_TEXT,8,13,9);
+    }
+}
 static void stattic_page_body(uint32_t page)
 {
     uint32_t k=song.sel;track_t *t=TSEL;
@@ -95,14 +124,11 @@ static void stattic_page_body(uint32_t page)
             stattic_text(16,71,"GEN",T_TEXT,14,20,3);stattic_small_icon(0,76,66);
             cv_rect(125,65,103,30,T_THEME);stattic_text(134,71,ST_GEN_NAMES[stattic_focus[1]],T_INK,15,21,5);
         }else{
-            stattic_text(16,71,"MIXER",T_TEXT,13,20,5);stattic_small_icon(1,94,68);
-            cv_rect(158,65,70,30,T_THEME);stattic_text(172,71,ST_MIX_NAMES[stattic_focus[2]],T_INK,13,21,3);
+            stattic_text(16,71,"MIXER",T_TEXT,13,20,5);
+            cv_rect(99,65,62,30,T_THEME);stattic_text(108,71,ST_MIX_NAMES[stattic_focus[2]],T_INK,13,21,3);
+            char pct[6];fmt_int(pct,(int32_t)snow_home_percent(t,ST_MIX_IDS[stattic_focus[2]]));str_cpy(pct+str_len(pct),"%",sizeof pct-str_len(pct));stattic_text(169,71,pct,T_TEXT,11,20,4);
         }
         stattic_graph(page);
-        if(page==1u){snow_text(14,184,"OCT-/CLEAR PT OCT+/CLEAR ALL",T_TEXT,29);snow_text(187,184,"PAGE 2/5",T_THEME,8);}
-        else if(page==0u&&k==5u){snow_text(8,184,"OCT+ HLD N/CHO",T_TEXT,14);snow_text(94,184,"OCT+/-:OCTAVE",T_MID,13);snow_text(180,184,"PAGE 1/5",T_THEME,8);}
-        else {snow_text(15,184,"OCT +/-:OCTAVE",T_MID,15);snow_text(143,184,page?"SELECT: PAGE 3/5":"SELECT: PAGE 1/5",T_THEME,16);}
-        stattic_hint(14,196,page==0u?"K1:TONE|K2:SHAPE|K3:SWEEP|K4:DECAY":page==1u?"K1:G/SEQ|K2:G/PRM|K3:G/LFO|K4:G/FX":"K1:VOL|K2:PAN|K3:FLR|K4:WDT",T_TEXT);
     }else if(page==3u){
         stattic_text(16,37,"PATTERN SW",T_THEME,12,17,10);stattic_small_icon(2,166,34);
         for(uint32_t ch=0;ch<NTRK;ch++){
@@ -116,8 +142,6 @@ static void stattic_page_body(uint32_t page)
                 if(p<2u)cv_rect(x+11,yy+23,2,6,T_TEXT);
             }
         }
-        snow_text(16,184,"OCT+/- RANDOM PATT",T_TEXT,21);snow_text(141,184,stattic_overview?"[SEQ] PATTERNS":"SELECT: PAGE 4/5",T_THEME,16);
-        stattic_hint(16,196,"K1:KK|K2:SD|K3:HH|K4:PR|ALG:BS|PRS:CH",T_TEXT);
     }else{
         stattic_text(16,37,"M/S VOLUME",T_THEME,13,18,10);stattic_small_icon(3,173,31);
         for(uint32_t ch=0;ch<NTRK;ch++){
@@ -131,15 +155,12 @@ static void stattic_page_body(uint32_t page)
             uint32_t pct=snow_home_percent(&trk[ch],P_LEVEL);snow_pixel_bar(100,y-1,92,17,pct,0,T_TEXT);
             char v[5];fmt_int(v,(int32_t)pct);str_cpy(v+str_len(v),"%",sizeof v-str_len(v));stattic_text(196,y,v,T_TEXT,8,17,4);
         }
-        if(stattic_overview){snow_text(16,190,"K1-K4 ALG PRS: CHANNEL LEVELS",T_TEXT,37);snow_text(16,201,"BLACK:MUTE WHITE:SOLO  SELECT:BPM",T_TEXT,37);}
-        else {stattic_hint(16,196,"M/S:KEY|K1:SLT CH|K2:VOL",T_TEXT);snow_text(187,196,"PAGE 5/5",T_THEME,8);}
     }
-    cv_rect(9,222,231,1,T_THEME);
-    if(ui.msg_t)snow_text(15,231,ui.msg,T_MID,36);
-    else if(ui.undo_w)snow_text(15,231,"UNDO: OCT- BACK / OCT+ REDO",T_MID,36);
+    stattic_footer(page);
 }
 static void snow_home_draw(void)
 {
+    snow_scope_on=0;
     cv_oy=0;uint32_t page=stattic_overview?(stattic_overview==1u?SN_HOME_PAT:SN_HOME_MS):snow_home_panel,k=song.sel;track_t *t=TSEL;int fresh=!snow_home_active;snow_home_active=1;
     if(fresh){snow_home_state.body=~0u;snow_home_state.head=~0u;snow_home_state.body_ms=0;}
     uint32_t beat=(uint32_t)((uint64_t)((take_pass[k]?take_pass[k]-1u:0u)*(uint32_t)t->p[P_SLEN]+t->seq_idx)*div_samples((uint32_t)t->p[P_SDIV])/beat_samples());
@@ -154,6 +175,7 @@ static void snow_home_draw(void)
     uint32_t sig=ux.gen*977u+k*31u+page*65537u+t->preset*7919u+t->user*131u+bank_gen()*8179u+perf_solo*11717u;
     for(uint32_t ch=0;ch<NTRK;ch++)sig=(sig^snow_touch_state[ch].serial^(uint32_t)trk[ch].p[P_LEVEL]^(uint32_t)trk[ch].p[P_MUTE]<<16^snow_pattern_current(ch))*16777619u;
     if(page<3u)sig^=stattic_scroll[page]*104729u+stattic_focus[page]*349u;
+    if(page==SN_HOME_MIX)for(uint32_t id=0;id<4u;id++)sig=(sig^(uint32_t)t->p[ST_MIX_IDS[id]])*16777619u;
     sig^=(uint32_t)t->p[SN_PLAY_MODE]*32993u;
     sig^=((uint32_t)stattic_ms.mute|((uint32_t)stattic_ms.solo<<6))*63997u;
     sig^=(uint32_t)(ui.msg_t!=0)*301u+(uint32_t)(ui.undo_w!=0)*619u;

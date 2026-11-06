@@ -189,7 +189,7 @@ static void snow_fx_process(track_t *t,int32_t *b,uint32_t n)
             int32_t tape=snow_tap(s->tape,256,s->pos&255u,(uint32_t)clamp(lag,256,240*256),s->tape_fill);
             if(s->tape_fill<256u)s->tape_fill++;
             snow_fx_lowpass(&s->tape_dc,tape,32);
-            x+=(tape-s->tape_dc-x)*tm/127;dry=x*4;
+            x+=snow_div127((tape-s->tape_dc-x)*tm);dry=x*4;
         }
         s->wow_ph+=34087u;s->flutter_ph+=594315u;
         if(bm) {
@@ -199,7 +199,7 @@ static void snow_fx_process(track_t *t,int32_t *b,uint32_t n)
             }
             s->crush_count--;
             snow_fx_lowpass(&s->crush_lp,s->crush,1500+p[SN_BTONE]*245);
-            x+=(s->crush_lp-x)*bm/127;dry=x*4;
+            x+=snow_div127((s->crush_lp-x)*bm);dry=x*4;
         }
         s->cho_ph+=ci;
         int32_t cho_l=0,cho_r=0;
@@ -221,7 +221,7 @@ static void snow_fx_process(track_t *t,int32_t *b,uint32_t n)
                 s->dt_q8=snow_delay_slew(s->dt_q8,target);
                 dl=snow_tap(s->delay,SN_DL_LEN,s->dw,s->dt_q8,s->delay_fill);
                 /* dt_q8 <= (11264-2)*256; its product with 508 fits uint32_t. */
-                uint32_t rt=s->dt_q8*(uint32_t)(508-p[SN_DWIDTH])/508u;
+                uint32_t rt=(uint32_t)snow_div127((int32_t)((s->dt_q8*(uint32_t)(508-p[SN_DWIDTH]))>>2));
                 dr=snow_tap(s->delay,SN_DL_LEN,s->dw,rt,s->delay_fill);
                 snow_fx_lowpass(&s->dlp,dl,ck);
                 s->delay[s->dw]=(int16_t)clamp((dm?s->in2:0)+snow_fx_mul(s->dlp,dfb),-32767,32767);
@@ -244,10 +244,10 @@ static void snow_fx_process(track_t *t,int32_t *b,uint32_t n)
                 if(s->rv_fill<512u)s->rv_fill++;
             }
             s->from_l=s->to_l;s->from_r=s->to_r;
-            s->to_l=mulq15(dl,dmix)+rev_l*rm/127;s->to_r=mulq15(dr,dmix)+rev_r*rm/127;
+            s->to_l=mulq15(dl,dmix)+snow_div127(rev_l*rm);s->to_r=mulq15(dr,dmix)+snow_div127(rev_r*rm);
         }
-        int32_t wl=s->from_l+snow_div2((s->to_l-s->from_l)*(int32_t)phase,2)+cho_l*cm/127;
-        int32_t wr=s->from_r+snow_div2((s->to_r-s->from_r)*(int32_t)phase,2)+cho_r*cm/127;
+        int32_t wl=s->from_l+snow_div2((s->to_l-s->from_l)*(int32_t)phase,2)+snow_div127(cho_l*cm);
+        int32_t wr=s->from_r+snow_div2((s->to_r-s->from_r)*(int32_t)phase,2)+snow_div127(cho_r*cm);
         b[i]=dry+(wl+wr)*2;s->side[i]=(wl-wr)*2;s->pos++;
     }
     if(!input){

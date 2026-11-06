@@ -1,4 +1,4 @@
-# STATTIC 0.8.0-rc3 — simulator and manual
+# STATTIC 0.8.0-rc4 — simulator and manual
 
 The firmware previously named Snow is now STATTIC. The repository and
 historical URLs retain `snow` so existing links and backups keep working.
@@ -14,9 +14,10 @@ HOME SELECT now browses five pages. Page 2 uses K1 sequence, K2 sound,
 K3 LFO, K4 FX. Page 4 uses six separate physical encoders for KK/SD/HH/PR/BS/CH
 patterns P1–P3. On page 5, K1 selects channel and K2 changes volume; the first
 six WHITE keys toggle MUTE and first six BLACK keys toggle SOLO.
-The lower captions are page-specific. GLO SELECT retains unheld tempo control.
+The enlarged lower captions are page-specific; the empty HOME visualizer strip
+is removed. HOME 3 shows the active parameter’s percentage. GLO SELECT retains unheld tempo control.
 All six channels boot at 64 steps. Generation covers four varied bars, with
-optional bar 1-to-3 repetition. During PLAY, pattern and HOME mute/solo changes
+optional bar 1-to-3 repetition. During PLAY, pattern, HOME mute/solo and all four HOME 2 generator changes
 wait for the next shared transport bar. On STOP, they apply immediately.
 
 This is experimental custom firmware. Back up before installation and use

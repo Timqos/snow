@@ -233,3 +233,23 @@ console.log('64-STEP STARTUP PASSED: every channel boots with LENGTH 64, includi
  until(32);assert.equal(q.web_snow_param_value(1,mute),0);assert.equal(q.web_snow_solo_get(),0);
  console.log('WASM BAR LAUNCH PASSED: six physical pattern selectors and HOME 5 mute/unmute/solo/unsolo switch together at the next shared bar; 64-step generation covers both halves.');
 }
+
+// HOME 2 changes the moment of entry, never the four generator algorithms.
+{
+ const q=await boot();render(q,1800);q.web_snow_tempo(180);q.web_snow_select(5);
+ q.web_enc(0,1);render(q,40);assert.equal(q.web_snow_home_panel(),1);
+ const base=()=>Array.from({length:q.web_snow_param_count()},(_,id)=>q.web_snow_param_base(5,id));
+ const grid=()=>Array.from(new Uint16Array(q.memory.buffer,q.web_snow_grid(5),64));
+ const press=mask=>{q.web_buttons(mask);render(q,35);q.web_buttons(0);render(q,35);};
+ const until=step=>{let ms=0;while(q.web_snow_transport_step()<step&&ms<10000){render(q,3);ms+=3;}assert.equal(q.web_snow_transport_step(),step);};
+ press(1<<10);until(3);const old=base(),steps=grid();
+ for(let knob=0;knob<4;knob++){
+  const n=q.web_snow_home_generations(5,knob);q.web_enc(3+knob,1);render(q,15);
+  assert.equal(q.web_snow_home_generations(5,knob),n+1);assert.deepEqual(base(),old);assert.deepEqual(grid(),steps);
+ }
+ until(15);assert.deepEqual(base(),old);assert.deepEqual(grid(),steps);
+ until(16);assert.notDeepEqual(base(),old);assert.notDeepEqual(grid(),steps);assert.equal(q.web_snow_position(5),0);
+ const current=base();q.web_enc(4,1);render(q,15);assert.deepEqual(base(),current);
+ press(1<<10);assert.notDeepEqual(base(),current);
+ console.log('WASM HOME 2 BAR PASSED: all four real encoder requests leave live music unchanged until their shared bar; STOP applies a waiting sound immediately.');
+}

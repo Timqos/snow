@@ -134,9 +134,12 @@ static void sixty_four(void)
     }
     unit_g_boot();for(uint32_t k=0;k<NTRK;k++)assert(trk[k].p[P_SLEN]==64);
 }
+#ifndef STATTIC_TRANSPORT_LIBRARY
 int main(void)
 {
     setvbuf(stdout,0,_IOLBF,0);web_nor_erase();web_boot();advance(SNOW_BOOT_MS+200);
     sixty_four();launch_and_mix();cancellation_and_batches();external_clock();stop_and_project();
     puts("ALL STATTIC TRANSPORT / 64-STEP TESTS PASSED");return 0;
 }
+
+#endif

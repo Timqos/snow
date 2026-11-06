@@ -107,6 +107,10 @@ static inline __attribute__((always_inline)) void *audio_far(void *p) { void *vo
 
 /* ----------------------------------------------------------- sound --- */
 #include "core.h"
+#if FELUCCA_SNOW
+#define SNOW_MIX_TICKS() fm1_ticks()
+#define SNOW_MIX_HAND (8u * FM1_TICKS_PER_US)
+#endif
 #include "engines.c"             /* dsp.c, the eng_*.c files, the factory patterns */
 #include "params.c"
 #include "mod.c"               /* the modulation matrix, used by voice.c and fx.c */

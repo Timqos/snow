@@ -110,6 +110,9 @@ static int launch_due(const track_t *t, uint32_t len, uint32_t period)
  * (seq.c seq_enter: NUDGE), it would be the outgoing pattern's */
 static int launch_ahead(const track_t *t, uint32_t len)
 {
+#if FELUCCA_SNOW
+    if(stattic_gen_sequence(trk_index(t)))return 1;
+#endif
     uint32_t k = trk_index(t);
     const launch_t *q = &launch_q[k];
     if (!q->armed)
@@ -188,6 +191,7 @@ static void launch_drop(void)
     for (k = 0; k < NTRK; k++)
         launch_q[k].armed = launch_q[k].done = mute_arm[k] = 0;
 #if FELUCCA_SNOW
+    stattic_gen_drop();
     stattic_ms.mute=stattic_ms.solo=0;
     stattic_solo=0;perf_solo=stattic_ms.glo;      /* No old HOME request or latched solo crosses a project load. */
 #endif
@@ -217,7 +221,8 @@ static __attribute__((noinline)) int launch_step(track_t *t, uint32_t len, uint3
 #if FELUCCA_SNOW
 static __attribute__((noinline)) void stattic_bar(void)
 {
-    stattic_ms_apply();                        /* Mute/solo first: new patterns obey the same bar's mix. */
+    stattic_ms_apply();                        /* Mute/solo, generators and patterns share this block. */
+    stattic_gen_apply();
     for(uint32_t k=0;k<NTRK;k++){
         launch_t *q=&launch_q[k];track_t *t=&trk[k];
         if(!q->armed||q->mode!=ST_LAUNCH_BAR||(int32_t)(launch_steps-q->at)<0)continue;

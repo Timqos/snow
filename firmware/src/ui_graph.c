@@ -2515,6 +2515,9 @@ static void qk_detector(int32_t cx, int32_t cy)
  * a flat line on it; MENU > SCREEN OFF keeps it from staying on the panel for hours) */
 static void graph_scope(uint16_t c)
 {
+#if FELUCCA_SNOW
+    snow_scope_on=1;
+#endif
     static int16_t snap[SCOPE_N];
     uint32_t w = scope_w, i, trig = 0;
     int32_t cy = (int32_t)cv_h / 2, py = cy, x, peak = 1500, a = cv_h >= H_GRAPH ? 46 : cy - 6;   /* (LARGE: the strip) */
@@ -2581,6 +2584,9 @@ static void graph_scope(uint16_t c)
 
 static void draw_graph(void)
 {
+#if FELUCCA_SNOW
+    snow_scope_on=(uint8_t)!ui.home;
+#endif
     const page_t *pg = cur_page();
     const track_t *t = TSEL;
 #if FELUCCA_SNOW

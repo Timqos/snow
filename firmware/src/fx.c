@@ -1120,6 +1120,13 @@ static __attribute__((noinline)) void smx_render(track_t *t, voice_t *v, uint32_
 
 /* one synth part into the dry mix and the sends (of sm: mx[0]; mx[1] on the second core); a part with no voice sounding
  * costs the LFO tick and a cleared buffer only (after the DIST tail has run out) */
+#if FELUCCA_SNOW
+#ifndef SNOW_MIX_TICKS
+#define SNOW_MIX_TICKS() 0u
+#define SNOW_MIX_HAND 40u
+#endif
+#define mix_part mix_part_body
+#endif
 #if FELUCCA_CPU2
 static __attribute__((noinline)) void mix_part(track_t *t, uint32_t n SM_DECL)   /* (either core runs it: out of the ISR) */
 #else
@@ -1219,6 +1226,25 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
         mod_end(t);                                     /* the stored values back */
 }
 
+#if FELUCCA_SNOW
+#undef mix_part
+static __attribute__((noinline)) void mix_part(track_t *t,uint32_t n SM_DECL)
+{
+#if FELUCCA_CPU2
+    uint32_t before=SNOW_MIX_TICKS();
+    uint32_t k=(uint32_t)(t-trk),old=part_cost[k];
+#endif
+    mix_part_body(t,n SM_ARG(sm));
+#if FELUCCA_CPU2
+    uint32_t ticks=SNOW_MIX_TICKS()-before;
+    if(ticks){
+        if(ticks>65535u)ticks=65535u;
+        part_cost[k]=(uint16_t)((old*3u+ticks+2u)/4u);
+    }
+#endif
+}
+#endif
+
 /* ---- (Skiff 1.3, as Felucca 1.6.1, after Jangada's, github.com/zednaked/jangada, GPL-3.0) the second core
  * (hal/fm1_cpu1.h) renders some of the tracks of each block into its own sums (mx[1]) while this core renders the
  * others; then this core adds them in and goes on (the LFOs' blocks, the buses, the FX layer, the master) as with one
@@ -1248,24 +1274,37 @@ static void c1_parts(uint32_t arg)                      /* arg: the tracks (bit 
 
 /* which tracks go to the second core: the split of the last block's costs that leaves the busier core the least; none
  * when that saves less than handing them over costs (C1_HAND) */
+#if FELUCCA_SNOW
+#define C1_HAND SNOW_MIX_HAND
+#else
 #define C1_HAND 40u
+#endif
 static __attribute__((noinline)) uint32_t mix_split(void)
 {
     uint32_t m, i, best = 0, all = 0, lo;
     for (i = 0; i < NPART; i++)
         all += part_cost[i];
     lo = all;
-    for (m = 1; m < (1u << NPART) - 1u; m++) {
-        uint32_t a = 0, w;
-        for (i = 0; i < NPART; i++)
-            if (m >> i & 1u)
-                a += part_cost[i];
+#if FELUCCA_SNOW
+    uint32_t a=0,prev=0;
+    for (i = 1; i < (1u << NPART); i++) {
+        m=i^(i>>1);uint32_t bit=m^prev,k=(uint32_t)__builtin_ctz(bit),w;
+        if(m&bit)a+=part_cost[k];else a-=part_cost[k];prev=m;
+        if(m==(1u<<NPART)-1u)continue;
         w = (a > all - a ? a : all - a) + C1_HAND;
-        if (w < lo) {
+        if (w < lo || (w==lo&&best&&m<best)) {
             lo = w;
             best = m;
         }
     }
+#else
+    for(m=1;m<(1u<<NPART)-1u;m++){
+        uint32_t a=0,w;
+        for(i=0;i<NPART;i++)if((m>>i)&1u)a+=part_cost[i];
+        w=(a>all-a?a:all-a)+C1_HAND;
+        if(w<lo){lo=w;best=m;}
+    }
+#endif
     return best;
 }
 #endif

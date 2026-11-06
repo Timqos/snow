@@ -279,8 +279,17 @@ static const char *menu_vname(uint32_t row, uint32_t v)
             str_cpy(b + str_len(b), " ", sizeof b - str_len(b));
         }
 #endif
+#if FELUCCA_SNOW
+        if(row==MI_CPU&&c>999)c=999;
+#endif
         fmt_int(b + str_len(b), c);
         str_cpy(b + str_len(b), row == MI_TUNE ? " CT" : " %", sizeof b - str_len(b));
+#if FELUCCA_SNOW
+        if(row==MI_CPU){
+            str_cpy(b+str_len(b)," L",sizeof b-str_len(b));
+            fmt_int(b+str_len(b),(int32_t)(felucca_dbg.late>999u?999u:felucca_dbg.late));
+        }
+#endif
         return b;
     }
     case MI_CLK: {                                     /* ((Skiff) "320 MHZ"; set another way than this power-on runs, as

@@ -438,6 +438,9 @@ static void draw_menu(void)
            * rows stayed as drawn until the cursor moved); ((1.3) LEARN's count and state; CPU's STOP / RESTART) */
           song.cpu_q8 * 100u / 256u * 12289u + ml_count() * 2741u + ui.ml.on * 3463u +
           (uint32_t)transport_busy() * 40503u;
+#if FELUCCA_SNOW
+    sig^=felucca_dbg.late*131u;
+#endif
     for (k = 0; k < MI_VALUES; k++)                     /* ((Skiff, after 1.3.1) every row's value, wherever it lives, so a
                                                          * step redraws it: the list of them by hand this replaces had
                                                          * missed STEP PREVIEW and SCREEN OFF) */

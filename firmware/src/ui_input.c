@@ -2101,12 +2101,13 @@ static void shift_mark(void)
 static int snow_home_generate(uint32_t knob)
 {
     uint32_t channel=song.sel;int rc;
-    if(knob==0u){
+    if(song.playing)rc=stattic_gen_prepare(channel,knob);
+    else if(knob==0u){
         if(bank_next(channel)<NENT)return 2;
         undo.keep=0;undo_label="GEN SEQ + LOCKS";load_begin(TSEL,UNDO_PAT);
         rc=snow_generate(channel,1);if(!rc)rc=snow_generate_parameters(channel);load_end(TSEL);
     }else rc=snow_random_section(channel,knob==1u?FAM_EDIT:knob==2u?FAM_LFO:FAM_FX);
-    if(!rc)snow_home_gen[channel][knob]++;
+    if(!rc){snow_home_gen[channel][knob]++;if(song.playing)ui_message("GEN AT NEXT BAR");}
     ui.force=1;return rc;
 }
 /* CH HOME 1: a tap applies octave on release; a 700 ms hold toggles mode

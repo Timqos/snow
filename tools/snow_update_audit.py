@@ -9,12 +9,15 @@ import argparse
 import hashlib
 import json
 import os
+import re
+import struct
 from pathlib import Path
 import subprocess
 import sys
 import urllib.request
 
 import fm1_install as pkg
+import lz4blk
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = "815358c56ce9307ed1cb4085351cd0fd94c15ee4"
@@ -42,6 +45,52 @@ def image(path):
         files[kind] = logical[off:off+size]
     assert pkg.product_of(raw).startswith("FM-1_"), "FM-1 packages only"
     return {"product": pkg.product_of(raw), "sha256": digest(raw), "files": files}
+
+
+def loader_payload(ota):
+    """Check both JLFS headers and every compressed block before comparing code."""
+    def crc16(data):
+        c=0
+        for b in data:
+            c ^= b << 8
+            for _ in range(8):
+                c=((c << 1) ^ 0x1021) if c & 0x8000 else c << 1
+            c &= 0xffff
+        return c
+    assert len(ota) >= 64
+    for off in (0,32):
+        assert int.from_bytes(ota[off:off+2],"little") == crc16(ota[off+2:off+32])
+    assert int.from_bytes(ota[2:4],"little") == crc16(ota[32:])
+    assert int.from_bytes(ota[4:8],"little") == 32
+    assert int.from_bytes(ota[8:12],"little") == len(ota)-32
+    assert int.from_bytes(ota[40:44],"little") == 0x01c0a800
+    data=bytearray();i=64
+    while i < len(ota):
+        assert i+8 <= len(ota)
+        clen,dlen=struct.unpack_from("<II",ota,i);i+=8
+        assert 0 < clen <= 4096 and 0 < dlen <= 4096 and i+clen <= len(ota)
+        block=lz4blk.decompress(ota[i:i+clen]);assert len(block)==dlen
+        data.extend(block);i+=clen
+    assert len(data)==int.from_bytes(ota[36:40],"little")
+    assert crc16(data)==int.from_bytes(ota[34:36],"little")
+    return bytes(data)
+
+def loader_display_review(snow,base):
+    """Only this explicitly requested display change is allowed. All executable
+    bytes, addresses, lengths and other strings must remain identical."""
+    new,old=loader_payload(snow),loader_payload(base)
+    assert b"STATTIC UPDATER" in new and b"SKIFF INSTALLER" not in new
+    assert new.replace(b"STATTIC UPDATER",b"SKIFF INSTALLER")==old, "Loader executable behavior changed"
+    path="firmware/loader/ldr_screen.c"
+    original=subprocess.check_output(["git","show",BASE+":"+path],cwd=ROOT,text=True)
+    current=(ROOT/path).read_text()
+    upstream_view=re.sub(r"#if FELUCCA_SNOW\n.*?#else\n(.*?)#endif\n",r"\1",current,flags=re.S)
+    assert upstream_view==original, "Loader source change is not confined to display literals"
+    assert not subprocess.check_output(["git","diff",BASE,"--",*CRITICAL,":(exclude)"+path],cwd=ROOT)
+    return {"loader_display_only_change": True,
+            "loader_executable_identical_after_brand_normalization": True,
+            "loader_payload_sha256": digest(new),"baseline_loader_payload_sha256": digest(old),
+            "reviewed_source_exception": path}
 
 
 def main():
@@ -75,8 +124,8 @@ def main():
         assert entry in snow["files"] and entry in base["files"]
     assert len(snow["files"][0]) == len(base["files"][0]) == 0x93000
     assert snow["files"][0][:0x4000] == base["files"][0][:0x4000], "Bootstrap review required"
-    assert snow["files"][100] == base["files"][100], "Loader review required"
-    assert not subprocess.check_output(["git", "diff", BASE, "--", *CRITICAL], cwd=ROOT)
+    loader_review=loader_display_review(snow["files"][100],base["files"][100])
+    checks.append("loader-display-only-equivalence")
     assert not subprocess.check_output(["git", "ls-files", "--others", "--exclude-standard", "--", *CRITICAL], cwd=ROOT)
     # Tests must correspond to the firmware source recorded in the shipped build.
     assert not subprocess.check_output(["git", "diff", meta["source_commit"], "--", "firmware", "tools/build.py"], cwd=ROOT)
@@ -86,8 +135,10 @@ def main():
         ("ota", "ota_test.c", ["-DOWN_PKG=1", f'-DFELUCCA_ID="{snow["product"]}"']),
         ("loader", "ldr_test.c", [f'-DFELUCCA_ID="ota-{snow["product"]}"']),
         ("map", "fm1_flash_map_test.c", []), ("storage", "storage_test.c", []),
+        ("loader-screen", "ldr_screen_test.c", []),
         ("stock-head", "snow_stock_head_test.c", ["-DOWN_PKG=1", f'-DFELUCCA_ID="{snow["product"]}"'])]:
         run("compile-"+name, *compiler, *defines, "-o", out/name, ROOT/"tests"/source)
+    run("stattic-loader-screen", out/"loader-screen");
     run("flash-map", out/"map");run("storage-torn-writes", out/"storage")
     run("ota-entry-snow", out/"ota", a.snow_package.resolve())
     run("ota-exit-skiff", out/"ota", a.baseline_package.resolve())
@@ -139,8 +190,9 @@ def main():
               "firmware_version": meta["version"], "firmware_source": meta["source_commit"],
               "snow_sha256": snow["sha256"], "baseline_sha256": base["sha256"],
               "previous_snow_sha256": digest(a.previous_snow_package.read_bytes()) if a.previous_snow_package else None,
-              "bootstrap_head_identical_to_baseline": True, "loader_identical_to_baseline": True,
-              "loader_sha256": digest(snow["files"][100]), "critical_sources_unchanged_from": BASE,
+              "bootstrap_head_identical_to_baseline": True, "loader_identical_to_baseline": snow["files"][100]==base["files"][100],
+              **loader_review,
+              "loader_sha256": digest(snow["files"][100]), "critical_sources_unchanged_except_reviewed_display_from": BASE,
               "critical_source_paths": CRITICAL, "checks": checks,
               "official_packages": {v: x["sha256"] for v, x in stock.items()},
               "official_rollback_checks": "passed" if len(stock) == 2 else "not_run",

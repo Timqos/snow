@@ -200,37 +200,50 @@ static void snow_auto_lock(motion_store_t *m,track_t *t,uint32_t step,uint32_t i
     motion_event_t *e=&m->event[m->count++];memset(e,0,sizeof *e);
     e->place=(uint16_t)place;e->id=(uint8_t)id;e->value=(int8_t)value;e->lock=e->generated=1;m->on|=(uint8_t)(1u<<k);
 }
-static int snow_generate_parameters(uint32_t channel)
+/* Build locks without touching motion, steps or parameters heard by the
+ * audio interrupt. source may be the HOME candidate; t is the real role. */
+static void snow_parameter_plan(track_t *t,const int16_t *base,uint32_t channel,
+                                uint32_t seed,step_t *steps,motion_store_t *next)
 {
-    if(channel>=NTRK)return 1;if(bank_next(channel)<NENT)return 2;
-    track_t *t=&trk[channel];step_t steps[NSTEP];memcpy(steps,t->step,sizeof steps);
-    motion_store_t next=motion;snow_remove_auto(&next,channel);
-    uint32_t seed=snow_next_seed(snow_seed(t)),rng=snow_hash(seed^(channel+1u)*977u)|1u;
-    uint32_t len=(uint32_t)clamp(t->p[P_SLEN],1,NSTEP),amt=(uint32_t)t->p[SN_G_LOCKS],made=0;
-    uint32_t cap=next.count<52u?52u-next.count:0;if(cap>8u)cap=8u;
+    uint32_t rng=snow_hash(seed^(channel+1u)*977u)|1u;
+    uint32_t len=(uint32_t)clamp(base[P_SLEN],1,NSTEP),amt=(uint32_t)base[SN_G_LOCKS],made=0;
+    uint32_t cap=next->count<52u?52u-next->count:0;if(cap>8u)cap=8u;
     for(uint32_t i=0;i<len;i++) {
         if(steps[i].cond==TC_ORNAMENT){steps[i].cond=TC_NONE;step_set_ratchet(&steps[i],1);}
         if(!amt||steps[i].time!=ST_NOTE||!steps[i].n||made>=cap||!snow_prob(&rng,amt*45u/100u))continue;
         uint32_t pick=snow_int(&rng,0,3),id=pick==0&&channel<3?SN_TUNE:pick==1?P_DEC:pick==2?P_E0:P_REV;
         if(channel>=4u)id=pick==0?P_E6:pick==1?P_PAN:pick==2?P_REV:channel==5u?P_E7:P_E0;
-        int32_t base=motion_base_value(t,id),spread=id==SN_TUNE?(int32_t)(2u+amt/20u):id==P_REV?35:10+(int32_t)amt/4;
+        int32_t value=base[id],spread=id==SN_TUNE?(int32_t)(2u+amt/20u):id==P_REV?35:10+(int32_t)amt/4;
         if(channel>=4u)spread=id==P_E6?8+(int32_t)amt/7:id==P_REV?12+(int32_t)amt/4:id==P_PAN?2+(int32_t)amt/10:5+(int32_t)amt/20;
-        int32_t v=base+(int32_t)snow_int(&rng,0,(uint32_t)spread*2u)-spread;
-        uint32_t before=next.count;snow_auto_lock(&next,t,i,id,v);made+=next.count!=before;
-        if(id==P_DEC&&made<cap&&snow_prob(&rng,40)){before=next.count;snow_auto_lock(&next,t,i,P_REV,(int32_t)snow_int(&rng,15,65));made+=next.count!=before;}
+        int32_t v=value+(int32_t)snow_int(&rng,0,(uint32_t)spread*2u)-spread;
+        uint32_t before=next->count;snow_auto_lock(next,t,i,id,v);made+=next->count!=before;
+        if(id==P_DEC&&made<cap&&snow_prob(&rng,40)){before=next->count;snow_auto_lock(next,t,i,P_REV,(int32_t)snow_int(&rng,15,65));made+=next->count!=before;}
     }
-    if(amt&&cap&&!made)for(uint32_t i=0;i<len;i++)if(steps[i].time==ST_NOTE&&steps[i].n){uint32_t id=channel>=4u?P_E6:P_E0;snow_auto_lock(&next,t,i,id,clamp(motion_base_value(t,id)+((seed&1u)?18:-18),0,127));break;}
+    if(amt&&cap&&!made)for(uint32_t i=0;i<len;i++)if(steps[i].time==ST_NOTE&&steps[i].n){uint32_t id=channel>=4u?P_E6:P_E0;snow_auto_lock(next,t,i,id,clamp(base[id]+((seed&1u)?18:-18),0,127));break;}
     if(amt&&channel>=2u&&channel<=3u&&snow_prob(&rng,65)) {
-        uint32_t candidate[NSTEP],n=0,period=div_samples((uint32_t)t->p[P_SDIV]),bar=beat_samples()*4u;
+        uint32_t candidate[NSTEP],n=0,period=div_samples((uint32_t)base[P_SDIV]),bar=beat_samples()*4u;
         for(uint32_t i=0;i<len;i++)if(steps[i].time==ST_NOTE&&steps[i].n&&!steps[i].cond) {
             uint32_t localbar=(uint32_t)((uint64_t)i*period/bar);
             if((uint64_t)len*period<bar*2u || (localbar&1u))candidate[n++]=i;
         }
         if(n){uint32_t at=candidate[snow_int(&rng,0,n-1u)];step_set_ratchet(&steps[at],snow_int(&rng,2,4));steps[at].cond=TC_ORNAMENT;}
     }
+}
+static int snow_generate_parameters(uint32_t channel)
+{
+    if(channel>=NTRK)return 1;if(bank_next(channel)<NENT)return 2;
+    track_t *t=&trk[channel];step_t steps[NSTEP];memcpy(steps,t->step,sizeof steps);
+    motion_store_t next=motion;snow_remove_auto(&next,channel);
+    uint32_t seed=snow_next_seed(snow_seed(t));
+    /* Locks must start from patch values even if an older lock is sounding. */
+    int16_t base[P_COUNT];
+    for(uint32_t id=0;id<P_COUNT;id++)base[id]=motion_base_value(t,id);
+    snow_parameter_plan(t,base,channel,seed,steps,&next);
     load_begin(t,UNDO_PAT);uint32_t guard=motion_guard();memcpy(t->step,steps,sizeof steps);motion=next;snow_seed_put(t,seed);
     motion_unguard(guard);load_end(t);ui.force=1;return 0;
 }
+#include "stattic_generate.c"
+
 static int snow_generate_scene(int vary)
 {
     for(uint32_t k=0;k<NTRK;k++)if(bank_next(k)<NENT)return 2;
@@ -256,6 +269,7 @@ static int snow_clear_sequence(int all)
 }
 static void snow_sequence_poll(void)
 {
+    if(stattic_gen_error){stattic_gen_error=0;ui_message("AUTOMATION FULL");}
     for(uint32_t k=0;k<NTRK;k++) {
         uint32_t pass=take_pass[k],mode=(uint32_t)trk[k].p[SN_G_LIVE];
         if(!song.playing){snow_gen_pass[k]=0;continue;}
@@ -268,6 +282,7 @@ static void snow_sequence_poll(void)
  * under one short guard. RANDOM PATT cannot split across two bar lines. */
 static int stattic_pattern_prepare(uint32_t channel,uint32_t slot,uint32_t *ready)
 {
+    stattic_gen_cancel(channel);
     launch_t *q=&launch_q[channel];uint32_t b0,b1;
     if(ent_block(channel,slot,&b0,&b1))slot=b0;
     q->armed=0;chain_go[channel]=0;RING_PUBLISH();bank_poll_trk(channel);

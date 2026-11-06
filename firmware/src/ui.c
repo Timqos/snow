@@ -1689,9 +1689,31 @@ static int mom_keep(int lfo, int fx)
     mom.n = (uint8_t)k;
     return (int)i;
 }
+static void load_snapshot(track_t *t,uint32_t what)
+{
+    uint32_t i=trk_index(t);
+    undo_push(what);
+    undo.trk = (uint8_t)(i + 1u);
+    undo.what = (uint8_t)what;
+    undo.eng = t->eng_req;
+    undo.preset = t->preset;
+    undo.user = t->user;
+    for(uint32_t id=0;id<P_COUNT;id++)undo.p[id]=motion_base_value(t,id);
+    memcpy(undo.step, t->step, sizeof undo.step);
+    memcpy(undo.fm6, fm6_patch[i], FP_SIZE);
+    undo.fm6_slot = fm6_slot[i];
+    if (what & UNDO_KIT)
+        memcpy(undo.dx, dx_kit, sizeof undo.dx);
+    undo.pid = trk_pid[i];
+    motion_snapshot_track(t, &undo.motion_backup);
+    undo.keep=0;
+}
 static void load_begin(track_t *t, uint32_t what)
 {
     uint32_t i = trk_index(t);
+#if FELUCCA_SNOW
+    if(!undo_depth)stattic_gen_cancel(i);       /* A later explicit load replaces a queued generator. */
+#endif
     if (what & UNDO_SOUND) {
         mom_back(t);                              /* ((1.3) MOMENTARY: the sound as it was, then the load) */
         drum_mute[i] = 0;                         /* ((1.3) the lanes' mutes go with the sound) */
@@ -1708,20 +1730,7 @@ static void load_begin(track_t *t, uint32_t what)
         load_motion_hold(t, what);
         return;
     }
-    undo_push(what);
-    undo.trk = (uint8_t)(i + 1u);
-    undo.what = (uint8_t)what;
-    undo.eng = t->eng_req;
-    undo.preset = t->preset;
-    undo.user = t->user;
-    memcpy(undo.p, t->p, sizeof undo.p);
-    memcpy(undo.step, t->step, sizeof undo.step);
-    memcpy(undo.fm6, fm6_patch[i], FP_SIZE);
-    undo.fm6_slot = fm6_slot[i];
-    if (what & UNDO_KIT)
-        memcpy(undo.dx, dx_kit, sizeof undo.dx);
-    undo.pid = trk_pid[i];
-    motion_snapshot_track(t, &undo.motion_backup);
+    load_snapshot(t,what);
     load_motion_hold(t, what);
 }
 
@@ -1892,7 +1901,11 @@ static void undo_step(int redo)
     if (redo)
         undo_back--;
     c = &undo_ring[(undo_top + UNDO_N - undo_back) % UNDO_N];
-    if (!undo_swap(c)) {
+    if (
+#if FELUCCA_SNOW
+        !(!redo && stattic_gen_undo(c->seq)) &&
+#endif
+        !undo_swap(c)) {
         if (redo)
             undo_back++;
         return;

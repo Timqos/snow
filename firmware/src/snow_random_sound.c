@@ -41,10 +41,9 @@ static void snow_design_fx(uint32_t channel,uint32_t *r,int16_t *p)
     p[P_IA]=ss_range(r,p[P_ITYPE]==1?8:20,p[P_ITYPE]==1?26:63);
     p[P_IB]=ss_range(r,p[P_ITYPE]==1?82:12,p[P_ITYPE]==1?119:40);p[P_IC]=ss_range(r,p[P_ITYPE]==1?90:0,p[P_ITYPE]==1?108:14);
 }
-static void snow_design_sound(const track_t *t,uint32_t channel,uint32_t seed,const uint32_t *mask,int16_t *p)
+static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t seed,const uint32_t *mask,int16_t *p)
 {
     uint32_t r=seed?seed:0x6d2b79f5u;int melodic=channel>=4u;
-    for(uint32_t id=0;id<P_COUNT;id++)p[id]=motion_base_value(t,id);
     /* Every EDIT page participates; the rules below couple selectors and
      * the parameters which define register, articulation and effect budgets. */
     for(uint32_t id=0;id<P_COUNT;id++)if((mask[id/32u]>>(id%32u))&1u){
@@ -160,15 +159,20 @@ static void snow_design_lfo(uint32_t channel,uint32_t *r,int16_t *p)
         p[P_M1AMT+i*3u]=i<active?ss_range(r,2,7)*(ss_chance(r,50)?1:-1):0;
     }
 }
-static int snow_random_section(uint32_t channel,uint32_t family)
+static void snow_design_sound(const track_t *t,uint32_t channel,uint32_t seed,const uint32_t *mask,int16_t *p)
 {
-    if(channel>=NTRK||(family!=FAM_EDIT&&family!=FAM_LFO&&family!=FAM_FX))return 1;
-    uint32_t mask[(P_COUNT+31u)/32u];int16_t next[P_COUNT];track_t *t=&trk[channel];snow_family_mask(family,mask);
+    for(uint32_t id=0;id<P_COUNT;id++)p[id]=motion_base_value(t,id);
+    snow_design_sound_from(t,channel,seed,mask,p);
+}
+/* Pure preparation: p is the caller's base/candidate, never the sounding
+ * values. Descriptors still use the real track (its role is pointer-based). */
+static void snow_design_section(track_t *t,uint32_t channel,uint32_t family,uint32_t *mask,int16_t *next)
+{
+    snow_family_mask(family,mask);
     if(!snow_sound_state[channel])snow_sound_state[channel]=rng()^fm1_ticks()^(channel+1u)*0x9e3779b9u;
     snow_sound_state[channel]+=0x9e3779b9u; /* full 32-bit seed walk, not a preset cycle */
-    if(family==FAM_EDIT)snow_design_sound(t,channel,snow_sound_state[channel],mask,next);
+    if(family==FAM_EDIT)snow_design_sound_from(t,channel,snow_sound_state[channel],mask,next);
     else {
-        for(uint32_t id=0;id<P_COUNT;id++)next[id]=motion_base_value(t,id);
         uint32_t r=snow_sound_state[channel];
         if(family==FAM_LFO)snow_design_lfo(channel,&r,next);
         else {
@@ -196,6 +200,13 @@ static int snow_random_section(uint32_t channel,uint32_t family)
             next[id]=(int16_t)param_fit(d,next[id]);
         }
     }
+}
+static int snow_random_section(uint32_t channel,uint32_t family)
+{
+    if(channel>=NTRK||(family!=FAM_EDIT&&family!=FAM_LFO&&family!=FAM_FX))return 1;
+    uint32_t mask[(P_COUNT+31u)/32u];int16_t next[P_COUNT];track_t *t=&trk[channel];
+    for(uint32_t id=0;id<P_COUNT;id++)next[id]=motion_base_value(t,id);
+    snow_design_section(t,channel,family,mask,next);
     undo.keep=0;undo_label=family==FAM_LFO?"RANDOM LFO":family==FAM_FX?"RANDOM FX":"RANDOM SOUND";
     load_begin(t,UNDO_SOUND|(family==FAM_FX?UNDO_FX:0));
     uint32_t guard=motion_guard();

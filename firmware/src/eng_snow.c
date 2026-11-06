@@ -7,6 +7,16 @@ static inline int32_t snow_div2(int32_t x,uint32_t bits)
 {
     return (x+((x>>31)&(int32_t)((1u<<bits)-1u)))>>bits;
 }
+/* Exact C division towards zero. The target's size optimiser otherwise
+ * emits hardware divides in sample loops. Floor reciprocal + one correction
+ * works over the entire int32 range, including INT32_MIN. */
+static inline int32_t snow_div127(int32_t x)
+{
+    uint32_t u=x<0?0u-(uint32_t)x:(uint32_t)x;
+    uint32_t q=(uint32_t)(((uint64_t)u*33818640u)>>32);
+    q+=u-q*127u>=127u;
+    return x<0?-(int32_t)q:(int32_t)q;
+}
 static const char *const SN_ALGS[] = {"FM PAIR","FM CHAIN","FM PAR","RING","ADDITIVE","FOLD"};
 static const char *const SN_WAVES[] = {"SINE","TRI","SAW","SQUARE","PULSE","ORGAN"};
 static const char *const SN_RMODELS[] = {"ROOM","HALL","PLATE"};
@@ -26,6 +36,13 @@ static uint8_t snow_mask=63;
 enum { SN_HOME_SYNTH, SN_HOME_GEN, SN_HOME_MIX, SN_HOME_PAT, SN_HOME_MS, SN_HOME_COUNT };
 static uint8_t snow_home_panel;
 static uint32_t snow_home_gen[NTRK][4];
+static void stattic_gen_apply(void);
+static void stattic_gen_drop(void);
+static void stattic_gen_cancel(uint32_t channel);
+static int stattic_gen_undo(uint32_t seq);
+static int stattic_gen_prepare(uint32_t channel,uint32_t knob);
+static int stattic_gen_sequence(uint32_t channel);
+
 static uint32_t stattic_scroll[3];
 static const uint8_t stattic_art_height[3]={84,78,78};
 static uint8_t stattic_focus[3];
@@ -149,6 +166,7 @@ static void snow_render(track_t *t,voice_t *v,int32_t *out,uint32_t n,const vmod
      * LFO destination and bounds twice per sample needlessly starved the UI
      * and audio deadline on the FM-1, though a desktop rendered it easily. */
     int32_t feedback_gain=snow_param(t,5)*128,drive_gain=128+snow_param(t,7)*3;
+    int32_t damping=8192-p[SN_RESO]*7600/127;
     uint32_t third_on=alg==1u||alg==2u||p[SN_SUB]||p[SN_FB_ROUTE]==2;
     for(uint32_t i=0;i<n;i++) {
         int32_t idx=index0+(((index-index0)*(int32_t)(i+1u))>>CTL_LOG2);
@@ -162,16 +180,16 @@ static void snow_render(track_t *t,voice_t *v,int32_t *out,uint32_t n,const vmod
         if(alg>=3)shift=0;
         int32_t x=snow_wave(a+shift,inc,(uint32_t)p[SN_WAVE1],pw);
         if(alg==3)x=mulq15(x,mod);
-        if(alg==4&&mix)x=(x*(127-mix)+mod*mix)/127;
+        if(alg==4&&mix)x=snow_div127(x*(127-mix)+mod*mix);
         if(alg==5)x=sine_i((uint32_t)x*(uint32_t)(32768+tone*4096));
-        if(alg<4 && mix)x=(x*(127-mix)+mod*mix)/127;
-        if(p[SN_SUB])x=(x*(127-p[SN_SUB])+third*p[SN_SUB])/127;
+        if(alg<4 && mix)x=snow_div127(x*(127-mix)+mod*mix);
+        if(p[SN_SUB])x=snow_div127(x*(127-p[SN_SUB])+third*p[SN_SUB]);
         int32_t noise=(int32_t)(noise32(&rng)>>16)-32768;
-        if(p[SN_NOISE])x=(x*(127-p[SN_NOISE])+noise*p[SN_NOISE])/127;
+        if(p[SN_NOISE])x=snow_div127(x*(127-p[SN_NOISE])+noise*p[SN_NOISE]);
         prev=p[SN_FB_ROUTE]==1?x:p[SN_FB_ROUTE]==2?third:mod;
         if(p[SN_FILTER]) {
             int32_t lp=tsvf_lp(&filter,x,&bp,&lo);
-            x=p[SN_FILTER]==1?lp:p[SN_FILTER]==2?x-lp-((bp*(8192-p[SN_RESO]*7600/127))>>12):bp;
+            x=p[SN_FILTER]==1?lp:p[SN_FILTER]==2?x-lp-((bp*damping)>>12):bp;
         }
         x=soft_knee(snow_div2(x*drive_gain,7),22000);
         out[i]+=voice_amp(x,m,i);
@@ -196,7 +214,7 @@ static void snow_fill(int16_t *p,uint32_t role,uint32_t preset)
  {"MIX",0,0,127,0,F_PCT,0},{"FEEDBACK",0,0,127,0,F_PCT,0}, \
  {"CUTOFF",0,0,127,110,F_CUTOFF,0},{"DRIVE",0,0,127,0,F_PCT,0}}, \
  .presets=SNOW_PATCHES[role],.npresets=10,.knob={P_E0,P_E1,P_E2,P_E3}, \
- .poly=4,.ownenv=1,.keep=0xe0,.note_on=snow_note_on,.render=snow_render, \
+ .poly=(role==5?NVOICE:4),.ownenv=1,.keep=0xe0,.note_on=snow_note_on,.render=snow_render, \
  .amp=snow_amp,.done=snow_done,.block=snow_block }
 static const engine_t SNOW_ENG[NTRK]={SNOW_MACHINE(0,"KICK"),SNOW_MACHINE(1,"SNARE"),SNOW_MACHINE(2,"HAT"),SNOW_MACHINE(3,"PERC"),SNOW_MACHINE(4,"BASS"),SNOW_MACHINE(5,"CHORD")};
 #undef SNOW_MACHINE

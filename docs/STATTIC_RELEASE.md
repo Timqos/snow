@@ -1,8 +1,63 @@
-# STATTIC 0.8.0-rc3
+# STATTIC 0.8.0-rc4
 
 Experimental FM-1 candidate, previously named Snow. The five user HOME
 mockups in `assets/stattic-home/` and the confirmed control captions are
 the interface reference. See [the recorded agreement](STATTIC_WORK_PLAN.md).
+
+## Repair in rc4
+
+- HOME's empty lower visualizer strip/divider is removed. Bottom helpers now
+  use larger type in two columns/two rows (three columns for pattern selectors),
+  without moving the upper layout. Other editor graphs remain available.
+- HOME 3 removes its small icon, moves the selected field left and displays
+  VOL/PAN/FLR/WDT's value as a percentage, not a live audio meter.
+- All four HOME 2 generators prepare off the audio thread and enter at the next
+  shared bar during PLAY. They preserve the existing algorithms, random streams,
+  parameter masks, detent counts and full synthesis/effect surface. Repeated
+  knobs coalesce into one undoable candidate; STOP applies it immediately.
+  Undo before the bar cancels it while retaining redo. Other tracks' locks and
+  live mixer changes are retained; event-pool overflow rejects a whole batch.
+- The real loader display reads STATTIC UPDATER. Only equal-length display
+  literals changed: decompressed executable bytes are identical to Skiff 2.2
+  after normalizing that brand string; headers/CRCs and all blocks are checked.
+
+## Audio investigation and changes
+
+The load-dependent crackle remains a physical-device report, not a fault that
+host playback has reproduced. Source research included SLOOP 2.8.5
+(`isod89/sloop-fm1`, `bac9c05`), Skiff issue 14/41 and Tonitor issue 11.
+SLOOP uses 256-frame halves and volatile interrupt state. Its texture-related
+issue 122 is not a STATTIC diagnosis: STATTIC has no SLOOP TEXTURE generator.
+
+STATTIC now uses 256-frame hardware halves (5.80 ms, previously 2.90 ms).
+This reduces interrupt overhead and gives short scheduling spikes more room;
+it does not halve DSP work or prove a physical overload has gone away.
+Control blocks remain 32 samples, so synth/envelope/generator resolution is
+unchanged. Audio DMA memory increases by 2048 B; it remains within RAM budgets.
+Unused HOME scope capture stops; non-HOME scope/editor functionality remains.
+
+The two-core split now measures each track's actual synthesis and complete
+rack work, instead of estimating only the number of voices. Gray-code mask
+search gives the same optimal split/tie choice with less repeated summation.
+The in-audio flag is volatile across nested TIMER5 interrupts. CPU display
+includes nested interrupt time, since that time also consumes the DMA deadline.
+SYSTEM → CPU also shows L: actual DMA deadline misses since boot, capped at 999.
+Exact reciprocal arithmetic replaces hot per-sample /127 operations; sample
+products, full-range int32 cases and immutable factory/FX PCM hashes are checked.
+
+CH's old four-voice cap was separately reproduced cutting old release notes
+when a new four-note chord arrives. It now uses all eight already allocated
+CH slots. No new voice storage or shared-budget increase: 8 voices on one core,
+12 on two cores as before. A real sequencer/mixer test retains four old released
+notes alongside the next four-note chord. More simultaneous held/released notes
+can still exhaust a finite shared budget; deadline guards are retained.
+
+Research links:
+- https://github.com/isod89/sloop-fm1
+- https://github.com/illuminus5/skiff/issues/14
+- https://github.com/illuminus5/skiff/issues/41
+- https://github.com/nzimas/tonitor/issues/11
+- https://github.com/isod89/sloop-fm1/issues/122
 
 ## Shared bar and four-bar phrases
 
@@ -88,10 +143,12 @@ replaced by dirty static strips. The original audio deadline/voice guards remain
 ## Physical report and verification limits
 
 The newest user report is **2 cores, up to 80% displayed CPU**: CH distortion
-appears during playback and is absent after STOP. This does not identify a
+appears as channels accumulate, irrespective of activation order; STOP was
+previously reported clean. This does not identify a
 single proven cause. Average load does not exclude brief deadline overruns,
-and dense new chords can replace release tails within the unchanged four-voice
-CH cap. Retain the existing two-core 12-voice shared budget and overload guards.
+and dense new chords previously replaced release tails within the old four-voice
+CH cap. The rc4 changes above address measured work allocation and that cap;
+the existing two-core 12-voice shared budget and overload guards remain.
 
 Native/WASM tests cover actual playback, parameter-lock ownership, finite
 stereo output, physical encoder/key routing, and a one-minute six-channel
@@ -109,12 +166,13 @@ The target build fits all enforced budgets (pre-publication build):
 
 | Region | Used | Limit | Free |
 | --- | ---: | ---: | ---: |
-| App slot | 572,300 B | 581,564 B | 9,264 B |
-| Data + BSS | 86,600 B | 98,304 B | 11,704 B |
-| Pool | 333,680 B | 356,352 B | 22,672 B |
+| App slot | 575,468 B | 581,564 B | 6,096 B |
+| Data + BSS | 88,648 B | 98,304 B | 9,656 B |
+| Pool | 344,732 B | 356,352 B | 11,620 B |
 | RAM code + ramx | 24,176 B | 24,576 B | 400 B |
 
-The loader, startup head, flash map, USB/model checks, update protocol and
+The loader display alone is renamed, with normalized executable equality
+checked. The startup head, flash map, USB/model checks, update protocol and
 hardware register code are unchanged. The software update/rollback audit
 must be rerun for the published binary, including original V15/V16 recovery.
 No physical device is flashed by the development tests. After installing,

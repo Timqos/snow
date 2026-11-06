@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Snow 0.7.4-rc1 — installation and rollback audit
 
-The current candidate is **STATTIC 0.8.0-rc3** (formerly Snow). See
+The current candidate is **STATTIC 0.8.0-rc4** (formerly Snow). See
 [the current revision](STATTIC_RELEASE.md) for interface/sound changes and
 physical qualification limits. The current published package's machine-readable
 `update-audit.json` supplies its exact hash and update/rollback evidence.
@@ -31,10 +31,13 @@ and the published Skiff 2.2 package, SHA-256
 `1caf971e6eae8f9bb9b1391c98bde62a2b1c49cda2ece7b0c25808db6b7e489e`.
 
 - All hardware abstraction files, flash maps/drivers, startup assembly, linker
-  map, loader sources, OTA entry/hardware hooks, storage driver, USB, package
-  maker and established updater implementations are unchanged from that base.
-- The **package's first 0x4000 bytes of flash.bin and its 7273-byte OTA loader
-  are byte-identical to the published Skiff package**. The bundled bootstrap
+  map, OTA entry/hardware hooks, storage driver, USB, package maker and
+  established updater implementations are unchanged from that base. Loader
+  source has one reviewed exception: equal-length STATTIC display literals.
+- The **package's first 0x4000 bytes of flash.bin remain byte-identical to
+  the published Skiff package**. The decompressed OTA loader is byte-identical
+  after normalizing STATTIC UPDATER to SKIFF INSTALLER; the audit checks every
+  executable byte and both wrapper CRCs. The bundled bootstrap
   head is not written to the device by this loader; the unit keeps its own.
 - The running application can write its data/staging windows, not the boot
   head or application code. Whole-sector, cross-boundary and overflowing range

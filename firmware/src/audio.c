@@ -14,7 +14,9 @@ static int32_t abuf[2u * HALF_WORDS] __attribute__((aligned(4)));
 /* diagnostics, kept across resets and UBOOT entry: read with `fm1t memr` */
 #define DBG_MAGIC 0x44424731u                       /* "DBG1" */
 struct felucca_dbg {
-    uint32_t magic, halves, max_us, nested, in_audio, late, timer_irqs, ui_frames;
+    uint32_t magic, halves, max_us, nested;
+    volatile uint32_t in_audio;               /* TIMER5 reads this while it may interrupt the renderer. */
+    uint32_t late, timer_irqs, ui_frames;
     uint32_t last_us, cpu_q8, boots;
     uint32_t stage, page, home;           /* where the main loop is (breadcrumbs) */
     uint32_t prev_stage, prev_page, prev_home, prev_rst, prev_frames;   /* as found at boot */
@@ -25,6 +27,9 @@ static uint32_t audio_cpu_rem;                         /* keep the fractional II
 #define SCOPE_N 512u
 static int16_t scope_buf[SCOPE_N];
 static uint32_t scope_w;
+#if FELUCCA_SNOW
+static volatile uint8_t snow_scope_on;        /* Only a visible non-HOME scope needs capture. */
+#endif
 
 static void audio_block(int32_t *out, uint32_t n)       /* mix (fx.c), then Q15 -> 24 bit */
 {
@@ -35,6 +40,9 @@ static void audio_block(int32_t *out, uint32_t n)       /* mix (fx.c), then Q15 
 #endif
     if (fx_usb_fixed)                                   /* USB LEVEL FIXED: USB took the full level, the DAC */
         usb_fixed_dac(out, n);                          /* (speaker, headphones) gets MASTER's (fx.c) */
+#if FELUCCA_SNOW
+    if(snow_scope_on)
+#endif
     for (i = 1; i < n; i += 2u)                         /* the HOME scope: the music, before the click */
         scope_buf[scope_w++ & (SCOPE_N - 1u)] = (int16_t)out[2u * i];
     click_render(out, n);                               /* the metronome (click.c): the DAC only, not USB */
@@ -105,7 +113,7 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
     t5_nested_ticks = 0;
     fm1_audio_ack_aux(p);
     if (p & FM1_AUDIO_HALF) {
-        uint32_t half = fm1_audio_free_half(), b, us;
+        uint32_t half = fm1_audio_free_half(), b, us, all;
         int32_t *o = &abuf[half * HALF_WORDS];
         if (shed_req) {
             shed_req = 0;
@@ -120,11 +128,15 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
         }
         fm1_audio_ack_half();
         audio_halves++;
-        us = shed_check(fm1_ticks() - t0);
+        all = fm1_ticks() - t0;
+        us = shed_check(all);
         if (us > audio_max_us)
             audio_max_us = us;
         {
-            uint32_t load = song.cpu_q8 * (CPU_AVG - 1u) + (us * 256u) / (HALF_FRAMES * 1000000u / FS) + audio_cpu_rem;
+            /* STATTIC reports the complete deadline, including nested IRQs.
+             * Render-only averages can hide the reason for voice shedding. */
+            uint32_t busy = FELUCCA_SNOW ? all / FM1_TICKS_PER_US : us;
+            uint32_t load = song.cpu_q8 * (CPU_AVG - 1u) + (busy * 256u) / (HALF_FRAMES * 1000000u / FS) + audio_cpu_rem;
             song.cpu_q8 = load / CPU_AVG;
             audio_cpu_rem = load % CPU_AVG;
         }
