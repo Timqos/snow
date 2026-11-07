@@ -69,4 +69,16 @@ Validation completed:
   package metadata. The published firmware package remains SHA 6c65c516…17a8.
 
 No physical FM-1 is connected here: the browser test models CDC transport,
-not a real USB driver/device. Publication/hash verification is pending.
+not a real USB driver/device.
+
+Published: https://timqos.github.io/snow/snow/console/
+
+- Web source: `8e26b34853d8ddc045a694495381aded705eba28`.
+- gh-pages: `868323ec1ccacf78461e88912ae9919b95b97a5d`.
+- Successful Pages run: `42385784422`.
+- All 15 normal URLs, including the root landing, match the local published
+  bytes. JavaScript module and WASM MIME types are correct. Verified
+  2026-11-07 17:20:08 Europe/Kyiv; report:
+  `build/stattic-live-verification-usb.json`.
+- Protected firmware package, WASM, worklet, build metadata and installer
+  target hashes are unchanged. No new firmware is needed for this console.
