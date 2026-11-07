@@ -88,7 +88,13 @@ stays on core 0; average load is not evidence that both cores are saturated.
 Do not change this policy on an unmeasured assumption in this candidate.
 Use the new CH/worker/IRQ stage snapshot to assess the next scheduling step.
 
-Publication and normal-URL hash verification remain pending.
+Published: https://timqos.github.io/snow/snow/?v=080rc9
+
+- gh-pages: `238588f`; successful Pages run: `42379576313`.
+- All 12 normal artifact URLs and the root landing match local hashes; WASM
+  MIME is correct. Verified 2026-11-07 16:02:30 Europe/Kyiv.
+- Complete local STATTIC release checks and the exact-binary audit pass.
+  Independent GitHub source CI is running; source PR remains unmerged.
 
 No physical FM-1 is connected here. Table relocation removes flash accesses;
 its physical timing benefit and whether it cures rasp remain unmeasured.
