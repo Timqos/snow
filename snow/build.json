@@ -1,7 +1,7 @@
 {
   "stage": "STATTIC candidate: five-page HOME, vertical static, role-aware sequences and sound repair",
-  "version": "v0.8.0-rc6-stattic",
-  "source_commit": "198eee5bd585f62004619d874ce264b4e06c0481",
+  "version": "v0.8.0-rc7-stattic",
+  "source_commit": "3b46f321bbd72c27f4a58e4256901e7732ff6a7e",
   "source_dirty": false,
-  "package_sha256": "38f551d861c58946378247b8534c72b23432965a0e06afe4cb134c4673b6ab8c"
+  "package_sha256": "07780cb6b09f4bb8ddac2531f009566b750765de5e32c13b4756508cb6898f37"
 }
