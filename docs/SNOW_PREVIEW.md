@@ -1,4 +1,4 @@
-# STATTIC 0.8.0-rc8 — simulator and manual
+# STATTIC 0.8.0-rc9 — simulator and manual
 
 CH now has a strict four-voice total, including release tails, in NOTES and
 CHORDS. New notes replace old voices at the limit; old tails can end before
@@ -8,6 +8,11 @@ rc8 corrects a false onset estimate for silent held voices, removes a discarded
 FM CHAIN waveform evaluation and executes the synth envelope in SRAM. Exact
 audio/state references cover all six algorithms and waveforms on every channel.
 Physical testing is still required for the reported rasp and rising L counter.
+
+rc9 places the unchanged sine/filter/saturation tables in target SRAM. SYSTEM
+adds AUDIO PEAK / AUDIO LAST and CH SYNTH / CH FX/MIX / CORE1 WAIT / AUDIO IRQ
+timings. They report the latest missed buffer, or the busiest before any miss;
+the browser does not reproduce the unit's hardware timings.
 
 The firmware previously named Snow is now STATTIC. The repository and
 historical URLs retain `snow` so existing links and backups keep working.

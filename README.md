@@ -8,7 +8,7 @@ Built on Skiff 2.2 and Felucca. Previously named Snow.
 · [Install STATTIC](https://timqos.github.io/snow/snow/install/)
 · [Factory firmware](https://timqos.github.io/snow/snow/install/factory.html)
 
-The 0.8.0-rc8 candidate retains five HOME pages: sound, generation,
+The 0.8.0-rc9 candidate retains five HOME pages: sound, generation,
 channel mixing, six-channel P1–P3 patterns, and MUTE/SOLO with volume.
 SELECT browses pages; the lower captions identify the physical controls.
 All six channels start at 64 steps. Four-bar generation varies bars 2 and 4;
@@ -36,7 +36,10 @@ their period changes. Low-note attack captures remain sample-identical to
 rc5. rc8 fixes repeated false onset costs from silent held voices, removes
 a discarded FM CHAIN waveform evaluation and puts the synth envelope in RAM.
 Rising L during the reported rasp confirms missed audio deadlines; physical
-retesting is still required, across channels and sound settings.
+retesting is still required, across channels and sound settings. rc9 also
+moves the exact sine/filter/saturation lookup tables into data SRAM and adds
+read-only SYSTEM peak/last-missed-half timing to separate CH synthesis,
+effects/mixing, worker wait and nested interrupt time on the actual device.
 
 HOME bottom helpers share one enlarged 8×14 pixel face, retaining their full
 wording and the exact upper layout. Other editors and system menus use larger

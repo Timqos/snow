@@ -20,7 +20,14 @@ extern uint32_t _pool_start[], _pool_end[], _rt_start[], _rt_end[], _rt_load[], 
 void fm1_timer5_irq(void)
 {
     static uint32_t sub, owed;
-    uint32_t t0 = fm1_ticks(), usb_due = sub % 5u == 0u;
+    uint32_t t0 = fm1_ticks();
+#if FELUCCA_SNOW
+    /* sub is confined to 0..9 below. Bits 0/5 retain the exact 2 kHz USB
+     * schedule without a hardware remainder operation at every 10 kHz IRQ. */
+    uint32_t usb_due = (0x21u >> sub) & 1u;
+#else
+    uint32_t usb_due = sub % 5u == 0u;
+#endif
     fm1_timer5_ack();
     mo.now = t0;
     felucca_dbg.timer_irqs++;
@@ -41,7 +48,11 @@ void fm1_timer5_irq(void)
     if (usb_due)
         owed |= 1u;                             /* 2 kHz: all USB SIE traffic lives here */
 #if FELUCCA_UART
+#if FELUCCA_SNOW
+    if ((0x84u >> sub) & 1u)                     /* phases 2/7: same UART cadence */
+#else
     if (sub % 5u == 2u)
+#endif
         owed |= 2u;                             /* 2 kHz: <= ~7 bytes per call at 31250 baud */
 #endif
     if (++sub == 10u)

@@ -457,6 +457,9 @@ static void draw_menu(void)
           (uint32_t)transport_busy() * 40503u;
 #if FELUCCA_SNOW
     sig^=felucca_dbg.late*131u;
+    if(ui.menu==1u&&menu_tab()==MTAB_SYSTEM)
+        sig+=snow_profile_max_ticks+snow_profile_event.total*31u+snow_profile_event.ch_synth*37u+
+             snow_profile_event.ch_post*41u+snow_profile_event.wait*43u+snow_profile_event.irq*47u;
 #endif
     for (k = 0; k < MI_VALUES; k++)                     /* ((Skiff, after 1.3.1) every row's value, wherever it lives, so a
                                                          * step redraws it: the list of them by hand this replaces had
@@ -523,7 +526,7 @@ static void draw_menu(void)
                 kh[2].act = ui.menu_sel == MI_LCLEAR ? "CLEAR" : ui.ml.on ? "STOP" : "START";
 #if FELUCCA_SNOW
             cv_text(8,205,&AF_S,"ALGO: TAB   PRESETS: ROW",T_TEXT);
-            const char *last=ui.menu_sel==MI_LCLEAR?"OCT+: CLEAR":ui.menu_sel==MI_LEARN?(ui.ml.on?"OCT+: STOP":"OCT+: START"):menu_act(ui.menu_sel)?"OCT+: OPEN":"OCT+/-: VALUE";
+            const char *last=ui.menu_sel>=MI_APEAK&&ui.menu_sel<=MI_AIRQ?"READ ONLY":ui.menu_sel==MI_LCLEAR?"OCT+: CLEAR":ui.menu_sel==MI_LEARN?(ui.ml.on?"OCT+: STOP":"OCT+: START"):menu_act(ui.menu_sel)?"OCT+: OPEN":"OCT+/-: VALUE";
             cv_text(8,223,&AF_S,last,T_TEXT);
 #else
             cv_key_row(8, 232, MK_Y, kh, 3, 7u, T_BG);

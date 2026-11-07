@@ -1,8 +1,36 @@
-# STATTIC 0.8.0-rc8
+# STATTIC 0.8.0-rc9
 
 Experimental FM-1 candidate, previously named Snow. The five user HOME
 mockups in `assets/stattic-home/` and the confirmed control captions are
 the interface reference. See [the recorded agreement](STATTIC_WORK_PLAN.md).
+
+## Changes in rc9
+
+Hardware rc8 result: five channels without CH stay clean at up to 60% and
+L does not rise; adding CH gives rasp, up to 80%, and rising L. This happens
+during ordinary live playback, with no USB audio recording. USB-recording
+remarks concerned the user's earlier SLOOP test, not this STATTIC failure.
+
+- Place the exact SINE (2,050 B), SVF_G (256 B) and TANH_Q15 (514 B) lookup
+  tables in ordinary data SRAM on the STATTIC target. The code was already
+  in executable SRAM but every sine interpolation still fetched two samples
+  through flash/XIP. Startup copies the unchanged 2,820 B before either core
+  or audio starts. No new boot hook, HAL change or audio-time buffer copy.
+- Add read-only SYSTEM timing rows after CPU CLOCK: AUDIO PEAK, AUDIO LAST,
+  CH SYNTH, CH FX/MIX, CORE1 WAIT and AUDIO IRQ. Keep the largest measured
+  half duration separately; stage times belong to the latest missed half,
+  or to the busiest half before any miss. Clean halves cannot overwrite the
+  failure's stage snapshot. Measurements are wall times and can overlap.
+- Preserve CH4, all synthesis/FX/parameter/generator behavior, gains, presets,
+  random seeds and the full HOME layout. Default/non-STATTIC generated table
+  declarations preprocess identically to rc8. Verify actual linked SRAM
+  addresses and startup-image bytes against immutable pre-move table hashes.
+
+This removes hot table reads from flash, with no claim yet about physical
+CPU savings or a cured rasp. The timing rows provide hardware evidence if
+the problem persists. SLOOP's three synth parts, drum unit and shared effects
+are a different workload from six STATTIC instruments with independent racks;
+SLOOP does support synthesized chords. No such architecture is removed here.
 
 ## Changes in rc8
 
@@ -256,22 +284,22 @@ pattern persistence and browser-save compatibility remain in the suite.
 
 ## Current verification
 
-The rc8 build passed the existing target budgets, complete STATTIC
+The rc9 candidate requires the existing target budgets, complete STATTIC
 native/WASM/audio suite, layout sweep at default/minimum/maximum values,
 eight-entry Undo and onset-prediction contracts, and ASan/UBSan checks.
 Desktop/mobile browser checks and 28 exact-package update/rollback checks
-passed, retaining previous rc7. Broader upstream UI checks retain all 3,458
+must pass, retaining previous rc8. Broader upstream UI checks retain all 3,458
 golden pictures with zero layout/alignment findings.
 The exact package, source commit and update/rollback results are recorded in
 [the published build](https://timqos.github.io/snow/snow/build.json) and
 [the binary audit](https://timqos.github.io/snow/snow/update-audit.json).
 Final region sizes and release verification are recorded in
-[the work log](STATTIC_RC8_WORK.md). Physical audio deadlines require FM-1
+[the work log](STATTIC_RC9_WORK.md). Physical audio deadlines require FM-1
 qualification; desktop or browser timing is not a substitute.
 
 The target regression gate retains all unaffected Skiff limits and the
 byte-reproduced rc3 reference for existing STATTIC paths. Oscillator SRAM
 placement adds no per-sample divisions. The 8/12 shared voice budget,
 256-frame hardware halves, 32-sample control blocks and all synthesis/effect
-parameters retain rc7 behavior and the requested CH-only voice cap. Installation/loader code is unchanged
+parameters retain rc8 behavior and the requested CH-only voice cap. Installation/loader code is unchanged
 from rc4; every new binary still requires its own update/rollback audit.

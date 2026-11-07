@@ -119,6 +119,9 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
     if (p & FM1_AUDIO_HALF) {
         uint32_t half = fm1_audio_free_half(), b, us, all;
         int32_t *o = &abuf[half * HALF_WORDS];
+#if FELUCCA_SNOW
+        snow_profile_begin();
+#endif
         if (shed_req) {
             shed_req = 0;
             shed_voice();
@@ -144,8 +147,12 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
             song.cpu_q8 = load / CPU_AVG;
             audio_cpu_rem = load % CPU_AVG;
         }
-        if (fm1_audio_free_half() != half)
+        uint32_t late=fm1_audio_free_half()!=half;
+        if (late)
             felucca_dbg.late++;                         /* the DMA moved on while we rendered */
+#if FELUCCA_SNOW
+        snow_profile_finish(all,t5_nested_ticks,late);
+#endif
         felucca_dbg.halves++;
         felucca_dbg.last_us = us;
         if (us > felucca_dbg.max_us)

@@ -759,6 +759,29 @@ static __attribute__((noinline)) void rev_side_mix(int32_t *l, int32_t *r, uint3
 /* one block of the whole mix (shared with hostsim.c): events -> each part (with its modulation matrix)
  * -> dist -> SLICER -> level / pan / sends -> buses -> master; out: stereo Q15 */
 static void events_block(uint32_t n);                    /* seq.c */
+#if FELUCCA_SNOW
+/* One half's wall times. The audio ISR resets while the worker is idle and
+ * snapshots only after all joins. Only CH's owner writes its two fields;
+ * only core 0 writes wait. Keep the latest missed half, or the busiest half
+ * while no miss exists. A separate maximum never loses the worst duration. */
+typedef struct { uint32_t total,ch_synth,ch_post,wait,irq; } snow_profile_t;
+static snow_profile_t snow_profile_now;
+static volatile snow_profile_t snow_profile_event; /* foreground SYSTEM reads the ISR's completed snapshot */
+static volatile uint32_t snow_profile_max_ticks;
+static uint8_t snow_profile_had_late;
+static uint32_t snow_ch_block_ticks;
+static __attribute__((noinline)) void snow_profile_begin(void)
+{snow_profile_now=(snow_profile_t){0};}
+static __attribute__((noinline)) void snow_profile_finish(uint32_t total,uint32_t irq,uint32_t late)
+{
+    if(total>snow_profile_max_ticks)snow_profile_max_ticks=total;
+    if(late||(!snow_profile_had_late&&total>snow_profile_event.total)){
+        snow_profile_now.total=total;snow_profile_now.irq=irq;
+        snow_profile_event=snow_profile_now;
+    }
+    if(late)snow_profile_had_late=1;
+}
+#endif
 #if FELUCCA_CPU2
 static int32_t wet[CTL];                                 /* (the dry mix and the sends: mx[0], above) */
 /* a track's cost for the second core's split (mix_split, after Jangada's and Felucca 1.6.1's): its voices x its engine's
@@ -1172,8 +1195,15 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
                    (trk_vmode(t) == V_POLY || trk_vmode(t) == V_UNISON);
 #if FELUCCA_CPU2
     vs_sm[(uint32_t)(t - trk) % NPART] = sm;            /* ((#21) smx_render's sums) */
+#if FELUCCA_SNOW
+    uint32_t ch_before=t==&trk[5]?SNOW_MIX_TICKS():0;
+#endif
     nr = track_render(t, b, n);
 #if FELUCCA_SNOW
+    if(t==&trk[5]){
+        snow_ch_block_ticks=SNOW_MIX_TICKS()-ch_before;
+        snow_profile_now.ch_synth+=snow_ch_block_ticks;
+    }
     snow_rendered_voices[(uint32_t)(t-trk)]=(uint8_t)nr;
 #endif
     part_cost[(uint32_t)(t - trk) % NPART] = (uint16_t)(nr * ENG_VCOST[t->engine % NENGINES] + (nr || t->tail ? 60u : 0u));
@@ -1271,6 +1301,7 @@ static __attribute__((noinline)) void mix_part(track_t *t,uint32_t n SM_DECL)
     mix_part_body(t,n SM_ARG(sm));
 #if FELUCCA_CPU2
     uint32_t ticks=SNOW_MIX_TICKS()-before;
+    if(k==5u)snow_profile_now.ch_post+=ticks-snow_ch_block_ticks;
     if(ticks){
         if(ticks>65535u)ticks=65535u;
         part_cost[k]=(uint16_t)(ticks>old?ticks:(old*7u+ticks+4u)/8u);
@@ -1393,8 +1424,14 @@ static void mix_block(int32_t *out, uint32_t n)
                 mix_part(&trk[i], n, &mx[0]);
         if (m) {
             const mixsum_t *sm = &mx[1];
+#if FELUCCA_SNOW
+            uint32_t wait_before=SNOW_MIX_TICKS();
+#endif
             if (C1_WAIT())                              /* it stopped answering (held from now on): its tracks here */
                 c1_parts(m | n << 8);
+#if FELUCCA_SNOW
+            snow_profile_now.wait+=SNOW_MIX_TICKS()-wait_before;
+#endif
             for (i = 0; i < n; i++) {
                 mix_l[i] += sm->l[i];
                 mix_r[i] += sm->r[i];

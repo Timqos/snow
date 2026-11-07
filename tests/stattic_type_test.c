@@ -42,7 +42,9 @@ int main(int argc,char **argv)
         }
     }
     context="menu";ui.home=1;ui.menu=1;ui.layer=ui.ly=0;
-    for(uint32_t row=0;row<MI_COUNT;row++){ui.menu_sel=row;ui.force=1;advance(70);if(row==MI_CPU||row==MI_COLOR){char name[24];snprintf(name,sizeof name,"menu-%u",row);capture(dir,name);}}
+    snow_profile_max_ticks=UINT32_MAX;
+    snow_profile_event=(snow_profile_t){UINT32_MAX,UINT32_MAX,UINT32_MAX,UINT32_MAX,UINT32_MAX};
+    for(uint32_t row=0;row<MI_COUNT;row++){ui.menu_sel=row;ui.force=1;advance(70);if(row==MI_CPU||row==MI_COLOR||row==MI_APEAK||row==MI_CHSYNTH||row==MI_C1WAIT){char name[24];snprintf(name,sizeof name,"menu-%u",row);capture(dir,name);}}
     ui.menu=2;ui.menu_scroll=0;ui.force=1;advance(100);capture(dir,"about");
     ui.menu=0;go_home();name_open(NK_USER_SAVE,0);ui.force=1;context="name";advance(100);capture(dir,"name");name_close();
     for(uint32_t k=1;k<CF_COUNT;k++){ui.confirm=k;ui.force=1;context="confirm";advance(60);if(k==CF_CLEAR_SEQ)capture(dir,"confirm");}

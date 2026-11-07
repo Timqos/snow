@@ -103,6 +103,35 @@ static void queued_generators(void)
     seq_start();events_block(1);assert(!snow_home_generate(2));launch_drop();assert(!stattic_gen[0].armed);
     puts("HOME 2: unchanged immediate-generator results/seeds, all four knobs enter together at BAR at 90..180 BPM, live mix preserved, batch undo/redo, queued cancellation, six-track locks, STOP and project drop passed");
 }
+static void audio_profile(void)
+{
+    snow_profile_event=(snow_profile_t){0};snow_profile_max_ticks=snow_profile_had_late=0;snow_profile_begin();
+    snow_profile_now.ch_synth=2400;snow_profile_now.ch_post=1200;snow_profile_now.wait=600;
+    snow_profile_finish(240000,480,0);
+    assert(snow_profile_event.total==240000&&snow_profile_event.ch_synth==2400&&snow_profile_event.ch_post==1200&&snow_profile_event.wait==600&&snow_profile_event.irq==480);
+    snow_profile_begin();assert(!snow_profile_now.ch_synth&&!snow_profile_now.wait);
+    snow_profile_finish(1,0,0);assert(snow_profile_event.total==240000&&snow_profile_event.ch_synth==2400);
+    assert(!strcmp(menu_vname(MI_CHSYNTH,0),"100 US"));
+    assert(!strcmp(menu_vname(MI_CHPOST,0),"50 US"));
+    assert(!strcmp(menu_vname(MI_C1WAIT,0),"25 US"));
+    assert(!strcmp(menu_vname(MI_AIRQ,0),"20 US"));
+    for(uint32_t row=MI_APEAK;row<=MI_AIRQ;row++){
+        assert(menu_n(row)==1u&&MI_TAB[row]==MTAB_SYSTEM&&!menu_act(row));
+        uint8_t cpu=CPU2_BYTE;menu_put(row,1);assert(CPU2_BYTE==cpu);
+    }
+    /* Once a miss exists, later clean halves must not overwrite its stages,
+     * even if a clean half rendered longer (late IRQ entry is possible). */
+    snow_profile_finish(1,0,1);assert(snow_profile_event.total==1&&snow_profile_max_ticks==240000);
+    snow_profile_finish(300000,0,0);assert(snow_profile_event.total==1&&snow_profile_max_ticks==300000);
+    snow_profile_now.ch_synth=1200;snow_profile_finish(240001,240,1);
+    assert(snow_profile_event.total==240001&&snow_profile_event.ch_synth==1200&&snow_profile_event.irq==240);
+    snow_profile_event=(snow_profile_t){0};snow_profile_max_ticks=snow_profile_had_late=0;snow_profile_begin();
+    repair_clock_step=1000;uint32_t before=repair_clock;
+    mix_part(&trk[5],CTL,&mx[0]);
+    assert(repair_clock-before==4000&&snow_profile_now.ch_synth==1000&&snow_profile_now.ch_post==2000);
+    repair_clock_step=0;snow_profile_begin();
+    puts("Audio diagnostics: peak duration, coherent latest missed-half stages retained across later clean halves, actual CH timing, read-only SYSTEM rows and boot reset passed");
+}
 static void bounded_chords(void)
 {
     c1h_off=1;seq_stop();launch_drop();memset(&motion,0,sizeof motion);panic_req=63;events_block(CTL);
@@ -166,5 +195,5 @@ static void eight_undo_entries(void)
 int main(void)
 {
     setvbuf(stdout,0,_IOLBF,0);c1h_off=1;web_nor_erase();web_boot();advance(SNOW_BOOT_MS+200);
-    exact_math();onset_prediction();queued_generators();bounded_chords();eight_undo_entries();puts("STATTIC REPAIR CONTRACTS PASSED; physical FM-1 deadline validation remains required");return 0;
+    exact_math();audio_profile();onset_prediction();queued_generators();bounded_chords();eight_undo_entries();puts("STATTIC REPAIR CONTRACTS PASSED; physical FM-1 deadline validation remains required");return 0;
 }
