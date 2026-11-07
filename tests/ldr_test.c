@@ -19,7 +19,9 @@
 #include <string.h>
 
 #if BOARD_SMK37
+#ifndef FELUCCA_ID
 #define FELUCCA_ID "ota-SMK-37 Pro_700"
+#endif
 #define T_APP_HI 0x9D000u                   /* end of the app area the loader writes */
 #define T_REC 0xBFF00u                      /* the SMK build's update record (ota.c OTA_RES) */
 #define T_REC2 0xAEF00u                     /* a record elsewhere in the VM (the stock app's staging is not fixed) */
@@ -29,7 +31,9 @@
 #define T_DATA_HI 0u
 #define T_USER 0xC2000u                     /* user sample data (USR1), outside the record window */
 #else
+#ifndef FELUCCA_ID
 #define FELUCCA_ID "ota-FM-1_900"
+#endif
 #define T_APP_HI 0x93000u
 #define T_REC 0xE4F00u
 #define T_REC2 0xE8F00u                     /* the stock firmware's */
@@ -49,6 +53,7 @@ static uint32_t rx_len, rx_full, now_ms, requests, erases, bad_range, record_cle
 static uint32_t flip_addr = 0xFFFFFFFFu, flip_seen, flip_on;   /* serve addr's flip_on-th reply with a byte changed */
 static uint32_t seq, head_erase, head_prog, other_first, other_last;   /* the order of the app area's erases and writes */
 static uint32_t progs, cut_at;                     /* writes so far; cut_at: the flash stops taking them after that many */
+static uint32_t body_progs;                        /* successful writes outside the app header sector */
 static uint32_t cut_off;                           /* the write the cut refused */
 static uint8_t info_reply[33], info_cmd;           /* (SMK) the last 0x7B / 0x7C reply */
 
@@ -150,6 +155,7 @@ static int ldr_prog(uint32_t off, const void *p, uint32_t n)
     if (off < 0x4000u || off + n > T_APP_HI || ((off & 0xFFu) + n) > 256u) bad_range++;
     if (cut_at && progs >= cut_at) { cut_off = off; return -1; }   /* (the power gone: nothing more is written) */
     progs++;
+    body_progs += off >= 0x5000u && off < T_APP_HI;
     seq++;
     if (off < 0x5000u && !head_prog) head_prog = seq;
     if (off >= 0x5000u && off < T_APP_HI) { other_first = other_first ? other_first : seq; other_last = seq; }
@@ -344,6 +350,7 @@ int main(int argc, char **argv)
     memcpy(nor, old + ofo, T_APP_HI);
     put_record_at(T_REC);
     seq = head_erase = head_prog = other_first = other_last = 0;
+    progs = body_progs = 0;
     rc = ldr_session();
     bad += check("the app's header sector erased before any other write",
                  rc == 0 && head_erase && other_first && head_erase < other_first);
@@ -356,12 +363,16 @@ int main(int argc, char **argv)
     bad += check("SMK record: a power-on starts it at 1, nothing before", crumb.starts == 1 && crumb.prev.stage == 0 &&
                  crumb.now.stage == 1 && !crumb.now.warm && crumb.magic == LDR_CRUMB_MAGIC);
 #endif
-    progs = 0; cut_at = 100;
+    /* Small updates can finish before 100 writes. Cut within the measured
+     * body phase so the test actually interrupts, before the header returns. */
+    uint32_t stop_after = body_progs > 100u ? 100u : body_progs / 2u;
+    if (!stop_after) stop_after = 1u;
+    progs = 0; cut_at = stop_after;
     rc = ldr_session();
     cut_at = 0;
     for (i = 0x4000u; i < 0x5000u && nor[i] == 0xFFu; i++) {}
     bad += check("a write cut short: the header erased, the record kept",
-                 rc == -10 && progs == 100u && i == 0x5000u && nor[T_REC + 6u] == 0x41);
+                 rc == -10 && progs == stop_after && i == 0x5000u && nor[T_REC + 6u] == 0x41);
 #if BOARD_SMK37
     bad += check("SMK record: the cut run stopped writing, at the sector it was writing",
                  crumb.now.stage == 3 && crumb.now.sector == (cut_off & ~0xFFFu));

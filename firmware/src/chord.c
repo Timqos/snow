@@ -78,6 +78,9 @@ static uint32_t chord_make(const track_t *t, uint32_t root, uint8_t *out, int32_
     uint16_t mask = 0;
     *rp = r;
     *maskp = 0;
+#if FELUCCA_SNOW
+    if(t->p[SN_PLAY_MODE])mode=CH_OFF;
+#endif
     if (!mode || mode > CH_POW || chord_kit(t)) {
         out[0] = (uint8_t)root;
         return 1;

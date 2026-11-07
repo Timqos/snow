@@ -523,3 +523,32 @@ asked first, as on the device. Nothing of these is pushed: the editor reads what
 
 **Still open:**
 - the 20 MHz LCD clock, `LCD_BAUD=2`, to try on hardware.
+# Snow prototype variant
+
+`FELUCCA_SNOW=1` fixes six role/library identities (KICK, SNARE, HAT, PERC,
+BASS, CHORD), ten factory sounds each. It retains the complete open manual
+synthesis surface: algorithms, waveforms, ADSR, envelopes, filter and two LFOs.
+Tape, Bitcrush, delay, reverb and chorus are independent channel racks with
+isolated state/tails; the old shared buses are not used by Snow. Chorus/Tape
+run at FS; filtered/interpolated delay/reverb run at FS/4 with bounded memory.
+FX and EDIT expose the channel controls; unused old global FX pages are hidden.
+
+Hold SEQ for a four-column, eight-slot pattern grid. Knobs pick each channel's
+pattern; OCT+ switches channels 1–4 / 5–6 and OCT− switches A–H / I–P. The
+native bank/quantized launcher retains notes and locks. Pending launches block
+generation until they commit, protecting the outgoing pattern. GEN's OCT+
+creates a channel variation, OCT− generates all six in the selected style.
+Twenty original groove vocabularies and instrument-aware melody/velocity/
+subdivision rules supply seed-based variation and optional evolution.
+
+Control All remains an additive layer over sound/locks, with a channel mask.
+GLO+SAVE captures a RAM snapshot; GLO+HOME reloads without moving transport;
+GLO+OCT− toggles the mask; GLO+OCT+ reloads one channel. All approved 0.2
+parameters remain. Retired parameter aliases keep their SIDs; 27 new parameters
+append new SIDs ahead of the internal engine macro block, keeping stored macro
+IDs stable. Snow's 64 TAKE knob events move to general SRAM to keep expanded
+undo copies inside the code/RAMX budget; baseline placement is unchanged.
+Browser storage is isolated as `snow-fm1-prototype-03`.
+
+Implementation, checks and limits: [docs/SNOW_PREVIEW.md](docs/SNOW_PREVIEW.md).
+The preceding sections describe the baseline when `FELUCCA_SNOW=0`.

@@ -62,8 +62,12 @@ static void ldr_screen(void)
 {
     lcd_init();                                     /* (the panel cleared, on) */
     ldr_text(70, 3, LDR_TITLE, "UPDATE MODE");
+#if FELUCCA_SNOW
+    ldr_lines("WAITING FOR THE", "STATTIC UPDATER", "KEEP USB CONNECTED");
+#else
     ldr_lines("WAITING FOR THE", "SKIFF INSTALLER", "KEEP USB CONNECTED");   /* (an install on its way, or one cut
                                                                               * off: words for both, no alarm) */
+#endif
     lcd_sync();
 }
 static uint32_t ldr_bar_w;                          /* the bar's px drawn */
@@ -85,7 +89,11 @@ static void ldr_bar(uint32_t done, uint32_t total)
 }
 static void ldr_failed(void)                        /* a session that wrote nothing or stopped: the way out */
 {
+#if FELUCCA_SNOW
+    ldr_lines("UPDATE FAILED", "INSTALL AGAIN WITH", "THE STATTIC UPDATER");
+#else
     ldr_lines("UPDATE FAILED", "INSTALL AGAIN WITH", "THE SKIFF INSTALLER");
+#endif
     lcd_fill(LDR_BAR_X, LDR_BAR_Y, LDR_BAR_W, 8, 0);
     lcd_sync();
     ldr_writing = 0;

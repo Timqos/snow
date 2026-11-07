@@ -58,6 +58,32 @@ static volatile uint32_t perf_mask;   /* main: the FX button's bit while its lay
 static volatile uint32_t kb_mask;     /* main: the button bits whose hold makes keys a layer's (ui_layer.c), 0 = none */
 static volatile uint8_t kb_lock;      /* main: a layer locked open (#83, no button held): 1 keys are the layer's, 2 FX's */
 static volatile uint8_t perf_solo;    /* main: tracks soloed in the GLO layer (the others muted as by a black key) */
+#if FELUCCA_SNOW
+/* HOME 5 requests are prepared in the UI, committed together by the audio
+ * transport at the next bar. No timers, allocations or per-sample work. */
+static volatile struct { uint8_t mute,solo,mute_on,solo_on,glo; } stattic_ms;
+static void stattic_ms_apply(void)
+{
+    uint32_t mm=stattic_ms.mute,sm=stattic_ms.solo;
+    if(!(mm|sm))return;
+    for(uint32_t k=0;k<NTRK;k++)if((mm>>k)&1u)trk[k].p[P_MUTE]=(int16_t)((stattic_ms.mute_on>>k)&1u);
+    stattic_solo=(uint8_t)((stattic_solo&~sm)|(stattic_ms.solo_on&sm));
+    perf_solo=stattic_ms.glo|stattic_solo;
+    stattic_ms.mute=stattic_ms.solo=0;
+}
+static void stattic_ms_toggle(uint32_t k,int solo)
+{
+    uint8_t bit=(uint8_t)(1u<<k);
+    if(solo){
+        if(stattic_ms.solo&bit)stattic_ms.solo&=(uint8_t)~bit;
+        else {stattic_ms.solo_on=(uint8_t)((stattic_ms.solo_on&~bit)|((~stattic_solo)&bit));stattic_ms.solo|=bit;}
+    }else{
+        if(stattic_ms.mute&bit)stattic_ms.mute&=(uint8_t)~bit;
+        else {stattic_ms.mute_on=(uint8_t)((stattic_ms.mute_on&~bit)|(trk[k].p[P_MUTE]?0u:bit));stattic_ms.mute|=bit;}
+    }
+    if(!song.playing)stattic_ms_apply();
+}
+#endif
 static volatile uint8_t perf_cut __attribute__((section(".pool")));   /* main: ((2.0, D 1A) ui_layer.c mute_keys) the
                                        * tracks cut by a black key held in GLO or PERFORM (FX's: perf_held, here) */
 static volatile uint8_t perf_kill;    /* main: every effect off (the menu, a dialog, UBOOT) */

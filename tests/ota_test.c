@@ -22,7 +22,9 @@
 #else
 #define SMK_MODEL "SMK-37 Pro"
 #endif
+#ifndef FELUCCA_ID
 #define FELUCCA_ID SMK_MODEL "_900"
+#endif
 #define T_AREA 0xBB000u
 #define T_FL_LEN "0x9D000"               /* flash.bin: this board's [0, app area end) */
 #define T_FL_OTHER 0x93000u              /* the other board's (the FM-1's) */
@@ -34,7 +36,9 @@ static uint8_t SMK_LDR[0x1F00];
 static uint32_t smk_ldr_len;
 #define SMK_LDR_LEN smk_ldr_len
 #else
+#ifndef FELUCCA_ID
 #define FELUCCA_ID "FM-1_900"
+#endif
 #define T_AREA 0xE0000u
 #define T_PARM_ID "ota-FM-1_015"
 #define T_FL_LEN "0x93000"
@@ -332,6 +336,15 @@ int main(int argc, char **argv)
         bad += check("the unit's head not the package's: -5 after 4 reads, no commit, no erase",
                      rc == -5 && requests == 4u && !committed && erases == 0 && area_erased());
     }
+    /* The SMK official route uses its embedded loader, not this served body. */
+    if (!official || !T_SMK) {
+        reset_dev();
+        corrupt_at = logical + ota_body_off() + 600u;
+        rc = ota_session();
+        bad += check("loader data changed in transfer -> no commit, staging erased",
+                     rc < 0 && !committed && area_erased());
+    }
+
     /* host disappears in the middle */
     reset_dev();
     mute_after = 4;

@@ -70,7 +70,7 @@ BOARD_DEFS = {"fm1": [], "smk37": ["-DBOARD_SMK37=1"]}           # the FM-1 buil
 BOARD_STEM = {"fm1": "skiff", "smk37": "skiff-smk37"}            # a release package: STEM-X.Y.fwsc
 # smk37: the keyboard's model name (MODEL env or --model); one hardware, three names. pro adds no flag
 MODELS = {"pro": "SMK-37 Pro", "elite": "SMK-37 Elite", "mke": "MKE-P37"}
-VERSION = None                      # FELUCCA_VERSION for release builds (default: firmware/src/felucca.c)
+VERSION = "v0.8.0-rc9-stattic" if os.environ.get("FELUCCA_SNOW") == "1" else None
 # FELUCCA_CPU2 (firmware/src/felucca.c), unset or 1, the default (Skiff 1.3, as Felucca 1.6.1): the second core is built
 # in, its entry and stacks (firmware/hal/fm1_cpu1.S) linked; MENU > SYSTEM > CPU 2 CORES starts it (1 CORE by default:
 # as 1.2). FELUCCA_CPU2=0: none of it is built
@@ -129,6 +129,8 @@ def generate():
             [tools / "gen_tables.py", GEN / "felucca_tables.h"],
             [tools / "gen_fm6_patches.py", GEN / "felucca_fm6.h"],
             [tools / "gen_samples.py", GEN / "felucca_samples.h"]]
+    if os.environ.get("FELUCCA_SNOW") == "1":
+        cmds.extend([[tools / "gen_snow_icons.py"], [tools / "gen_snow_channel_icons.py"], [tools / "gen_stattic_art.py"], [tools / "gen_stattic_logo.py"]])
     procs = [subprocess.Popen([sys.executable, *map(str, c)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               text=True) for c in cmds]
     failed = []
@@ -175,6 +177,8 @@ def build_loader():
     LDR.mkdir(parents=True, exist_ok=True)
     src = FW / "loader"
     flags = [*CFLAGS, *BOARD_DEFS[BOARD], "-Ifirmware/hal", "-Ifirmware/src", f'-DFELUCCA_ID="ota-{PRODUCT}"']
+    if os.environ.get("FELUCCA_SNOW") == "1":
+        flags.append("-DFELUCCA_SNOW=1")
     flags = ["-Oz" if f == "-Os" else f for f in flags]   # (LDR_MAX: the smallest code the compiler makes)
     tc_all(("cc", "-c", src / "crt0_ldr.S", "-o", LDR / "crt0_ldr.o"),
            ("cc", *flags, "-c", src / "loader.c", "-o", LDR / "loader.o"))
@@ -220,7 +224,7 @@ def build_app():
     flags = [*CFLAGS, *BOARD_DEFS[BOARD], "-Ifirmware/hal", "-Ifirmware/src", "-Ibuild/gen"]
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_OTA_RAMONLY", "FELUCCA_CDC",
                  "FELUCCA_UART", "FELUCCA_UAC", "FELUCCA_UAC_TONE", "FELUCCA_UAC_48K", "FELUCCA_ICONS", "FELUCCA_SLICE", "FELUCCA_FM4",
-                 "FELUCCA_CDC_DEFAULT", "FELUCCA_CPU2"):
+                 "FELUCCA_CDC_DEFAULT", "FELUCCA_CPU2", "FELUCCA_SNOW"):
         v = os.environ.get(flag)    # unset: the default in firmware/src/felucca.c
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")
@@ -312,6 +316,8 @@ def check(img, syms, dis, rt):
                 errors.append(f"reference to ROM address {val:#010x}")
     if len(img) > APP_SLOT:
         errors.append(f"image {len(img)} B exceeds the app slot")
+    elif os.environ.get("FELUCCA_SNOW") == "1" and APP_SLOT - len(img) < 4096:
+        errors.append(f"Snow flash reserve {APP_SLOT-len(img)} B is below the required 4096 B")
 
     def sym(name):
         mm = re.search(r"^([0-9a-f]+) .*\s" + name + r"$", syms, re.M)

@@ -54,10 +54,18 @@ static const layer_t LAYERS[LAYER_N] = {
     {0, 0, 0, "", {{0, 0}, {0, 0}, {0, 0}}},
     {B_FX, LK_HOLD, FAM_HOME, "[FX] HOLD", {{KC_WHITE, "EFFECTS"}, {KC_BLACK, "MUTE"}, {KC_K14, "MACROS"}}},   /* (LET GO: the
                                                      * header's HOLD; (2.0, D 1A) BLACK: GLO's MUTE) */
+#if FELUCCA_SNOW
+    {B_GLO, LK_SET, FAM_HOME, "[GLO] MIXER", {{KC_SAVE, "TEMP"}, {KC_HOME, "RELOAD"}, {KC_GLO, "DONE"}}},
+#else
     {B_GLO, LK_SET, FAM_HOME, "[GLO] SET", {{KC_PLAY, "RESTART"}, {KC_OCTDN, "UNDO"}, {KC_GLO, "DONE"}}},
+#endif
     {B_SCL, LK_SET, FAM_SCL, "[SEL] SET", {{KC_KEYS, "ROOT"}, {KC_OCTDN, "UNDO"}, {KC_SCL, "DONE"}}},
     {B_EDIT, LK_SET, FAM_HOME, "[EDIT] SET", {{KC_KEYS, "ENGINE"}, {KC_OCTDN, "UNDO"}, {KC_EDIT, "DONE"}}},
+#if FELUCCA_SNOW
+    {B_SEQ,LK_SET,FAM_SEQ,"SEQ PATTERNS",{{KC_K14,"PATTERNS"},{KC_OCTUP,"A/I"},{KC_OCTDN,"A/I"}}},
+#else
     {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] TOOLS", {{KC_KEYS, "TOOLS"}, {KC_OCTDN, "UNDO"}, {KC_SEQ, "DONE"}}},
+#endif
     {B_REC, LK_SET, FAM_HOME, "[REC] SET", {{KC_KEYS, "RECORDING"}, {KC_OCTDN, "UNDO"}, {KC_REC, "DONE"}}},
     {B_ARP, LK_SET, FAM_HOME, "[ARP] PERFORM", {{KC_SELECT, "LAUNCH"}, {KC_PRESETS, "KEYS"}, {KC_OCTDN, "CANCEL"}}},   /* (Skiff;
                                                      * the footer drawn as the B mockup's: draw_layer; BLOCKS' header too:
@@ -67,8 +75,13 @@ static const uint8_t LY_KC[LAYER_N] = {0, KC_FX, KC_GLO, KC_SCL, KC_EDIT, KC_SEQ
 /* SCL's knobs: the key and its chord (cur_page() while the layer edits or draws them: page_over) */
 static const page_t LY_SCL = {"SCALE", FAM_SCL, SC_TRACK, GR_SCALE, {P_ROOT, P_SCALE, P_CHRD, P_VOIC}};
 /* SEQ TOOLS' knobs: the PATTERN page's (the length the tools work in) */
+#if FELUCCA_SNOW
+static const page_t LY_SEQ={"PATTERNS",FAM_SEQ,SC_GLOBAL,GR_SNOW_PAT,{0,1,2,3}};
+static const page_t *ly_page(uint32_t l){return l==LAYER_SCL?&LY_SCL:l==LAYER_SEQ?&LY_SEQ:0;}
+#else
 static const page_t LY_SEQ = {"PATTERN", FAM_SEQ, SC_TRACK, GR_STEPS, {P_SLEN, P_SDIV, P_SSWING, P_SGATE}};
 static const page_t *ly_page(uint32_t l) { return l == LAYER_SCL ? &LY_SCL : l == LAYER_SEQ ? &LY_SEQ : 0; }
+#endif
 #define LY_OPEN 2u                     /* ui.ly_t0: the map opened (no tap any more) */
 #define LY_COMBO 4u                    /* .. by a combo */
 #define LY_DEAD 8u                     /* .. pressed where there is no layer: does nothing */
@@ -132,12 +145,18 @@ static void layer_masks(void)
     kb_mask = m;
     perf_mask = m & ly_bit(LAYER_FX);
     kb_lock = (uint8_t)(m && ui.lock ? 1u | (ui.lock == LAYER_FX ? 2u : 0u) : 0u);   /* (no button held: the ISR's) */
+#if FELUCCA_SNOW
+    if(ui.home&&snow_home_panel==SN_HOME_MS&&!ui.menu&&!ui.confirm&&!ui.ly&&!ui.shift){kb_mask=ly_bit(LAYER_GLO);kb_lock=1;}
+#endif
 }
 
 /* a layer button pressed (its edge) while none is armed: it is now, a dead one where no layer opens */
 static void layer_arm(uint32_t pressed, uint32_t now)
 {
     uint32_t l, other = 0;
+#if FELUCCA_SNOW
+    if(ui.ly==LAYER_GLO&&(pressed&ly_bit(LAYER_EDIT)))return; /* Control All modifier */
+#endif
     if (ui.ly) {                                        /* ((Skiff U4, F7) a second layer's button: ignored, and said) */
         for (l = LAYER_FX; l < LAYER_N; l++)
             if (l != ui.ly && ly_avail(l))
@@ -590,27 +609,60 @@ static void layer_key(uint32_t l, uint32_t k)
         else if (!key_black(k) && p < BANK_SLOTS)
             perf_slot_key(k, p);                        /* ((2.0) the black keys: mute_keys) */
     } else if (l == LAYER_SEQ) {
+#if FELUCCA_SNOW
+        if(!key_black(k) && p<ST_PATTERNS)(void)snow_pattern_select(song.sel,p);
+        else if(key_black(k) && p<NTRK)sel_set(p);
+#else
         if (!key_black(k))
             tools_key(p);
         else if (p < NLANE && drum_track(TSEL)) {
             ui.lane = (uint8_t)p;                       /* (black keys 1..8: the lane, as on the grid) */
             eu_lane(TSEL);                              /* ((1.3) EUCLID open: on that lane now) */
         }
+#endif
     }
 }
 /* each pass: the keys the layer got now; then GLO's solo: the tracks of its keys still held (perform.c) */
 static void layer_keys(uint32_t keys)
 {
     uint32_t k, l = layer_open() ? layer_open() : ui.layer, s = 0;
-    mute_keys(l, keys);
+#if FELUCCA_SNOW
+    int home_ms=ui.home&&snow_home_panel==SN_HOME_MS&&!ui.menu&&!ui.confirm&&!ui.ly&&!ui.shift;
+    if(home_ms)l=LAYER_GLO;
+#endif
+    mute_keys(
+#if FELUCCA_SNOW
+        home_ms?LAYER_NONE:
+#endif
+        l,
+#if FELUCCA_SNOW
+        home_ms?0u:
+#endif
+        keys);
     for (k = 0; keys && k < 27u; k++)
-        if ((keys >> k) & 1u)
+        if ((keys >> k) & 1u){
+#if FELUCCA_SNOW
+            if(home_ms){
+                uint32_t ch=key_black(k)?key_place(k):glo_white(k);
+                if(ch<NTRK){
+                    int solo=key_black(k);fm1_irq_off();stattic_ms_toggle(ch,solo);fm1_irq_on();
+                    if(song.playing)ui_message((solo?stattic_ms.solo:stattic_ms.mute)&(1u<<ch)?
+                        (solo?"SOLO AT NEXT BAR":"MUTE AT NEXT BAR"):(solo?"SOLO CANCELLED":"MUTE CANCELLED"));
+                }
+                ui.force=1;continue;
+            }
+#endif
             layer_key(l, k);
+        }
     lys.solo &= kb_layer;
     for (k = 0; k < 27u; k++)
         if ((lys.solo >> k) & 1u)
             s |= 1u << glo_white(k);               /* ((Skiff phase 6) the track it solos) */
+#if FELUCCA_SNOW
+    fm1_irq_off();stattic_ms.glo=(uint8_t)s;perf_solo=(uint8_t)s|stattic_solo;fm1_irq_on();
+#else
     perf_solo = (uint8_t)s;
+#endif
     lys.fill &= kb_layer;                               /* (Skiff) FILL: while its key is held in the layer */
     seq_fill = lys.fill != 0u;
 }
@@ -626,12 +678,21 @@ static void layer_knob(uint32_t k, int32_t s)
         perf_k[k] = (int16_t)clamp(perf_k[k] + accel(EN_K1 + k, s, k ? 100 : 200), k ? 0 : -100, 100);   /* (#126) */
     } else if (l == LAYER_GLO) {                        /* the four tracks' LEVEL (T1..T4; (Skiff phase 6) the four
                                                          * shown: ui.c trk_top), recorded as on MIXER */
+#if FELUCCA_SNOW
+        if(fm1_in.buttons&(1u<<panel.btn[B_EDIT])) {if(k<4u)snow_control_all(k,s);}
+        else if(k<NTRK) {
+            track_t *t=&trk[k];
+            t->p[P_LEVEL]=(int16_t)clamp(t->p[P_LEVEL]+s,TP[P_LEVEL].min,TP[P_LEVEL].max);
+            motion_capture(t,P_LEVEL,t->p[P_LEVEL]);ml_knob(t,P_LEVEL);
+        }
+#else
         track_t *t = &trk[trk_top() + k];
         int16_t *vp = &t->p[P_LEVEL];
         *vp = (int16_t)clamp(*vp + accel(EN_K1 + k, s, TP[P_LEVEL].max - TP[P_LEVEL].min), TP[P_LEVEL].min,
                              TP[P_LEVEL].max);
         motion_capture(t, P_LEVEL, *vp);
         ml_knob(t, P_LEVEL);                            /* ((1.3) MIDI LEARN: Tk LEVEL picked) */
+#endif
     } else if (l == LAYER_EDIT) {                       /* ENG, No., FAV */
         if (k == 0u)
             edit_load(eng_step_for(song.sel, TSEL->eng_req, s), 0);
@@ -652,6 +713,10 @@ static void layer_knob(uint32_t k, int32_t s)
             rp_apply();
             lys.rp_dirty = 1;
         }
+#if FELUCCA_SNOW
+    } else if (l == LAYER_SEQ) {
+        snow_pattern_knob(k,s);
+#endif
     } else if (l == LAYER_SEQ && eu.on) {               /* ((1.3) EUCLID: HITS STEPS ROT; KNOB 4: none) */
         eu_knob(TSEL, k, s);
     } else if (l) {                                     /* the page's knobs, wherever the page is */
@@ -707,6 +772,12 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
     if (layer_set_open())
         lys.oct |= (uint8_t)(((pressed >> dn) & 1u) | ((pressed >> up) & 1u) << 1);
     mine = oct & lys.oct;
+#if FELUCCA_SNOW
+    if(lys.l==LAYER_SEQ && mine) {
+        int rc=stattic_random_patterns();ui_message(rc==2?"WAIT PATTERN LAUNCH":rc==3?"NO OTHER PATTERNS":rc==5?"AUTOMATION FULL":rc?"PATTERNS FULL":"RANDOM PATT");
+        lys.oct=0;ui.force=1;return oct&~mine;
+    }
+#endif
     if ((mine & 3u) && eu.on && lys.l == LAYER_SEQ) {   /* ((1.3) EUCLID open: OCT+ applies, OCT- cancels; only that) */
         eu_close(&trk[lys.trk % NTRK], mine & 2u);
         ui_message(mine & 2u ? "EUCLID APPLIED" : "EUCLID CANCELLED");
@@ -810,9 +881,14 @@ static uint32_t layer_leds(uint32_t *br)
             on = !((drum_mute[song.sel] >> p) & 1u);
             can = 1;
         } else if (l == LAYER_SEQ) {                    /* the tools breathe; DRUM: the lane */
+#if FELUCCA_SNOW
+            on=b?p==song.sel:p<ST_PATTERNS && snow_pattern_current(song.sel)==p;
+            can=b?p<NTRK:p<ST_PATTERNS && snow_pattern_used(song.sel,p);
+#else
             on = (b && p < NLANE && drum_track(TSEL) && p == ui.lane) || (!b && p == TL_EUCLID && eu.on);   /* lit,
                                                          * the other lanes breathe ((1.3) EUCLID open: lit) */
             can = b ? p < NLANE && drum_track(TSEL) : tl_cell(TSEL, p);
+#endif
         } else if (l == LAYER_PERF && b && p < NTRK) {  /* (Skiff) a track sounding lit; a muted one, a staged one */
             on = !trk[p].p[P_MUTE] && !mute_arm[p] && !trk_cut(p);   /* breathe ((2.0) a hold cutting too) */
             can = 1;
@@ -1178,6 +1254,9 @@ static void layer_euclid(void)
 }
 static void layer_seq(void)
 {
+#if FELUCCA_SNOW
+    snow_pattern_grid(0);return;
+#endif
     uint32_t p, st = LS_OFF, drum = (uint32_t)drum_track(TSEL);
     char n[3] = {0, 0, 0}, nm[8];
     if (eu.on)
@@ -1252,7 +1331,8 @@ static void layer_rec(void)
 static void layer_cards(uint32_t l)
 {
     char val[12];
-    const char *unit;
+    const char *unit=0;
+    (void)unit;
     uint32_t c;
     if (l == LAYER_FX) {                                /* FILTER CRUSH THROW DEPTH */
         int32_t m = perf_k[0];
@@ -1274,12 +1354,20 @@ static void layer_cards(uint32_t l)
             draw_column(3, "DEPTH", val, "%", VR_LIVE, (100 - perf_k[3]) * 10, ICON_MIX);
         }
     } else if (l == LAYER_GLO) {                        /* the four tracks' LEVEL (the track's icon; muted: dim; */
+#if FELUCCA_SNOW
+        static const char *const names[4] = {"TONE", "SHAPE", "SWEEP", "DECAY"};
+        for (c = 0; c < 4u; c++) {
+            fmt_int(val, snow_param(TSEL, c));
+            draw_column(c, names[c], val, "ALL", VR_LIVE, snow_param(TSEL, c) * 1000 / 127, 0);
+        }
+#else
         for (c = 0; c < 4u; c++) {                      /* (Skiff phase 6) the four shown, ui.c trk_top) */
             uint32_t k = trk_top() + c;
             param_format(&TP[P_LEVEL], trk[k].p[P_LEVEL], val, &unit);
             draw_column(c, "LEVEL", val, unit, glo_sounding(k) ? VR_LIVE : VR_DIM, RATIO(&TP[P_LEVEL], trk[k].p[P_LEVEL]),
                         trk_icon(k, 1));
         }
+#endif
     } else if (l == LAYER_EDIT) {
         engine_columns();
     } else if (l == LAYER_PERF) {                       /* (Skiff) the throws as the B mockup shows them: how far */
@@ -1332,8 +1420,13 @@ static void draw_layer(void)
         sig += (perf_kill ? 0u : perf_held | perf_latched) * 31u + perf_latch_on * 11u + perf_act * 131u + perf_avail() * 7u + (uint32_t)perf_harm_on() * 3u +
                glo_mutes() * 7717u + perf_cut * 2803u;   /* ((2.0, D 1A) the black keys: GLO's MUTE) */
     else if (l == LAYER_GLO)
+#if FELUCCA_SNOW
+        sig += snow_mask * 997u + snow_param(TSEL, 0) * 31u + snow_param(TSEL, 1) * 127u +
+               snow_param(TSEL, 2) * 521u + snow_param(TSEL, 3) * 2081u;
+#else
         sig += perf_solo * 31u + (uint32_t)song.g[G_CLOCK] * 5u + (uint32_t)seq_fill * 104729u +
                glo_mutes() * 131u + trk_top() * 1299709u + (perf_cut | perf_held >> PF_M1) * 2803u;   /* ((2.0) holds) */
+#endif
     else if (l == LAYER_SCL)
         sig += (uint32_t)TSEL->p[P_SCALE] * 31u;
     else if (l == LAYER_REC)
@@ -1348,6 +1441,12 @@ static void draw_layer(void)
         sig += snd_id() * 31u + (uint32_t)preset_favorite() * 5u + up_gen * 101u + song.sel * 977u +
                drum_mute[song.sel] * 2654435761u;   /* ((1.3) the lanes' mutes) */   /* ((Skiff phase 6) its
                                                                                     * track: what it may play) */
+#if FELUCCA_SNOW
+    if(l==LAYER_SEQ) {
+        sig+=snow_pattern_half*1543u+bank_gen()*131u;
+        for(uint32_t k=0;k<NTRK;k++)sig=sig*31u+snow_pattern_current(k);
+    }
+#endif
     if (ui.force || sig != ui.layer_sig) {
         ui.layer_sig = sig;
         cv_begin(240, H_GRAPH + foot_less(), T_BG);  /* ((Skiff) BLOCKS: the taller panel, a map centred in it; not

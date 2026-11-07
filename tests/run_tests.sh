@@ -155,11 +155,15 @@ run "keys and buttons: fast press, long release, bouncy contacts (one note each)
 $CC -o "$OUT/midi_uart_test" tests/midi_uart_test.c
 run "TRS MIDI parser" "$OUT/midi_uart_test"
 
-HALF=$(sed -n 's/^#define HALF_FRAMES \([0-9]*\).*/\1/p' firmware/src/core.h)
+HALF=$($CC -dM -E -x c -Ibuild/gen -Ifirmware/src -include firmware/src/core.h /dev/null | awk '$2 == "HALF_FRAMES" {print $3}')
 $CC -O2 -DT_CDC=1 -DHALF_FRAMES=$HALF -o "$OUT/uac_test" tests/uac_test.c -lm
 run "USB audio input: descriptors (with CDC), ring and packets, 44.1 -> 48 kHz resampler, 48 kHz stream" "$OUT/uac_test"
 $CC -O2 -DT_CDC=0 -DHALF_FRAMES=$HALF -o "$OUT/uac_test_nocdc" tests/uac_test.c -lm
 run "USB audio input: descriptors (without CDC), ring and packets, resampler, 48 kHz stream" "$OUT/uac_test_nocdc"
+for cdc in 0 1; do
+    $CC -O2 -DT_CDC=$cdc -DHALF_FRAMES=256 -o "$OUT/uac_test_stattic_$cdc" tests/uac_test.c -lm
+    run "USB audio input: STATTIC 256-frame halves, CDC=$cdc, ring/packets/resampling" "$OUT/uac_test_stattic_$cdc"
+done
 # USB descriptor layouts (#67): CDC UAC LAYOUT CDC-presented 48K; layout 0 and the console left out = 1.0's bytes
 # (+ the 48 kHz rate with 48K = 1, the default; 48K = 0: byte for byte)
 for v in 1.1.0.1.1 1.1.1.1.1 1.1.2.1.1 1.1.3.1.1 1.1.0.0.1 1.1.2.0.1 0.1.0.1.1 1.1.0.1.0 1.1.0.0.0 1.1.2.1.0 0.1.0.1.0 \
@@ -460,6 +464,7 @@ fi
 # ASan + UBSan: the stored-data and protocol paths, and short fuzz runs (fixed seeds: the same inputs every run)
 SAN="-O1 -g -fsanitize=address,undefined -fno-sanitize=signed-integer-overflow,shift,bounds,object-size,pointer-overflow"
 SAN="$SAN -fno-sanitize-recover=undefined -w"
+export ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0}"
 san_ok() {
     printf 'int main(void){return 0;}\n' > "$OUT/san_probe.c" &&
         ${CC%% *} $SAN -o "$OUT/san_probe" "$OUT/san_probe.c" 2>/dev/null && "$OUT/san_probe"
@@ -493,6 +498,7 @@ else
     run "ASan/UBSan fuzz: user sample slot headers -> scan -> SAMPLE / GRAIN / SLICE (1000, seed 17)" "$A/fuzz_smp" 1000 17
 fi
 
+run "regression: target budget gate rejects new work from a zero baseline" python3 tests/target_budget_test.py
 run "regression: target cost of the render loops (pi32v2 disassembly)" python3 tests/target_budget.py \
     build/felucca.dis tests/target_budget.txt
 

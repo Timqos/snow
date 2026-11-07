@@ -1,3 +1,6 @@
+#if FELUCCA_SNOW
+#include "snow_pixels.c"
+#endif
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Felucca UI: the panel (Y_GRAPH .. Y_GRAPH + H_GRAPH) between the cards and the footer: a SURF area
@@ -710,6 +713,9 @@ static void graph_scale(const track_t *t, uint16_t c)
         uint16_t col = (mask >> deg) & 1u ? (deg == 0u ? T_ACCENT : c) : T_RAISE;
         cv_rrect(x + 3, BLACK[i] ? 6 : 38, 10, 52, 3, col, T_SURF);
     }
+#if FELUCCA_SNOW
+    cv_text_on(12,104,&AF_S,N_SCALE[clamp(t->p[P_SCALE],0,NELEM(N_SCALE)-1)],c,T_SURF);
+#endif
 }
 /* CHORD (SCL 2): the chord's name ("Cm7": the last one the track played; before any, the one on its ROOT from
  * C4) over the keys from the C below its lowest note (two octaves, three for a wide one): its notes THEME, its
@@ -725,6 +731,12 @@ static void graph_chord(const track_t *t, uint16_t c)
     uint16_t mask;
     char b[12];
     const char *cap = "LAST";
+#if FELUCCA_SNOW
+    if(t->p[SN_PLAY_MODE]){
+        panel_note("NOTES: PLAY YOUR CHORDS", "UP TO 4 NOTES / REC TO RECORD", "SEL PAGE 1: MODE CHORDS");
+        return;
+    }
+#endif
     if (!t->p[P_CHRD]) {
         panel_note("CHORD KEYS OFF", "[K1] DIA3: IN-KEY CHORDS", 0);   /* (the title says what they are) */
         return;
@@ -1840,6 +1852,25 @@ static void graph_user(void)
  * panel): TEXT while something uses it, MID and outlined DIM while nothing does (it can be cleared: bank.c pool_refs);
  * the one KNOB 1 picked TEXT, INK on it (outlined TEXT when unused); an empty id a dot */
 #define PV_W 28                                      /* a tile 28 wide, 30 apart from x 1: 1 .. 238 */
+#if FELUCCA_SNOW
+static void snow_pattern_grid(uint32_t top)
+{
+    for(uint32_t col=0;col<6u;col++) {
+        uint32_t ch=col;if(ch>=NTRK)continue;
+        int32_t x=2+(int32_t)col*40;
+        for(uint32_t row=0;row<8u;row++) {
+            uint32_t slot=snow_pattern_half*8u+row;
+            int selected=snow_pattern_current(ch)==slot,used=snow_pattern_used(ch,slot);
+            uint16_t bg=selected?T_ACCENT:T_SURF,fg=selected?T_INK:used?T_TEXT:T_DIM;
+            char label[3]={(char)('A'+slot),0};
+            cv_rect(x,1+(int32_t)row*12,35,11,bg);
+            cv_bg=bg;cv_text(x+5,1+(int32_t)row*12,&AF_S,label,fg);
+            if(used)cv_rect(x+27,5+(int32_t)row*12,4,4,fg);
+        }
+    }
+    cv_bg=T_BG;
+}
+#endif
 static void graph_bank(void)
 {
     int32_t th = 15, py = 17;
@@ -2484,6 +2515,9 @@ static void qk_detector(int32_t cx, int32_t cy)
  * a flat line on it; MENU > SCREEN OFF keeps it from staying on the panel for hours) */
 static void graph_scope(uint16_t c)
 {
+#if FELUCCA_SNOW
+    snow_scope_on=1;
+#endif
     static int16_t snap[SCOPE_N];
     uint32_t w = scope_w, i, trig = 0;
     int32_t cy = (int32_t)cv_h / 2, py = cy, x, peak = 1500, a = cv_h >= H_GRAPH ? 46 : cy - 6;   /* (LARGE: the strip) */
@@ -2550,8 +2584,21 @@ static void graph_scope(uint16_t c)
 
 static void draw_graph(void)
 {
+#if FELUCCA_SNOW
+    snow_scope_on=(uint8_t)!ui.home;
+#endif
     const page_t *pg = cur_page();
     const track_t *t = TSEL;
+#if FELUCCA_SNOW
+    if(!ui.home&&snow_gen_page(pg)) {
+        uint32_t sig=2166136261u^ux.gen;const uint8_t *sb=(const uint8_t *)t->step,*mb=(const uint8_t *)&motion;
+        for(uint32_t i=0;i<sizeof t->step;i++)sig=(sig^sb[i])*16777619u;
+        for(uint32_t i=0;i<sizeof motion;i++)sig=(sig^mb[i])*16777619u;
+        sig^=(uint32_t)t->p[P_SLEN]*977u+(uint32_t)song.playing*7919u+(song.playing?t->seq_idx*131u:0u);
+        if(ui.force||sig!=ui.graph_sig){ui.graph_sig=sig;cv_oy=0;cv_begin(240,graph_h(),T_BG);snow_gen_grid(t,(int32_t)graph_h());cv_blit(0,graph_y());}
+        return;
+    }
+#endif
     uint16_t c = ux.quark ? T_THEME : T_TRK(song.sel);   /* Skiff: BLOCKS draws in the track's colour ((Skiff Q5) QUARK:
                                                       * cyan, an instrument's readouts, as the mockup) */
     uint32_t sig;
@@ -2660,6 +2707,11 @@ static void draw_graph(void)
             cv_oy = pad;
             graph_user();
             break;
+#if FELUCCA_SNOW
+        case GR_SNOW_PAT:
+            snow_pattern_grid(pg->id[0]);
+            break;
+#endif
         case GR_BANK:                                /* (Skiff phase 5) the pool view, from the panel's top (the mockup's) */
             cv_oy = 0;
             graph_bank();

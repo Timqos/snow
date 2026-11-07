@@ -20,6 +20,9 @@ static void *eng_part(const track_t *t);
 #include "eng_noise.c"
 #include "eng_fm6.c"            /* FM6: 6-operator FM, msfa ported (fm6_core.c, Apache-2.0) */
 #include "fm4_convert.c"        /* DIGITAL's tables, and its sounds -> FM6 */
+#if FELUCCA_SNOW
+#include "eng_snow.c"           /* Snow: six specialised, sample-free FM machines */
+#endif
 #if FELUCCA_FM4
 #include "eng_digital.c"        /* DIGITAL: four-operator FM (retired; FELUCCA_FM4=1 builds it) */
 #endif
@@ -95,6 +98,9 @@ static const engine_t *const ENGINES[NENGINES] = {
     &ENG_FM4_GONE,               /* 13: reserved (FELUCCA_SLICE=0 builds without SLICE: never offered, eng_ok) */
 #endif
     &ENG_DRUMX,                  /* 14 (ENGI_DRUMX, Skiff) */
+#if FELUCCA_SNOW
+    &SNOW_ENG[0], &SNOW_ENG[1], &SNOW_ENG[2], &SNOW_ENG[3], &SNOW_ENG[4], &SNOW_ENG[5],
+#endif
 };
 
 /* a track's engine number as an index (the audio paths: a compare, cheaper than % NENGINES; a bad number: 0) */
@@ -125,6 +131,9 @@ static const char *snd_missing(const track_t *t, uint32_t *code)
  * engine indices, never DIGITAL's reserved 1 (with FELUCCA_FM4 it follows FM6). The indices stay as they are (the
  * stores and the protocol hold them); only this table orders them */
 static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
+#if FELUCCA_SNOW
+    15, 16, 17, 18, 19, 20,
+#else
     0,                           /* ANALOG */
     12,                          /* FM6 */
 #if FELUCCA_FM4
@@ -137,11 +146,13 @@ static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
 #endif
     10,                          /* DRUM */
     14,                          /* DRUM-X */
+#endif
 };
 
 /* the engines one can pick (engine 1 only with FELUCCA_FM4), in ENGINE_ORDER: eng_ok(e), the n-th of them
  * eng_vis(n), e's place among them eng_rank(e), the next / previous one eng_step(e, dir) (wraps) */
-static int eng_ok(uint32_t e) { return e < NENGINES && (FELUCCA_FM4 || e != ENGI_DIGITAL) && (FELUCCA_SLICE || e != ENGI_SLICE); }
+static int eng_ok(uint32_t e) { return FELUCCA_SNOW ? e >= ENGI_SNOW && e < NENGINES :
+    e < NENGINES && (FELUCCA_FM4 || e != ENGI_DIGITAL) && (FELUCCA_SLICE || e != ENGI_SLICE); }
 static uint32_t eng_vis(uint32_t n) { return ENGINE_ORDER[n % NENG_SHOWN]; }
 static uint32_t eng_rank(uint32_t e)
 {
@@ -160,6 +171,8 @@ static uint32_t eng_step(uint32_t e, int32_t dir)
  * NHEAVY). The one rule: picking, presets, user presets, the editor, projects ask it */
 static int eng_allowed(uint32_t k, uint32_t e)
 {
+    if (FELUCCA_SNOW)
+        return k < NTRK && e == ENGI_SNOW + k;
     return k < NHEAVY || (e % NENGINES != ENGI_PHYS && e % NENGINES != ENGI_GRAIN);
 }
 static uint32_t eng_step_for(uint32_t k, uint32_t e, int32_t dir)   /* eng_step past what track k may not play */
@@ -173,5 +186,9 @@ static uint32_t eng_step_for(uint32_t k, uint32_t e, int32_t dir)   /* eng_step 
 
 /* the parts at power-on (engine, preset; the sequencers empty): bass, pad, lead, drums, (phase 6) a sample sound
  * and a second kit: ANALOG ACID, FM6 PAD (was DIGITAL PAD), LOFI PULSE LD, DRUM KIT, PIANO, DRUM KIT */
+#if FELUCCA_SNOW
+static const uint8_t TRK_DEF[NPART][2] = {{15, 0}, {16, 0}, {17, 0}, {18, 0}, {19, 0}, {20, 0}};
+#else
 static const uint8_t TRK_DEF[NPART][2] = {{0, 4}, {ENGI_FM6, 4}, {3, 0}, {ENGI_DRUM, 0}, {ENGI_SAMPLE, 0}, {ENGI_DRUM, 0}};
+#endif
 static uint32_t trk_def_engine(uint32_t i) { return TRK_DEF[i % NPART][0]; }

@@ -19,6 +19,9 @@
  * Included by seq.c (after motion.c, before seq_tick); launch_step runs in the ISR, only with something staged, not
  * inlined. */
 enum { LAUNCH_LOOP, LAUNCH_BAR, LAUNCH_BEAT, LAUNCH_NOW, LAUNCH_N };
+#if FELUCCA_SNOW
+enum { ST_LAUNCH_BAR=LAUNCH_N };                 /* HOME: strict shared bar, independent of track DIV/SWING. */
+#endif
 static const uint8_t LAUNCH_TIME[5] = {P_SLEN, P_SDIV, P_SSWING, P_SGATE, P_DIR};
 typedef struct {
     volatile uint8_t armed;                        /* staged, waiting for its launch point (set last; the ISR clears) */
@@ -95,6 +98,9 @@ static int launch_due(const track_t *t, uint32_t len, uint32_t period)
 {
     uint32_t k = trk_index(t);
     const launch_t *q = &launch_q[k];
+#if FELUCCA_SNOW
+    if(q->mode==ST_LAUNCH_BAR)return 0;          /* Committed by launch_clock, before any track ticks. */
+#endif
     if ((uint16_t)(take_pass[k] - take_p0[k]) < q->reps)
         return 0;
     return launch_here(t, len, period, q->mode, q->at);
@@ -104,6 +110,9 @@ static int launch_due(const track_t *t, uint32_t len, uint32_t period)
  * (seq.c seq_enter: NUDGE), it would be the outgoing pattern's */
 static int launch_ahead(const track_t *t, uint32_t len)
 {
+#if FELUCCA_SNOW
+    if(stattic_gen_sequence(trk_index(t)))return 1;
+#endif
     uint32_t k = trk_index(t);
     const launch_t *q = &launch_q[k];
     if (!q->armed)
@@ -181,6 +190,11 @@ static void launch_drop(void)
     uint32_t k;
     for (k = 0; k < NTRK; k++)
         launch_q[k].armed = launch_q[k].done = mute_arm[k] = 0;
+#if FELUCCA_SNOW
+    stattic_gen_drop();
+    stattic_ms.mute=stattic_ms.solo=0;
+    stattic_solo=0;perf_solo=stattic_ms.glo;      /* No old HOME request or latched solo crosses a project load. */
+#endif
 }
 /* track t's playing step has just ended, a mute or a pattern staged for it: at its launch point the mute turns; the
  * swap, and (but NOW) its first step next, a new pass. 1: swapped (seq_tick takes its DIV and LEN again). Not
@@ -204,9 +218,26 @@ static __attribute__((noinline)) int launch_step(track_t *t, uint32_t len, uint3
 }
 /* each block, before the tracks tick: the 1/16 steps as a 1/16 track (and the click: click_tick) counts them, PLAY's
  * first block step 0 (seq_start), the remainder kept (BAR / BEAT launches) */
+#if FELUCCA_SNOW
+static __attribute__((noinline)) void stattic_bar(void)
+{
+    stattic_ms_apply();                        /* Mute/solo, generators and patterns share this block. */
+    stattic_gen_apply();
+    for(uint32_t k=0;k<NTRK;k++){
+        launch_t *q=&launch_q[k];track_t *t=&trk[k];
+        if(!q->armed||q->mode!=ST_LAUNCH_BAR||(int32_t)(launch_steps-q->at)<0)continue;
+        launch_swap(t);take_p0[k]=take_pass[k];
+        t->seq_idx=(uint16_t)(t->p[P_SLEN]>1?t->p[P_SLEN]-1:0);
+        t->seq_cnt=0;t->seq_pos=0x7FFFFFFFu; /* First step fires in this audio block, for every selected track. */
+    }
+}
+#endif
 static void launch_clock(uint32_t n)
 {
     uint32_t p = div_samples(2);
+#if FELUCCA_SNOW
+    uint32_t before=launch_steps;
+#endif
     if (launch_pos == CLK_START) {
         launch_pos = 0;
         return;
@@ -216,4 +247,7 @@ static void launch_clock(uint32_t n)
         launch_pos -= p;
         launch_steps++;
     }
+#if FELUCCA_SNOW
+    if((before>>4)!=(launch_steps>>4))stattic_bar();
+#endif
 }

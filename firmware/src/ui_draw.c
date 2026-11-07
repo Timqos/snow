@@ -298,8 +298,8 @@ static void card_mot_of(const int16_t *vp)
 #define LG_MH 18
 #define LG_LY 24                                        /* the label's line: M capitals rows 28..38 */
 #define LG_VB 49                                        /* the value's band: L capitals rows 49..69 */
-#define LG_UY 73                                        /* the unit's line (S capitals rows 76..84) */
-#define LG_GY 92                                        /* the gauge, 3 px */
+#define LG_UY (FELUCCA_SNOW ? 80 : 73)                                        /* the unit's line (S capitals rows 76..84) */
+#define LG_GY (FELUCCA_SNOW ? 98 : 92)                                        /* the gauge, 3 px */
 /* a tall card's value s in L where the sparse L face has its glyphs and it fits with 3 px either side, else M, else S
  * (0, 1, 2; its unit is on a line of its own) */
 static uint32_t tall_face(const char *s, const char *unit)
@@ -615,6 +615,27 @@ static void ret_hints(uint32_t ret, int32_t y)
 }
 static void draw_foot(void)
 {
+#if FELUCCA_SNOW
+    if(!ui.home&&!ui.layer&&!ui.shift&&snow_random_first_page(cur_page())){
+        uint32_t sig=ux.gen*977u+song.sel*31u+TSEL->preset*4099u+TSEL->user*65537u+127u;
+        if(ui.force||ui.foot_sig!=sig){ui.foot_sig=sig;cv_oy=0;cv_begin(240,48,T_BG);
+            uint32_t family=cur_page()->fam;
+            cv_text(3,1,&AF_S,family==FAM_LFO?"OCT+ : RANDOM ALL LFO":family==FAM_FX?"OCT+ : RANDOM ALL FX":"OCT+ : RANDOM ALL EDIT",T_THEME);
+            cv_text(3,17,&AF_S,"HOLD SAVE : UNDO",T_MID);
+            char name[24],pos[10]="1/";sound_name(TSEL,name);
+            cv_text(3,33,&AF_S,SN_TARGET_NAMES[song.sel][0],T_THEME);cv_free_text(25,33,&AF_S,name,T_TEXT,T_BG,170);
+            uint32_t n=0;for(uint32_t p=0;p<NPAGES;p++)n+=PAGES[p].fam==family&&page_visible(p);
+            fmt_int(pos+2,(int32_t)n);cv_text_r(235,17,&AF_S,pos,T_MID,T_BG);cv_blit(0,192);}
+        return;
+    }
+    if(!ui.home&&!ui.layer&&!ui.shift&&snow_gen_page(cur_page())){
+        uint32_t sig=ux.gen*977u+123u;
+        if(ui.force||ui.foot_sig!=sig){ui.foot_sig=sig;cv_oy=0;cv_begin(240,38,T_BG);
+            cv_text(3,1,&AF_S,"O+ GEN RND   O- GEN PARM",T_THEME);
+            cv_text(3,19,&AF_S,"SAVE + O- : CLEAR",T_MID);cv_blit(0,202);}
+        return;
+    }
+#endif
     char s[48], pn[16], ti[20];
     const track_t *t = TSEL;
     uint32_t sig;
@@ -922,6 +943,18 @@ static void draw_columns(void)
         sheet_of(cur_page()->graph)->cards();
         return;
     }
+#if FELUCCA_SNOW
+    if(cur_page()->graph==GR_SNOW_PAT) {
+        for(uint32_t c=0;c<4u;c++) {
+            uint32_t k=cur_page()->id[c];
+            if(k>=NTRK){draw_column(c,"--","--","",VR_DIM,-1,ICON_NONE);continue;}
+            uint32_t entry=snow_pattern_current(k);
+            char pattern[3]={(char)('A'+entry),0};
+            draw_column(c,SN_ROLES[k],pattern,"PATTERN",VR_LIVE,-1,ICON_AUTO);
+        }
+        return;
+    }
+#endif
     if (cur_page()->graph == GR_SONG) {                  /* (Skiff phase 5) ENTRY PATTERN REPS SONG (ui_input.c song_knob):
                                                          * the selected track's entry picked; its pattern (KNOB 2's pick
                                                          * while there is one), its repeats; SONG */
@@ -1135,6 +1168,9 @@ static void draw_columns(void)
 }
 
 
+#if FELUCCA_SNOW
+#include "snow_boot.c"
+#else
 /* The power-on splash (main.c fm1_main, web/emu felucca_web.c; 1.1.5): a RAISE square centred on the screen, square
  * corners (in every style; LINE too: RAISE from the palette's SURF), in it in AF_M, the ink SPL_PAD in from the left:
  * at the top the name and the version, the first line's capitals' top SPL_PAD down; at the bottom the maker and
@@ -1214,6 +1250,8 @@ static void draw_splash(void)
     }
     lcd_sync();
 }
+
+#endif
 
 /* UPDATE MODE countdown (main.c: OCT- + OCT+ held): over everything, the menu and the dialogs too */
 static void draw_uboot(void)
@@ -1389,6 +1427,10 @@ static void confirm_text(char *a, char *b)
 static void draw_confirm(void) { draw_confirm_blocks(); }   /* (U2: BLOCKS' dialog, ui_blocks.c) */
 
 
+#if FELUCCA_SNOW
+#include "snow_home.c"
+#include "snow_channels.c"
+#endif
 static void ui_draw_page(uint32_t counting);
 static void ui_draw(void)
 {
@@ -1411,6 +1453,15 @@ static void ui_draw(void)
 }
 static void ui_draw_page(uint32_t counting)
 {
+#if FELUCCA_SNOW
+    int snow_overview=!ui.menu&&!ui.confirm&&!name_on()&&!counting&&!ui.shift&&
+        ((ui.layer&&(ui.ly==LAYER_GLO||ui.ly==LAYER_SEQ))||(!ui.layer&&!ui.home&&(cur_page()->graph==GR_TRK||cur_page()->graph==GR_SNOW_PAT)));
+    if(snow_overview){snow_channels_draw(ui.layer?ui.ly==LAYER_SEQ:cur_page()->graph==GR_SNOW_PAT);return;}
+    if(snow_channels_active)snow_home_active=0;
+    snow_channels_active=0;stattic_overview=0;
+    if(!ui.home||ui.menu||ui.confirm||ui.layer||ui.shift||name_on()||counting)snow_home_active=0;
+    if(ui.home&&!ui.menu&&!ui.confirm&&!ui.layer&&!ui.shift&&!name_on()&&!counting){snow_home_draw();return;}
+#endif
     if (ui.uboot) {
         draw_uboot();
         draw_head();
