@@ -43,7 +43,8 @@ reconstructs the displayed per-boot L. Unknown versions report L since this
 connection; wraps/restarts are handled separately. The bounded export reports
 any dropped raw characters, samples or events. Marking a rasp is local and
 does not cause an extra USB polling burst. This is state/counter sampling,
-not a complete instruction trace or an audio recording. USB telemetry itself
+not a complete instruction trace or an audio recording. After a rasp marker,
+allow another sample (or use One snapshot) before pausing/exporting. USB telemetry itself
 adds work; pause capture to compare.
 
 Firmware remains `676c7090c30831133eddaedf1e8f5e5afa66bf03`, package SHA
