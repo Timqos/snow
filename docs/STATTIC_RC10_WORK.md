@@ -40,4 +40,34 @@ one/two-core equivalence, existing target budgets, full native/WASM/browser
 checks and exact-package update/rollback validation. Physical improvement
 must be measured on the FM-1; rc10 is not advertised as a confirmed cure.
 
-Build/publication results will be appended after verification.
+Completed software validation:
+
+- The full local native/WASM pipeline passes. Immutable factory, FX, low-note
+  onset and 2,592 operator PCM/final-state references remain identical.
+- Nine one/two-core worker modes, including all-worker and IRQ-aware auto,
+  produce identical audio in all three scenes. Existing CH4, shared budgets,
+  BAR changes, generation, actual two-bar release and eight Undo entries pass.
+- Primary IRQ accounting, bounded duty prediction, oracle and snapshot tests
+  pass ASan/UBSan. All existing target budgets are retained. New scalar
+  helper budgets are separately checked; no old limit was increased.
+- Linked oscillator/envelope code and exact sine/filter/saturation table
+  bytes remain in SRAM. App 575,052 / 581,564 B (6,512 free); data/BSS
+  91,752 / 98,304 B (6,552 free); pool 348,148 / 356,352 B (8,204 free);
+  executable RAM + ramx 24,008 / 24,576 B (568 free).
+- Real Chromium/AudioWorklet controls, five HOME pages, queued BAR changes,
+  CH hold, menus, mobile layout and factory return pass. USB transport is
+  tested with a deterministic CDC model, including rc10 detail and unknown
+  clock reporting; it does not claim a physical USB test.
+- All 28 exact-package update/rollback checks pass, including rc9 both
+  directions, V15/V16 matching heads and OTA/loader ASan/UBSan. Critical HAL,
+  flash, storage, USB and loader execution remain unchanged.
+
+Firmware source: `967530f069a38db0b5d4c01d4c7ec69d0ea77d15`.
+Audit/map source: `319babd91b64400b68de2d68558349ce6eb91ea0`.
+File: `stattic-0.8.0-rc10.fwsc`, 610,430 bytes.
+SHA-256: `19143e04d33405079e03dbc97ac15450d9dd124ba9c8e3aec10d7787adf27f47`.
+The rc9 package remains available. Source PR #3 remains unmerged.
+
+No physical FM-1 is attached here. Reliable live playback is still unverified;
+compare hardware L/voice-fade counters and detailed snapshots after installation.
+Publication/hash verification is pending.
