@@ -70,4 +70,13 @@ The rc9 package remains available. Source PR #3 remains unmerged.
 
 No physical FM-1 is attached here. Reliable live playback is still unverified;
 compare hardware L/voice-fade counters and detailed snapshots after installation.
-Publication/hash verification is pending.
+Published: https://timqos.github.io/snow/snow/?v=080rc10
+USB console: https://timqos.github.io/snow/snow/console/?v=2
+
+- gh-pages: `34efcc2a92a463ae8ebca5c4b48111ed0c8e7fe5`.
+- Successful Pages run: `42391108232`.
+- All 20 normal artifact URLs and the root landing match published local
+  hashes; JavaScript-module and WASM MIME types are correct. The previous
+  rc9 package also retains its exact hash. Verified 2026-11-07 18:26:05 Europe/Kyiv.
+- Machine-readable verification: `build/stattic-live-verification-rc10.json`.
+- Independent GitHub source CI is running; the source PR remains unmerged.
