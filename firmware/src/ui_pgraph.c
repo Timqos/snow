@@ -680,7 +680,7 @@ static void graph_arp(const track_t *t, uint16_t c)
         }
     }
     if (!t->nheld)
-        pg_text_r(228, 13, "EXAMPLE: C E G", T_DIM);
+        pg_text_r(228, FELUCCA_SNOW?16:13, "EXAMPLE: C E G", T_DIM);
     for (i = 0; i < 16u; i++) {
         uint32_t k = i % (2u * len > 2u ? 2u * len - 2u : 1u), r, n = 1;
         int32_t x = 30 + (int32_t)(i * 124u / 10u) + ((i & 1u) ? sw : 0), skip;

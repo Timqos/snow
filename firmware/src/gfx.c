@@ -1,3 +1,6 @@
+#ifndef FELUCCA_SNOW
+#define FELUCCA_SNOW 0
+#endif
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Small-canvas renderer (no full framebuffer). Draw text/lines into
@@ -21,23 +24,52 @@ typedef struct {
     uint8_t psh;                        /* log2 of the phases per glyph: g[i << psh] .. g[(i << psh) + phases - 1] */
     const uint8_t *hc;                  /* data's Huffman code (cv_alpha_hc), 0 = 2 px per byte (cv_alpha) */
     uint8_t sc;                         /* (Skiff 2.0) a pixel face (cv_alpha_px): its scale 1..3, | PX_BOLD; 0 = Barlow */
+    uint8_t caph;                       /* STATTIC stretched pixel capitals; zero for legacy faces */
+    uint8_t tight;                      /* fitted letter spacing in 1/16 pixel; source strokes stay intact */
 } aafont_t;
 #define PX_BOLD 0x80u
+#define PX_STRETCH 0x40u
 typedef struct { const char *name; uint16_t bg, surf, text, theme, accent; } ui_pal_t;
 typedef struct { uint16_t off; uint8_t w; const char *label; } kc_t;
 #include "ui_fonts.h"                   /* AF_S 12 px / 400, AF_M 15 px / 500, AF_L 28 px / 600 */
 #include "ui_pixfont.h"                 /* (Skiff) THEME CRYPT's pixel faces AF_S_PX .. (tools/gen_pixel_font.py) */
 #include "ui_palettes.h"
+#if FELUCCA_SNOW
+#include "snow_palettes.h"
+#endif
 #include "ui_keycaps.h"                 /* KC_*: the keycaps / badges (tools/gen_aa_keycaps.py), KNOB_* arcs */
+#if FELUCCA_SNOW
+#undef KC_H
+#define KC_H 18
+#endif
 #define ELLIPSIS '\x85'                 /* the ellipsis glyph of AF_S and AF_M */
 
 /* (Skiff) the theme's faces: Barlow Condensed's, or THEME CRYPT's and NEON's pixel ones (palette_set). From here on AF_S AF_M
  * AF_L AF_V name the theme's, and AF_x_CAP_Y / _CAP_H its capitals' rows (CAP_IN centres by them) */
+/* Snow always selects the pixel faces. Do not retain the unused Barlow atlas
+ * through UF_FACE[0]'s static relocations; non-Snow builds stay unchanged. */
+#if FELUCCA_SNOW
+/* Reuse the same 5x7 source pixels and glyph table: no larger atlas/cache.
+ * Fill each existing line band with readable ink instead of seven pixels. */
+#define ST_FACE(name,h,asc,width,cap) static const aafont_t name = {h,asc,32,96,5,0,AF_S_PX_G,AF_S_PX_DATA,0,0,AF_S_PX_EX,0,0,PX_STRETCH|width,cap}
+ST_FACE(ST_FACE_S,16,15,6,14);
+ST_FACE(ST_FACE_M,20,19,7,18);
+ST_FACE(ST_FACE_V,29,25,9,20);
+ST_FACE(ST_FACE_L,34,31,14,28);
+#undef ST_FACE
+static const aafont_t *const UF_FACE[2][4] = {{&ST_FACE_S,&ST_FACE_M,&ST_FACE_L,&ST_FACE_V},{&ST_FACE_S,&ST_FACE_M,&ST_FACE_L,&ST_FACE_V}};
+#else
 static const aafont_t *const UF_FACE[2][4] = {{&AF_S, &AF_M, &AF_L, &AF_V}, {&AF_S_PX, &AF_M_PX, &AF_L_PX, &AF_V_PX}};
+#endif
 static const uint8_t UF_CAP[2][4][2] = {
+#if FELUCCA_SNOW
+    {{1,14},{1,18},{3,28},{5,20}},
+    {{1,14},{1,18},{3,28},{5,20}}
+#else
     {{AF_S_CAP_Y, AF_S_CAP_H}, {AF_M_CAP_Y, AF_M_CAP_H}, {AF_L_CAP_Y, AF_L_CAP_H}, {AF_V_CAP_Y, AF_V_CAP_H}},
-    {{AF_S_PX_CAP_Y, AF_S_PX_CAP_H}, {AF_M_PX_CAP_Y, AF_M_PX_CAP_H}, {AF_L_PX_CAP_Y, AF_L_PX_CAP_H},
-     {AF_V_PX_CAP_Y, AF_V_PX_CAP_H}}};
+    {{AF_S_PX_CAP_Y, AF_S_PX_CAP_H}, {AF_M_PX_CAP_Y, AF_M_PX_CAP_H}, {AF_L_PX_CAP_Y, AF_L_PX_CAP_H}, {AF_V_PX_CAP_Y, AF_V_PX_CAP_H}}
+#endif
+};
 static struct { const aafont_t *const *f; const uint8_t (*cap)[2]; } uf = {UF_FACE[0], UF_CAP[0]};
 #undef AF_S_CAP_Y
 #undef AF_S_CAP_H
@@ -181,6 +213,10 @@ static void palette_set(uint32_t i)
     ux.quark = i == UI_QUARK_INDEX;
     uf.f = UF_FACE[ux.crypt || ux.neon];         /* (CRYPT, NEON: the pixel faces) */
     uf.cap = UF_CAP[ux.crypt || ux.neon];
+#if FELUCCA_SNOW
+    ux.crypt=ux.neon=ux.quark=0;
+    uf.f=UF_FACE[1];uf.cap=UF_CAP[1];
+#endif
     ux.bg = p->bg; ux.surf = p->surf; ux.text = p->text; ux.theme = p->theme;
     ux.accent = p->accent;
     for (k = 0; k < UI_NTRK; k++)
@@ -410,7 +446,7 @@ static const uint16_t *ramp(uint16_t fg, uint16_t bg)
     v = rc.v[i];
     for (a = 0; a < 16u; a++) {
         uint32_t out = 0;
-        int32_t w = cv[a];
+        int32_t w = FELUCCA_SNOW?(a<8u?0:256):cv[a];
         for (k = 0; k < 3u; k++) {
             int32_t x = (bg >> SH[k]) & MK[k], y = (fg >> SH[k]) & MK[k];
             out |= (uint32_t)(x + (((y - x) * w + 128) >> 8)) << SH[k];
@@ -501,6 +537,48 @@ static void cv_alpha_px(int32_t x, int32_t y, uint32_t w, uint32_t h, const uint
     }
     GFX_HOOK_PIXELS(w * h);
 }
+
+static uint32_t glyph(const aafont_t *f,uint32_t ch);
+#if FELUCCA_SNOW
+static void cv_alpha_stretch(int32_t x,int32_t y,uint32_t w,uint32_t h,
+                             const aag_t *src,const uint8_t *d,const uint16_t *rv)
+{
+    uint32_t sy=0,ey=0;y+=cv_oy;
+    for(uint32_t gy=0;gy<h;gy++){
+        int32_t py=y+(int32_t)gy,sh=0;uint16_t chrome=0;
+        if(cv_fx.on){sh=py<cv_fx.base?(cv_fx.base-1-py)/3:0;chrome=cv_fx.col[py<cv_fx.top?0:py-cv_fx.top<FX_ROWS?py-cv_fx.top:FX_ROWS-1];}
+        if(py>=cv_cy0&&py<cv_cy1){
+            uint16_t *row=cv_px+(uint32_t)py*cv_w;uint32_t sx=0,ex=0;
+            for(uint32_t gx=0;gx<w;gx++){
+                uint32_t v=nib(d,sy*src->bw+sx);int32_t px=x+(int32_t)gx+sh;
+                if(v&&(uint32_t)px<cv_w)row[px]=chrome?chrome:rv[v];
+                ex+=src->bw;while(ex>=w){ex-=w;sx++;}
+            }
+        }
+        ey+=src->bh;while(ey>=h){ey-=h;sy++;}
+    }
+    GFX_HOOK_PIXELS(w*h);
+}
+static uint32_t text_advance(const aafont_t *f,uint32_t c)
+{
+    uint32_t a=f->g[glyph(f,c)].adv;
+    return f->sc&PX_STRETCH?a*(f->sc&31u)/5u-f->tight:a;
+}
+static aag_t text_scaled_glyph(const aafont_t *f,const aag_t *src)
+{
+    aag_t g=*src;uint32_t w=f->sc&31u;
+    g.adv=(uint16_t)(g.adv*w/5u-f->tight);
+    if(g.bw){
+        uint32_t y0=(uint32_t)(src->by-AF_S_PX_CAP_Y)*f->caph/7u;
+        uint32_t y1=(uint32_t)(src->by-AF_S_PX_CAP_Y+src->bh)*f->caph/7u;
+        g.bw=(uint8_t)((src->bw*w+4u)/5u);g.bh=(uint8_t)(y1-y0);
+        g.by=(uint8_t)(f->asc-f->caph+y0);
+    }
+    return g;
+}
+#else
+static uint32_t text_advance(const aafont_t *f,uint32_t c){return f->g[glyph(f,c)].adv;}
+#endif
 
 /* the same from a glyph's Huffman-coded bit stream (tools/gen_aa_font.py huff_pack): canonical codes, MSB
  * first; hc = the number of codes of each length 1..15, then the symbols in code order, each a value and
@@ -632,7 +710,7 @@ static int32_t text_w(const aafont_t *f, const char *s)
         uint32_t c = fold(f, (uint8_t)*s);
         if (prev)
             pen += kern(f, prev, c);
-        pen += f->g[glyph(f, c)].adv;
+        pen += text_advance(f,c);
         prev = c;
     }
     return (pen + 8) >> 4;
@@ -650,6 +728,10 @@ static int32_t text_run(int32_t x, int32_t y, const aafont_t *f, const char *s, 
         if (prev)
             pen += kern(f, prev, c);
         g = &f->g[glyph(f, c)];
+#if FELUCCA_SNOW
+        const aag_t *src=g;aag_t scaled;
+        if(f->sc&PX_STRETCH){scaled=text_scaled_glyph(f,g);g=&scaled;}
+#endif
         if (f->psh && g[1].off != g->off) {
             pos = pen - (pen & (step - 1));          /* the phase position at or left of the pen */
             d0 = pos - pen - err;                    /* .. and the one right of it: which keeps the gap truer */
@@ -667,6 +749,10 @@ static int32_t text_run(int32_t x, int32_t y, const aafont_t *f, const char *s, 
                 ;                                    /* (text_ink: measured only) */
             else if (f->hc)
                 cv_alpha_hc(gx, gy, g->bw, g->bh, f->data + g->off, f->hc, rv);
+#if FELUCCA_SNOW
+            else if(f->sc&PX_STRETCH)
+                cv_alpha_stretch(gx,gy,g->bw,g->bh,src,f->data+g->off,rv);
+#endif
             else if (f->sc)
                 cv_alpha_px(gx, gy, g->bw, g->bh, f->data + g->off, rv, f->sc);
             else
@@ -747,8 +833,21 @@ static int32_t ink_in(const aafont_t *f, const char *s, int32_t w)
 }
 /* s with its ink centred across x0 .. x0 + w (y: its line top, CAP_IN to centre it up and down too); a pixel left
  * over goes left / up, as everywhere (the cushions too) */
+#if FELUCCA_SNOW
+static const aafont_t *text_room(const aafont_t *f,const char *s,int32_t width,aafont_t *copy)
+{
+    if(!(f->sc&PX_STRETCH))return f;
+    *copy=*f;copy->sc=(uint8_t)(PX_STRETCH+(f->caph*5u+6u)/7u);
+    while((copy->sc&31u)>5u&&text_w(copy,s)>width)copy->sc--;
+    while(copy->tight<12u&&text_w(copy,s)>width)copy->tight++;
+    return copy;
+}
+#endif
 static int32_t cv_text_in(int32_t x0, int32_t y, int32_t w, const aafont_t *f, const char *s, uint16_t fg, uint16_t bg)
 {
+#if FELUCCA_SNOW
+    aafont_t fitted;f=text_room(f,s,w,&fitted);
+#endif
     return cv_text_on(x0 + ink_in(f, s, w), y, f, s, fg, bg);
 }
 
@@ -780,6 +879,9 @@ static int text_fit(char *d, uint32_t n, const char *s, const aafont_t *f, int32
 static int32_t cv_text_fit(int32_t x, int32_t y, const aafont_t *f, const char *s, uint16_t fg, uint16_t bg,
                            int32_t maxw)
 {
+#if FELUCCA_SNOW
+    aafont_t fitted;f=text_room(f,s,maxw,&fitted);
+#endif
     char b[48];
     int cut = text_fit(b, sizeof b, s, f, maxw);
     return cv_text_flags(x, y, f, b, fg, bg, cut ? 1u : 0u);
@@ -787,6 +889,9 @@ static int32_t cv_text_fit(int32_t x, int32_t y, const aafont_t *f, const char *
 static int32_t cv_free_text(int32_t x, int32_t y, const aafont_t *f, const char *s, uint16_t fg, uint16_t bg,
                             int32_t maxw)
 {
+#if FELUCCA_SNOW
+    aafont_t fitted;if(text_w(f,s)>maxw)f=text_room(f,s,maxw,&fitted);
+#endif
     char b[48];
     int cut = text_fit(b, sizeof b, s, f, maxw);
     return cv_text_flags(x, y, f, b, fg, bg, cut ? 9u : 8u);
@@ -853,6 +958,22 @@ static int32_t cv_key_hint(int32_t x, int32_t y, uint32_t id, const char *act, i
 typedef struct { uint8_t key; const char *act; } khint_t;
 static void cv_key_row(int32_t x0, int32_t x1, int32_t y, const khint_t *h, uint32_t n, uint32_t on, uint16_t under)
 {
+#if FELUCCA_SNOW
+    aafont_t fitted=AF_S;
+    uint32_t total=0;
+    for(uint32_t j=0;j<n;j++){char label[32];kh_plain(label,sizeof label,h[j].key,h[j].act);total+=(uint32_t)str_len(label);}
+    fitted.sc=(uint8_t)(PX_STRETCH|5u);
+    while(fitted.tight<12u&&total*96u-total*fitted.tight>(uint32_t)(x1-x0)*16u)fitted.tight++;
+    int32_t widths[4],sum=0;
+    if(n<=4u){
+        for(uint32_t j=0;j<n;j++){char label[32];kh_plain(label,sizeof label,h[j].key,h[j].act);widths[j]=text_w(&fitted,label);sum+=widths[j];}
+        if(sum<=x1-x0){
+            int32_t gap=n>1u?(x1-x0-sum)/(int32_t)(n-1u):0,x=x0;
+            for(uint32_t j=0;j<n;j++){char label[32];kh_plain(label,sizeof label,h[j].key,h[j].act);cv_text_on(x,y+KC_TY,&fitted,label,(on>>j)&1u?T_MID:T_DIM,under);x+=widths[j]+gap;}
+            return;
+        }
+    }
+#endif
     uint32_t i, words = n;                         /* hints 0 .. words-1 keep their word */
     int32_t w, gap, x = x0;
     for (;;) {

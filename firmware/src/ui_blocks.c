@@ -238,7 +238,7 @@ static void draw_column_blocks(uint32_t c, const char *label, const char *val, c
         cv_frame(0, 0, COL_W, COL_H, T_LINE);
     }
     if (label[0]) {
-        const aafont_t *lf = kind == LK_LABEL && text_w(&AF_M, label) <= room ? &AF_M : &AF_S;
+        const aafont_t *lf = !FELUCCA_SNOW && kind == LK_LABEL && text_w(&AF_M, label) <= room ? &AF_M : &AF_S;
         int32_t ly = lf == &AF_M ? 0 : BK_LY, cy = ly + (lf == &AF_M ? AF_M_CAP_Y : AF_S_CAP_Y);
         int32_t ch = lf == &AF_M ? AF_M_CAP_H : AF_S_CAP_H, lx = BK_L, lw = room;
         uint16_t lc = hot ? T_INK : T_MID;

@@ -56,6 +56,20 @@ static uint32_t pool_alloc_after(uint32_t orig);   /* ((2.0, #34) a copy's numbe
 static uint32_t bank_cur(uint32_t k);
 static uint32_t bank_gen(void);
 static void entry_ui(uint32_t e);
+#if FELUCCA_SNOW
+static void snow_pattern_knob(uint32_t channel,int32_t steps);
+static uint32_t snow_pattern_current(uint32_t channel);
+static int snow_pattern_used(uint32_t channel,uint32_t slot);
+static int snow_pattern_select(uint32_t channel,uint32_t slot);
+static uint8_t snow_pattern_half;
+static int snow_generate(uint32_t channel,int vary);
+static int snow_generate_scene(int vary);
+static int snow_generate_parameters(uint32_t channel);
+static int snow_parameter_scene(void);
+static int snow_clear_sequence(int all);
+static int stattic_random_patterns(void);
+static void snow_sequence_poll(void);
+#endif
 static uint32_t pool_len(uint32_t id);         /* (Skiff phase 5) SAVE > PATTERNS, the pool view (bank.c) */
 static uint32_t pool_refs(uint32_t id);
 static void pool_clear(uint32_t id);
@@ -139,6 +153,26 @@ static void theme_apply(void)                  /* settings.palette, and over it 
 #define CPU2_BYTE (favorites.factory[15][5])
 #define CPU2_SET (CPU2_BYTE & 1u)
 #define PREVIEW_SET ((CPU2_BYTE >> 1) & 1u)            /* ((1.3) MENU > STEP PREVIEW ON) */
+#if FELUCCA_SNOW
+/* Enable Snow's already-built second core once, including settings saved
+ * with the old default. Preserve later 1 CORE choices and fault fallback.
+ * SKS1 already preserves the complete CPU byte. */
+#define SN_CPU_DEFAULT_APPLIED 0x80u
+static uint8_t snow_cpu_defaults_changed;
+static void snow_cpu_boot_defaults(void)
+{
+#if FELUCCA_CPU2
+    if(!(CPU2_BYTE&SN_CPU_DEFAULT_APPLIED)){
+        CPU2_BYTE|=SN_CPU_DEFAULT_APPLIED|1u;
+        snow_cpu_defaults_changed=1;
+    }
+#endif
+}
+static void snow_cpu_save_defaults(void)
+{
+    if(snow_cpu_defaults_changed){snow_cpu_defaults_changed=0;settings_save();}
+}
+#endif
 /* (2.0, D 2A) MENU > CONTROL > RETURN: how MOMENTARY's values, the FX layer's macros and PERFORM's throws come back once
  * let go (mom_poll; throw.c thr_beats): SNAP, over 1 BEAT, over 1 BAR. A settings byte ([15][16]: zero, the default
  * 1 BAR; RET_BAR - the value) */
@@ -261,19 +295,19 @@ static void fmt_kn(char *b, int32_t k, int32_t n)
  * the panel 76..198 (a SURF area; the graphs live in it), footer 202..240; BG between them */
 #define Y_HEAD 0
 #define H_HEAD 24
-#define Y_LABEL 28                    /* the cards */
+#define Y_LABEL (FELUCCA_SNOW ? 24 : 28)                    /* the cards */
 #define Y_SEP_END 72
 #define CARD_W 57
 #define CARD_H 44
 #define CARD_X(c) (3 + 59 * (int32_t)(c))
-#define Y_GRAPH 76                    /* the panel */
+#define Y_GRAPH (FELUCCA_SNOW ? 68 : 76)                    /* the panel */
 #define H_GRAPH 122
 #define Y_FOOT 202
 #define H_FOOT 38
 /* MENU > LARGE (large_kind below): on the value pages the cards are tall (28..132) and the panel a strip
  * (136..198); elsewhere (lists, rolls, layers) the layout above, its card labels in M */
 #define LG_CARD_H 104
-#define LG_Y_GRAPH 136
+#define LG_Y_GRAPH (FELUCCA_SNOW ? 132 : 136)
 #define LG_H_GRAPH 62
 
 static struct {
@@ -554,9 +588,24 @@ static uint32_t card_h(void) { return large_kind() == LK_TALL ? LG_CARD_H : CARD
 static uint32_t graph_y(void) { return large_kind() == LK_TALL ? LG_Y_GRAPH : Y_GRAPH; }
 /* (Skiff) BLOCKS: the footer is one line, as the B mockup's (no step strip): its canvas 16 px lower, the panel 16 px
  * taller (ADSR and LFO grow into it, the fixed layouts sit centred: graph_pad) */
-#define FOOT_LINE 16u
+#define FOOT_LINE (FELUCCA_SNOW ? 4u : 16u)
 static uint32_t foot_less(void) { return FOOT_LINE; }
-static uint32_t graph_h(void) { return (large_kind() == LK_TALL ? LG_H_GRAPH : H_GRAPH) + foot_less(); }
+#if FELUCCA_SNOW
+static int snow_random_first_page(const page_t *p);
+#endif
+static uint32_t graph_h(void)
+{
+#if FELUCCA_SNOW
+    const page_t *p=cur_page();
+    if(!ui.home&&!ui.layer&&((p->fam==FAM_SEQ&&p->graph==GR_NONE)||snow_random_first_page(p)))
+        return (snow_random_first_page(p)?192u:202u)-graph_y(); /* enlarged action hints */
+#endif
+#if FELUCCA_SNOW
+    return 206u-graph_y();
+#else
+    return (large_kind() == LK_TALL ? LG_H_GRAPH : H_GRAPH) + foot_less();
+#endif
+}
 static int32_t graph_pad(void) { return (int32_t)foot_less() / 2; }
 static uint32_t foot_y(void) { return Y_FOOT + foot_less(); }
 static uint32_t foot_h(void) { return H_FOOT - foot_less(); }
@@ -634,6 +683,9 @@ static int page_visible(uint32_t i)
     const engine_t *e = ENGINES[TSEL->eng_req % NENGINES];
     const sheet_t *sh = sheet_of(PAGES[i].graph);
     uint32_t id = PAGES[i].id[0];
+#if FELUCCA_SNOW
+    if(PAGES[i].fam==FAM_GLO && (PAGES[i].graph==GR_DELAY || PAGES[i].graph==GR_REVERB || PAGES[i].graph==GR_CHORUS))return 0;
+#endif
     if (sh)
         return TSEL->eng_req % NENGINES == sh->eng;
     if (PAGES[i].graph == GR_LANES)
@@ -645,7 +697,7 @@ static int page_visible(uint32_t i)
     if (e->oneshot && (PAGES[i].fam == FAM_SCL || id == P_ATK || id == P_EG2_ATK || id == P_VOICE ||
                        id == P_ALLOC))
         return 0;
-    if (e->ownenv && (id == P_ATK || id == P_EG2_ATK))   /* ((Skiff phase 9) ENV 2: where ENV is; (2.0) MOD dims the
+    if (e->ownenv && !FELUCCA_SNOW && (id == P_ATK || id == P_EG2_ATK))   /* ((Skiff phase 9) ENV 2: where ENV is; (2.0) MOD dims the
                                                           * ENV's routes) */
         return 0;
 #if FELUCCA_SLICE
@@ -655,7 +707,7 @@ static int page_visible(uint32_t i)
     if (PAGES[i].graph == GR_SLICES)
         return 0;
 #endif
-    return !(PAGES[i].fam == FAM_EDIT && PAGES[i].id[0] >= P_FM1_ATK &&
+    return FELUCCA_SNOW || !(PAGES[i].fam == FAM_EDIT && PAGES[i].id[0] >= P_FM1_ATK &&
              PAGES[i].id[0] <= P_FM4_LEVEL) || (FELUCCA_FM4 && TSEL->eng_req % NENGINES == ENGI_DIGITAL);
 }
 
@@ -701,6 +753,11 @@ static void unit_g_boot(void)
         ui_set_rev = 2;
         settings_save();
     }
+#if FELUCCA_SNOW
+    /* Boot runs after session restore: an old autosave must not replace CH's 2BAR startup default. */
+    trk[5].p[P_REL] = SN_CH_RELEASE;
+    for(i=0;i<NTRK;i++)trk[i].p[P_SLEN]=64;     /* All six instruments start with a four-bar, 64-step sequence. */
+#endif
 }
 
 static uint32_t page_first(uint32_t fam)
@@ -711,6 +768,12 @@ static uint32_t page_first(uint32_t fam)
             return i;
     return 0;
 }
+#if FELUCCA_SNOW
+static int snow_random_first_page(const page_t *p)
+{
+    return (p->fam==FAM_EDIT||p->fam==FAM_LFO||p->fam==FAM_FX)&&p==&PAGES[page_first(p->fam)];
+}
+#endif
 /* (Skiff U3, N3, N5) a family's first page the track has; NPAGES: none */
 static uint32_t page_vis_first(uint32_t fam)
 {
@@ -1240,6 +1303,20 @@ static void open_family(uint32_t fam)
 static void open_global(void)
 {
     uint32_t i, last = ui.fam_last[FAM_GLO];
+#if FELUCCA_SNOW
+    /* The shared bus pages are hidden in Snow: each channel has its own FX.
+     * Both a tap and a remembered page must honour the same visibility rules
+     * as SELECT. Otherwise GLO opened controls disconnected from the sound. */
+    if (!ui.home && (cur_page()->fam == FAM_TRK || cur_page()->fam == FAM_GLO)) {
+        for (i = ui.page + 1u; i < NPAGES; i++)
+            if (PAGES[i].fam == FAM_GLO && page_visible(i)) break;
+        ui.page = (uint8_t)(i < NPAGES ? i : page_first(FAM_TRK));
+    } else {
+        ui.page = (uint8_t)(last && last < NPAGES && page_visible(last) &&
+                           (PAGES[last].fam == FAM_GLO || PAGES[last].fam == FAM_TRK) ?
+                           last : page_first(FAM_TRK));
+    }
+#else
     if (!ui.home && (cur_page()->fam == FAM_TRK || cur_page()->fam == FAM_GLO)) {
         for (i = ui.page + 1u; i < NPAGES && PAGES[i].fam != FAM_GLO; i++) {}
         ui.page = (uint8_t)(cur_page()->fam == FAM_TRK ? page_first(FAM_GLO) : i < NPAGES ? i : page_first(FAM_TRK));
@@ -1247,6 +1324,7 @@ static void open_global(void)
         ui.page = (uint8_t)(last && last < NPAGES && (PAGES[last].fam == FAM_GLO || PAGES[last].fam == FAM_TRK) ? last :
                             page_first(FAM_TRK));
     }
+#endif
     ui.fam_last[FAM_GLO] = ui.page;
     ui.home = 0;
     page_entered();
@@ -1342,7 +1420,7 @@ static int seq_is_empty(const track_t *t)
  * takes the copy too (UNDO_MOT: SAVE held puts the track's motion back, the sound and the steps stay; motion_undo_take).
  * A sound load keeps the track's motion on the parameters every engine has (load_end, motion.c motion_sound_loaded);
  * a pattern load drops it all (the steps it was on are gone) */
-enum { UNDO_SOUND = 1, UNDO_PAT = 2, UNDO_MOT = 4, UNDO_KIT = 8 };   /* (UNDO_KIT, Skiff phase 7: INIT on DRUM-X,
+enum { UNDO_SOUND = 1, UNDO_PAT = 2, UNDO_MOT = 4, UNDO_KIT = 8, UNDO_FX = 16 };   /* (UNDO_KIT, Skiff phase 7: INIT on DRUM-X,
                                                                      * the project's kit: sound_init) */
 typedef struct {
     uint8_t trk;                 /* track + 1, 0 = nothing to undo */
@@ -1367,11 +1445,22 @@ typedef struct {
  * are used. `undo` is the newest: loads in a row share it as before */
 #define UNDO_N 8u
 #define UNDO_WIN 180u                    /* the undo window, frames (~2.7 s): OCT- back, OCT+ redo (undo_step) */
+#if FELUCCA_SNOW
+/* Keep all eight undo entries. Two cold snapshots move to the data pool,
+ * making room for the oscillator's hot code in executable SRAM. */
+#define UNDO_FAST_N 6u
+static undo_t undo_fast[UNDO_FAST_N] __attribute__((section(".ramx")));
+static undo_t undo_pool[UNDO_N-UNDO_FAST_N] __attribute__((section(".pool")));
+static inline undo_t *undo_entry(uint32_t slot)
+{return slot<UNDO_FAST_N?&undo_fast[slot]:&undo_pool[slot-UNDO_FAST_N];}
+#else
 static undo_t undo_ring[UNDO_N] __attribute__((section(".ramx")));
+static inline undo_t *undo_entry(uint32_t slot){return &undo_ring[slot];}
+#endif
 static uint8_t undo_n, undo_top, undo_back;
 static const char *undo_label;   /* the next copy's name, set just before its load_begin (tl_undo_take,
                                   * motion_undo_take); 0: by what it changes */
-#define undo (undo_ring[undo_top])
+#define undo ((*undo_entry(undo_top)))
 /* (2.0) the copies numbered; pin: the copy a SET layer's first change took (SEQ TOOLS, REC: the track as the layer
  * opened, its OCT- puts that back: ui_tools.c tl_put_back; was a copy of its own, 1.1 KB of the pool), kept while the
  * ring turns (undo_push); pin_next: such a layer open, its first copy not taken yet */
@@ -1389,7 +1478,7 @@ static int32_t undo_find(uint32_t seq)
 {
     uint32_t a;
     for (a = undo_back; seq && a < undo_n; a++)
-        if (undo_ring[(undo_top + UNDO_N - a) % UNDO_N].seq == seq)
+        if ((*undo_entry((undo_top + UNDO_N - a) % UNDO_N)).seq == seq)
             return (int32_t)((undo_top + UNDO_N - a) % UNDO_N);
     return -1;
 }
@@ -1403,7 +1492,7 @@ static void undo_push(uint32_t what)                       /* a new copy: the ca
     if (undo_n < UNDO_N)
         undo_n++;
     else if (upin.pin && undo.seq == upin.pin)             /* ((2.0) the oldest is the put-back's: it takes the next */
-        undo_ring[(undo_top + 1u) % UNDO_N] = undo;        /* oldest's place, that one goes) */
+        (*undo_entry((undo_top + 1u) % UNDO_N)) = undo;        /* oldest's place, that one goes) */
     undo.seq = ++upin.seq ? upin.seq : ++upin.seq;         /* (1.., 0: none) */
     if (upin.pin_next) {
         upin.pin = undo.seq;
@@ -1615,9 +1704,31 @@ static int mom_keep(int lfo, int fx)
     mom.n = (uint8_t)k;
     return (int)i;
 }
+static void load_snapshot(track_t *t,uint32_t what)
+{
+    uint32_t i=trk_index(t);
+    undo_push(what);
+    undo.trk = (uint8_t)(i + 1u);
+    undo.what = (uint8_t)what;
+    undo.eng = t->eng_req;
+    undo.preset = t->preset;
+    undo.user = t->user;
+    for(uint32_t id=0;id<P_COUNT;id++)undo.p[id]=motion_base_value(t,id);
+    memcpy(undo.step, t->step, sizeof undo.step);
+    memcpy(undo.fm6, fm6_patch[i], FP_SIZE);
+    undo.fm6_slot = fm6_slot[i];
+    if (what & UNDO_KIT)
+        memcpy(undo.dx, dx_kit, sizeof undo.dx);
+    undo.pid = trk_pid[i];
+    motion_snapshot_track(t, &undo.motion_backup);
+    undo.keep=0;
+}
 static void load_begin(track_t *t, uint32_t what)
 {
     uint32_t i = trk_index(t);
+#if FELUCCA_SNOW
+    if(!undo_depth)stattic_gen_cancel(i);       /* A later explicit load replaces a queued generator. */
+#endif
     if (what & UNDO_SOUND) {
         mom_back(t);                              /* ((1.3) MOMENTARY: the sound as it was, then the load) */
         drum_mute[i] = 0;                         /* ((1.3) the lanes' mutes go with the sound) */
@@ -1634,20 +1745,7 @@ static void load_begin(track_t *t, uint32_t what)
         load_motion_hold(t, what);
         return;
     }
-    undo_push(what);
-    undo.trk = (uint8_t)(i + 1u);
-    undo.what = (uint8_t)what;
-    undo.eng = t->eng_req;
-    undo.preset = t->preset;
-    undo.user = t->user;
-    memcpy(undo.p, t->p, sizeof undo.p);
-    memcpy(undo.step, t->step, sizeof undo.step);
-    memcpy(undo.fm6, fm6_patch[i], FP_SIZE);
-    undo.fm6_slot = fm6_slot[i];
-    if (what & UNDO_KIT)
-        memcpy(undo.dx, dx_kit, sizeof undo.dx);
-    undo.pid = trk_pid[i];
-    motion_snapshot_track(t, &undo.motion_backup);
+    load_snapshot(t,what);
     load_motion_hold(t, what);
 }
 
@@ -1755,7 +1853,11 @@ static int undo_swap(undo_t *c)
         c->preset = pr;
         c->user = u;
         for (i = 0; i < P_COUNT; i++)
-            if (!param_kept(i)) {
+            if (!param_kept(i)
+#if FELUCCA_SNOW
+                || ((c->what & UNDO_FX) && ((i>=P_SLCR&&i<=P_SLDEPTH)||(i>=P_DKSRC&&i<=P_DKREL)))
+#endif
+                ) {
                 int16_t v = t->p[i];
                 t->p[i] = c->p[i];
                 c->p[i] = v;
@@ -1813,8 +1915,12 @@ static void undo_step(int redo)
     }
     if (redo)
         undo_back--;
-    c = &undo_ring[(undo_top + UNDO_N - undo_back) % UNDO_N];
-    if (!undo_swap(c)) {
+    c = &(*undo_entry((undo_top + UNDO_N - undo_back) % UNDO_N));
+    if (
+#if FELUCCA_SNOW
+        !(!redo && stattic_gen_undo(c->seq)) &&
+#endif
+        !undo_swap(c)) {
         if (redo)
             undo_back++;
         return;
@@ -1961,6 +2067,13 @@ static void preset_fill(int16_t *p, const engine_t *e, uint32_t pi)
             p[P_DIST + i] = (int16_t)(pr->fx[i] ? pr->fx[i] - 1 : FX_DEF[i]);
         for (i = 0; i < NELEM(pr->more) && pr->more[i].id; i++)   /* ((Skiff) its LFO, GLIDE, ..: core.h) */
             p[pr->more[i].id] = pr->more[i].v;
+#if FELUCCA_SNOW
+        if (e->render == snow_render) {
+            uint32_t role=0;
+            while(role<NTRK && e!=&SNOW_ENG[role])role++;
+            if(role<NTRK)snow_fill(p,role,pi);
+        }
+#endif
     }
 }
 /* preset pi of the engine the track asked for: the sound only (not the steps, not param_kept) */
@@ -2063,6 +2176,9 @@ static void track_defaults(track_t *t)
     uint32_t i;
     for (i = 0; i < P_E0; i++)
         t->p[i] = TP[i].def;
+#if FELUCCA_SNOW
+    t->p[SN_PLAY_MODE]=snow_role(t)==5u?0:1;
+#endif
     track_defaults_steps(t);
 }
 
@@ -2258,6 +2374,10 @@ static uint32_t preset_visible(uint32_t cur, uint32_t total, uint32_t row)
 static const param_desc_t *home_param(uint32_t k, int16_t **vp)
 {
     uint32_t id = ENGINES[TSEL->eng_req % NENGINES]->knob[k & 3u];
+#if FELUCCA_SNOW
+    static const uint8_t mix[]={P_LEVEL,P_PAN,SN_DJ_FILTER,SN_WIDTH};
+    if(snow_home_panel==SN_HOME_MIX)id=mix[k&3u];
+#endif
     *vp = &TSEL->p[id];
     return track_desc(TSEL, id);
 }

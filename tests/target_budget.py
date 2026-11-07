@@ -13,6 +13,7 @@ CPU check (regress.c) is the primary one; this one sees the target compiler's co
 import os
 import re
 import sys
+from pathlib import Path
 
 FUNCS = ["analog_render", "digital_render", "digital_render_legacy", "digital_render_custom", "phase_render", "lofi_render", "sample_render", "formant_render",
          "trio_render", "trio_pass", "wheel_render", "wheel_block",
@@ -51,6 +52,16 @@ FUNCS = ["analog_render", "digital_render", "digital_render_legacy", "digital_re
 # they are skipped; present, checked against these (their budget lines until the engine was retired in 1.0)
 OPTIONAL = {"digital_render": 12, "digital_render_legacy": 333, "digital_render_custom": 558,
             "uac_tap48": 504}           # (absent from a FELUCCA_UAC_48K=0 or FELUCCA_UAC=0 build)
+SNOW_FUNCS = ["snow_render", "snow_amp", "snow_fx_process", "snow_mix_begin", "snow_mix_sample", "snow_sync_inc",
+              "mix_part_body", "snow_cost_onsets", "stattic_gen_apply", "stattic_bar",
+              "snow_split_candidate", "snow_profile_serial"]
+# Absent in the reproduced rc3 fixed-role image: PHYS is stubbed there,
+# racks are per channel, and mono slicer_track is inlined into mix_part.
+# If one is linked in again it is still checked against its Skiff budget.
+SNOW_LINKED_OUT = {"px_modal_block", "px_modal_run", "px_memb_block", "px_string_excite",
+                   "px_string_run", "px_symp_run", "slicer_track", "rev_room", "rev_spring",
+                   "rev_hall", "rev_side_mix", "cho_mode"}
+FUNCS += SNOW_FUNCS
 TOL = 0.10                      # exact (no noise): small edits pass, a grown render loop does not
 DIV_W = 8                       # a divide weighs 1 + 8 instructions
 NEST = 4                        # an instruction in a loop inside a loop weighs 4, two deep 16, ...
@@ -112,23 +123,36 @@ def main():
         print(f"target: skip ({dis} missing: run ./build.sh)")
         return 0
     fns = functions(dis)
+    snow = "snow_render" in fns
     res = {n: cost(fns[n]) for n in FUNCS if fns.get(n)}
-    missing = [n for n in FUNCS if n not in res and n not in OPTIONAL]
+    missing = [n for n in FUNCS if n not in res and n not in OPTIONAL and
+               (snow or n not in SNOW_FUNCS) and not (snow and n in SNOW_LINKED_OUT)]
     base = {}
     if os.path.exists(budget):
         for line in open(budget):
             p = line.split()
             if len(p) >= 2 and not line.startswith("#"):
                 base[p[0]] = int(p[1])
+    profile = Path(__file__).with_name("stattic_target_budget.txt")
+    use_profile = snow and Path(budget).resolve() == Path(__file__).with_name("target_budget.txt").resolve()
+    overrides = {}
+    if use_profile:
+        for line in profile.read_text().splitlines():
+            p = line.split()
+            if len(p) >= 2 and not line.startswith("#"):
+                overrides[p[0]] = int(p[1])
+        base.update(overrides)
+        print("target: STATTIC profile (rc3 reference); all other Skiff budgets retained")
     if os.environ.get("BUDGET_UPDATE"):
-        with open(budget, "w") as f:
+        destination = profile if use_profile else budget
+        with open(destination, "w") as f:
             f.write("# FELUCCA target cost budget (tests/target_budget.py): instructions in the loops of each\n"
                     f"# function in build/felucca.dis, x{NEST} per nesting level, divides x{1 + DIV_W}. The check allows "
                     f"+{TOL * 100:.0f} %.\n# Rewritten by BUDGET_UPDATE=1.\n")
             for n, r in res.items():
-                if n not in OPTIONAL:
+                if n not in OPTIONAL and (not use_profile or n in overrides):
                     f.write(f"{n} {r['cost']}\n")
-        print(f"target: budget {budget} rewritten ({len(res)} functions)")
+        print(f"target: budget {destination} rewritten")
     fail = 0
     for n in missing:
         print(f"target: FAIL {n} not found in {dis} (renamed? inlined? update FUNCS)")
@@ -138,7 +162,8 @@ def main():
         state = "no budget (BUDGET_UPDATE=1 adds it)" if b is None else "ok"
         if b is not None and not os.environ.get("BUDGET_UPDATE"):
             if r["cost"] > b * (1 + TOL):
-                state = f"OVER BUDGET (+{(r['cost'] / b - 1) * 100:.0f} %, limit +{TOL * 100:.0f} %)"
+                state = (f"OVER BUDGET (+{(r['cost'] / b - 1) * 100:.0f} %, limit +{TOL * 100:.0f} %)"
+                         if b else "OVER BUDGET (new loop work; baseline has none)")
                 fail += 1
             elif r["cost"] < b * (1 - TOL):
                 state = f"note: {(r['cost'] / b - 1) * 100:.0f} % (BUDGET_UPDATE=1 to keep it)"

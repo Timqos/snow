@@ -60,12 +60,15 @@ static uint32_t div_samples(uint32_t div);         /* (fx.c) */
 static __attribute__((noinline)) uint32_t lfo_sync_inc(const track_t *t)   /* (not inlined: its divides stay out of
                                                                            * the audio ISR's loop over the tracks) */
 {
-    uint32_t c = LSYNC_DIV[(uint32_t)t->p[P_LSYNC] % NELEM(LSYNC_DIV)], s = (uint32_t)t->p[P_SDIV] % 10u, cyc, q, r;
+    uint32_t c = LSYNC_DIV[(uint32_t)t->p[P_LSYNC] % NELEM(LSYNC_DIV)], s = (uint32_t)t->p[P_SDIV] % 10u, cyc;
     cyc = DIV_48[c] % DIV_48[s] ? div_samples(c) : DIV_48[c] / DIV_48[s] * div_samples(s);
     cyc = cyc ? cyc : 1u;
-    q = 0xFFFFFFFFu / cyc;
-    r = 0xFFFFFFFFu % cyc;
+#if FELUCCA_SNOW
+    return snow_sync_inc(t,0u,cyc);
+#else
+    uint32_t q = 0xFFFFFFFFu / cyc, r = 0xFFFFFFFFu % cyc;
     return q * CTL + (r * CTL + CTL) / cyc;
+#endif
 }
 static uint32_t lfo_inc(const track_t *t) { return t->p[P_LSYNC] ? lfo_sync_inc(t) : LFO_INC[t->p[P_LRATE] & 127]; }
 
@@ -497,6 +500,13 @@ static void trk_note_off(track_t *t, uint32_t note)
     t->xp_n = (uint8_t)k;
     (void)mo_note(t, note, 0, 0);                      /* ((2.2) NOTES OUT: its note-off, if it went out) */
     mono_remove(t, note);                              /* a mode change must not retain a released key */
+#if FELUCCA_SNOW
+    if(t->engine>=ENGI_SNOW && !t->p[SN_MODE]) {
+        for(i=0;i<NVOICE;i++)if(t->v[i].note==note)t->v[i].gate=0;
+        if(t->mono_note==note)t->mono_note=0;
+        return;
+    }
+#endif
     if (mode != V_POLY) {
         uint32_t nv = mode == V_UNISON ? trk_nvoice(t) : 1u;
         if (t->mono_note == note) {
@@ -589,6 +599,11 @@ static void engine_block(track_t *t)
  * 2.5 %). Value 0 (and a time below a block) takes the tables' 0. OFF: the tables' values, as before (looked up once a
  * block here instead of once a voice in env_tick: the same numbers) */
 static uint32_t beat_samples(void);                /* (fx.c) */
+#if FELUCCA_SNOW
+/* Only synchronized envelopes need arithmetic. Keep per-track coefficients
+ * across blocks, including restoration into a newly loaded track's state. */
+static struct { uint32_t quarter,k[3];int16_t a,d,r,sync;uint8_t valid; } stattic_env_cache[NTRK];
+#endif
 _Static_assert(CTL == 32, "esync_one: 4.6 CTL in Q16 is 9646899");
 static uint32_t esync_one(uint32_t quarter, int32_t v, uint32_t i)
 {
@@ -610,16 +625,42 @@ static __attribute__((noinline)) void esync_coef(track_t *t)   /* (not inlined: 
                                                                     * audio ISR's loop over the voices) */
 {
     const int16_t *p = t->p;
+#if FELUCCA_SNOW
+    uint32_t ck=(uint32_t)(t-trk),quarter=0;int32_t decay=p[P_DEC];
+    if(p[P_ESYNC]||snow_role(t)==5u){
+        quarter=beat_samples();if(snow_role(t)==5u&&p[P_ESYNC])decay=clamp(p[P_DEC]+snow_param(t,3)-64,0,127);
+        if(stattic_env_cache[ck].valid&&stattic_env_cache[ck].quarter==quarter&&
+           stattic_env_cache[ck].a==p[P_ATK]&&stattic_env_cache[ck].d==decay&&
+           stattic_env_cache[ck].r==p[P_REL]&&stattic_env_cache[ck].sync==p[P_ESYNC]){
+            memcpy(t->esync_k,stattic_env_cache[ck].k,sizeof t->esync_k);return;
+        }
+    }
+#endif
     if (p[P_ESYNC]) {
         uint32_t q = beat_samples();
         t->esync_k[0] = esync_one(q, p[P_ATK], 0);
         t->esync_k[1] = esync_one(q, p[P_DEC], 1);
+#if FELUCCA_SNOW
+        if(snow_role(t)==5u)t->esync_k[1]=esync_one(q,clamp(p[P_DEC]+snow_param(t,3)-64,0,127),1);
+#endif
         t->esync_k[2] = esync_one(q, p[P_REL], 2);
     } else {                                            /* OFF: the tables, as always */
         t->esync_k[0] = ENV_LIN[p[P_ATK] & 127];
         t->esync_k[1] = ENV_EXP[p[P_DEC] & 127];
         t->esync_k[2] = ENV_EXP[p[P_REL] & 127];
+#if FELUCCA_SNOW
+        /* CH release is always a tempo value; attack/decay keep their ms
+         * controls unless ENV SYNC is explicitly enabled. */
+        if(snow_role(t)==5u)t->esync_k[2]=esync_one(beat_samples(),p[P_REL],2);
+#endif
     }
+#if FELUCCA_SNOW
+    if(quarter){
+        stattic_env_cache[ck].quarter=quarter;stattic_env_cache[ck].a=p[P_ATK];stattic_env_cache[ck].d=(int16_t)decay;
+        stattic_env_cache[ck].r=p[P_REL];stattic_env_cache[ck].sync=p[P_ESYNC];stattic_env_cache[ck].valid=1;
+        memcpy(stattic_env_cache[ck].k,t->esync_k,sizeof t->esync_k);
+    }
+#endif
 }
 
 static int32_t env_tick(track_t *t, voice_t *v)
@@ -816,6 +857,9 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
             if (e->amp)                                 /* the engine's own amplitude curve */
                 env = e->amp(t, v, env);
             m.envq15 = e->ownenv ? 0 : env;
+#if FELUCCA_SNOW
+            if (t->engine >= ENGI_SNOW) m.envq15 = clamp(v->s[0] >> 9, 0, 32767);
+#endif
             m.amp1 = e->ownenv ? env : mulq15(env, v->vel * 258);
             if (p[P_LD_AMP])
                 m.amp1 = mulq15(m.amp1, 32767 - mulq15(p[P_LPOL] ? lfo : (lfo + 32768) >> 1, p[P_LD_AMP] * 258));

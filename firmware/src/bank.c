@@ -243,6 +243,9 @@ static int bk_pack_raw(uint8_t *r, uint32_t k, const step_t *st, const int16_t *
             continue;
         uint32_t id = np == P_COUNT || MOTION_ID(e) < P_E0 ? MOTION_ID(e) : MOTION_ID(e) - PROJ_ESHIFT;
         m[0] = (uint8_t)((e->place & 63u) | (id >> 7) << 6);   /* ((1.3) the id's bit 7: BK_VER2) */
+#if FELUCCA_SNOW
+        if(e->generated)m[0]|=128u;
+#endif
         m[1] = (uint8_t)((id & 127u) | (e->lock ? MOTION_LOCK : 0u));
         if (id > 127u)
             r[0] = BK_VER2;
@@ -447,6 +450,9 @@ static int pat_decode(const track_t *t, uint32_t id, step_t *st, int16_t *v, mot
         ms->event[i].place = (uint16_t)(tk << 6 | (m[0] & 63u));
         ms->event[i].id = (uint8_t)((m[1] & 127u) | (m[0] & 64u) << 1);   /* ((1.3) bit 7: BK_VER2's; 0 before) */
         ms->event[i].lock = m[1] >> 7;
+#if FELUCCA_SNOW
+        ms->event[i].generated=(m[0]>>7)&1u;
+#endif
         ms->event[i].value = (int8_t)val;
         out |= val < -64 || val > 127;
     }
@@ -667,6 +673,9 @@ static uint32_t ms_put(motion_store_t *ms, const track_t *t, uint32_t step, uint
     ms->event[i].place = (uint16_t)place;
     ms->event[i].id = (uint8_t)id;
     ms->event[i].lock = 0;
+#if FELUCCA_SNOW
+    ms->event[i].generated=0;
+#endif
     ms->event[i].value = (int8_t)param_fit(d, v);
     if (i == ms->count)
         ms->count++;
@@ -1111,7 +1120,7 @@ static uint32_t list_sig(uint32_t k)
  * empty entry (song_poll: a rest), (#28) any on a REST: silence, no automation, the track's own LEN DIV SWING GATE DIR,
  * so the rest's REPS count passes of the length the track has; on no pattern (trk_pid 0), so nothing is kept unless it
  * was recorded into */
-static int stage_entry(uint32_t k, uint32_t e, uint32_t m, uint32_t adv, uint32_t reps)
+static int stage_entry_copy(uint32_t k, uint32_t e, uint32_t m, uint32_t adv, uint32_t reps, int arm)
 {
     track_t *t = &trk[k];
     launch_t *q = &launch_q[k];
@@ -1153,9 +1162,13 @@ static int stage_entry(uint32_t k, uint32_t e, uint32_t m, uint32_t adv, uint32_
     q->same = (uint8_t)same;
     q_lsig[k] = list_sig(k);
     RING_PUBLISH();
-    q->armed = 1;
+    q->armed = (uint8_t)arm;
     bk.gen++;
     return full ? 2 : 0;
+}
+static int stage_entry(uint32_t k, uint32_t e, uint32_t m, uint32_t adv, uint32_t reps)
+{
+    return stage_entry_copy(k,e,m,adv,reps,1);
 }
 /* (2.0, #44) a LOOP launch of entry e for track k, playing: on a chain's part before its last, it waits for the chain's
  * end as for a pattern's (song_poll stages it on the last part), one of the user's staged before dropped, the chain's

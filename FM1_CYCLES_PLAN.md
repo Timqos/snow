@@ -1,32 +1,30 @@
-# FM-1 Cycles — project brief
+# Snow / FM-1 — current brief
 
-A sample-free, six-track FM groovebox for M-VAVE FM-1, using the open-source Skiff codebase as a starting point.
+Latest user clarification after Snow 0.2: keep its deep synthesis controls,
+but **fix channel identities and factory libraries** to KICK, SNARE, HAT,
+PERC, BASS, CHORD. Ten presets of its own instrument per channel, 60 total.
+Do not switch a channel's role/library to another instrument. Manual waveform,
+algorithm, envelope and modulation edits remain free to radically transform
+the sound; the role does not restrict these approved controls.
 
-## Fixed tracks
-KICK / SNARE / HAT / PERC / BASS / CHORD. Each needs rich, editable FM synthesis (pages of four parameters), and two independently assignable LFOs.
+Provide genuinely independent per-channel delay, reverb, chorus and their
+settings/state/tails, plus Tape and Bitcrush with dedicated controls. Keep
+existing synth, filters, drives, inserts, two LFOs, locks and live RAM reload.
 
-## Essential workflow
-- 16–64-step patterns, per-track lengths, full step parameter locks.
-- Control All: adjust compatible sound macros across six tracks simultaneously; allow excluding tracks. Do not destroy recorded parameter locks.
-- Temporary Save / Reload for instantaneous return to a performance snapshot while playback continues; separate from permanent project saves.
-- Probability, ratchet, microtiming, swing, mute/solo.
-- Project/bank/pattern management via SAVE, borrowing the *interaction principles* of Tessera.
-- Crisp pixel-styled high-contrast interface inspired by Digitakt/Digitone, mapped to four hardware knobs.
+Holding SEQ opens a visible pattern grid. K1–K4 independently select their
+channels' patterns; a second page covers channels 5–6. Eight visible slots,
+quantized launching, and clear current/queued states. Tessera is a workflow
+reference; don't copy its generators or sequencer implementation.
 
-## Per-track effects
-Independent filter, drive, chorus, delay, reverb and other appropriate effects with their own track settings, bypass and wet/dry. Do not silently substitute shared-send-only effects. Benchmark real hardware limits: six simultaneous independent reverbs may not be feasible.
+Generate varied rhythms/melodies **for the instrument and selected style**:
+IDM, electronica, breakbeat, drum & bass, deep house, ambient and other styles.
+Use seed, density, syncopation, complexity, variation, accents, humanization,
+scale and contour. Support both one channel and a coordinated ensemble.
+Preserve locks and independent pattern editing.
 
-## Quality requirements
-Sound quality and underrun-free playback first. No sample playback, no unnecessary generative MIDI engines. Benchmark CPU and memory. Browser emulator tests are useful but cannot establish hardware audio reliability. Preserve applicable upstream GPL/license notices.
+Develop in a branch/PR, build a genuine .fwsc in the cloud, test real C via
+WASM and publish on GitHub Pages. No tools required on the user's Mac and
+no hardware flashing. Retain upstream licenses. Physical FM-1 testing is
+required before claiming hardware stability.
 
-## No-local-install development workflow
-GitHub source + cloud CI build using pinned, verified JieLi SDK/toolchain + browser emulator on GitHub Pages. Do not require Docker or other toolchains on the user's Mac.
-
-## Milestone 1 (before changing synthesis)
-1. Audit Skiff audio/voice code, six-track sequencer, parameter locks, web emulator, and build dependencies.
-2. Establish a reproducible cloud build of **unchanged** firmware yielding .fwsc, or report specific blocking dependencies.
-3. Run existing tests and create a browser preview.
-4. Work in a separate development branch/PR. Do not flash the hardware.
-5. Propose implementation phases and resource budgets for the six new engines and effects.
-
-No first firmware is considered ready until build and emulator checks pass; physical FM-1 testing is required before calling it stable.
+Current implementation and limits: [docs/SNOW_PREVIEW.md](docs/SNOW_PREVIEW.md).

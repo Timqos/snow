@@ -20,7 +20,14 @@ extern uint32_t _pool_start[], _pool_end[], _rt_start[], _rt_end[], _rt_load[], 
 void fm1_timer5_irq(void)
 {
     static uint32_t sub, owed;
-    uint32_t t0 = fm1_ticks(), usb_due = sub % 5u == 0u;
+    uint32_t t0 = fm1_ticks();
+#if FELUCCA_SNOW
+    /* sub is confined to 0..9 below. Bits 0/5 retain the exact 2 kHz USB
+     * schedule without a hardware remainder operation at every 10 kHz IRQ. */
+    uint32_t usb_due = (0x21u >> sub) & 1u;
+#else
+    uint32_t usb_due = sub % 5u == 0u;
+#endif
     fm1_timer5_ack();
     mo.now = t0;
     felucca_dbg.timer_irqs++;
@@ -41,7 +48,11 @@ void fm1_timer5_irq(void)
     if (usb_due)
         owed |= 1u;                             /* 2 kHz: all USB SIE traffic lives here */
 #if FELUCCA_UART
+#if FELUCCA_SNOW
+    if ((0x84u >> sub) & 1u)                     /* phases 2/7: same UART cadence */
+#else
     if (sub % 5u == 2u)
+#endif
         owed |= 2u;                             /* 2 kHz: <= ~7 bytes per call at 31250 baud */
 #endif
     if (++sub == 10u)
@@ -87,7 +98,7 @@ static void fm1_fault(const fm1_crash_t *c)
     fm1_audio_stop();
     scr_wake_now();                                   /* (MENU > SCREEN OFF: the panel on first) */
     lcd_fill(0, 0, 240, 240, UI_CRASH_BG);            /* fixed, outside the palettes */
-    draw_text_line(0, 8, 240, &AF_M, "SKIFF CRASH", UI_CRASH_INK, UI_CRASH_BG, 1);
+    draw_text_line(0, 8, 240, &AF_M, FELUCCA_SNOW ? "STATTIC CRASH" : "SKIFF CRASH", UI_CRASH_INK, UI_CRASH_BG, 1);
     hexs(b, c->vec);
     draw_text_line(10, 40, 220, &AF_M, b, UI_CRASH_INK, UI_CRASH_BG, 0);
     hexs(b, c->pc);
@@ -119,6 +130,9 @@ static void felucca_init(void)
         apply_preset_to(t, TRK_DEF[i][1]);    /* with its sends */
         t->engine = t->eng_req;
         track_defaults_steps(t);              /* (a sound load never touches them) */
+#if FELUCCA_SNOW
+        if (i == 5u) t->p[P_CHRD] = 3;       /* Snow: a major triad from one key; CHORD page changes it */
+#endif
     }
     lists_clear();                            /* (Skiff phase 5) no lists, no patterns on the tracks */
     undo_depth--;
@@ -166,6 +180,9 @@ static void fm1_main(void)
 #endif
     if (settings_init())                                /* a new unit: the SKIFF palette, and BPM LOCK on (DESIGN.md */
         ui_prefs |= PREF_BPM_LOCK;                      /* rule 3: the tempo with GLO held, #58) */
+#if FELUCCA_SNOW
+    snow_cpu_boot_defaults();                          /* before second-core startup, not after audio */
+#endif
     usb_serial_apply();                                 /* (#67: the saved USB SERIAL before usb_start) */
     lcd_init();
     draw_splash();                                      /* ui_draw.c (1.1.5) */
@@ -174,6 +191,9 @@ static void fm1_main(void)
         felucca_dbg.magic = DBG_MAGIC;
     }
     felucca_dbg.boots++;
+#if FELUCCA_SNOW
+    snow_late_base=felucca_dbg.late;
+#endif
     felucca_dbg.max_us = 0;
     felucca_dbg.in_audio = 0;                       /* .noinit: a reset inside the audio ISR left it set, and
                                                        TIMER5 would treat every tick as nested (no USB poll) */
@@ -252,7 +272,16 @@ static void fm1_main(void)
     unit_g_adopt = ui_set_rev < 2u;           /* (Skiff U3, R8) the first boot: the session's CLOCK MIDI IN TUNE .. */
     autosave_boot(boot_clean);                /* (1.2) the last session's music, under the splash */
     unit_g_boot();                            /* .. become the unit's; later the unit's are put back over it (ui.c) */
+#if FELUCCA_SNOW
+    snow_cpu_save_defaults();                /* persist once; later user choices and fault fallback remain respected */
+#endif
+#if FELUCCA_SNOW
+    for (ms = 0; ms < SNOW_BOOT_MS; ms += 10u) {
+        snow_splash_frame(ms);              /* bounded 20 fps; audio IRQ never draws */
+        fm1_wdt_feed();
+#else
     for (ms = 0; ms < 400u; ms += 10u) {      /* the splash; the pot followed (MIDI IN plays under it) */
+#endif
         fm1_delay_ms(10);
         master_poll();
     }

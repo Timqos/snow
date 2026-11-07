@@ -19,19 +19,28 @@
 #define MI_SERIAL_NAME
 #define MI_SERIAL_TAB
 #endif
+#if FELUCCA_SNOW
+#define MI_DIAG_IDS MI_APEAK, MI_ALAST, MI_CHSYNTH, MI_CHPOST, MI_C1WAIT, MI_AIRQ,
+#define MI_DIAG_NAMES "AUDIO PEAK", "AUDIO LAST", "CH SYNTH", "CH FX/MIX", "CORE1 WAIT", "AUDIO IRQ",
+#define MI_DIAG_TABS MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM,
+#else
+#define MI_DIAG_IDS
+#define MI_DIAG_NAMES
+#define MI_DIAG_TABS
+#endif
 #if BOARD_SMK37
 /* (SMK-37 Pro, SMK37_UX.md) KEY VELOCITY in CONTROL (question 8); no LEDS row (button LEDs A: on or off only): MI_LEDS
  * past MI_COUNT, so its setting stays and no tab shows it */
 enum { MI_COLOR, MI_PHEAD, MI_LARGE, MI_ANIM, MI_SCROFF, MI_HINTS, MI_HOLD, MI_ACCEL, MI_BPMLOCK, MI_SCLLED, MI_PREVIEW,
        MI_RETURN, MI_KVEL, MI_LOWCUT, MI_USB, MI_CLICK, MI_CLKLVL, MI_COUNTIN, MI_TUNE, MI_CLOCK, MI_CLKOUT, MI_ROUTE,
        MI_AUTOCH, MI_TCH1, MI_TCH2, MI_TCH3, MI_TCH4, MI_TCH5, MI_TCH6, MI_NOTES, MI_CCOUT, MI_THRU, MI_REMOTE, MI_LEARN,
-       MI_LCLEAR, MI_SERIAL_IN MI_RESTORE, MI_CPU, MI_CLK, MI_PANEL, MI_RESET, MI_ABOUT, MI_COUNT, MI_LEDS MI_SERIAL_OUT };
+       MI_LCLEAR, MI_SERIAL_IN MI_RESTORE, MI_CPU, MI_CLK, MI_DIAG_IDS MI_PANEL, MI_RESET, MI_ABOUT, MI_COUNT, MI_LEDS MI_SERIAL_OUT };
 static const char *const KVEL_N[SMK_KV_N] = {"DYNAMIC", "SOFT", "HARD", "FIXED 64", "FIXED 100", "FIXED 127"};
 #else
 enum { MI_COLOR, MI_PHEAD, MI_LARGE, MI_ANIM, MI_LEDS, MI_SCROFF, MI_HINTS, MI_HOLD, MI_ACCEL, MI_BPMLOCK, MI_SCLLED,
        MI_PREVIEW, MI_RETURN, MI_LOWCUT, MI_USB, MI_CLICK, MI_CLKLVL, MI_COUNTIN, MI_TUNE, MI_CLOCK, MI_CLKOUT, MI_ROUTE,
        MI_AUTOCH, MI_TCH1, MI_TCH2, MI_TCH3, MI_TCH4, MI_TCH5, MI_TCH6, MI_NOTES, MI_CCOUT, MI_THRU, MI_REMOTE, MI_LEARN,
-       MI_LCLEAR, MI_SERIAL_IN MI_RESTORE, MI_CPU, MI_CLK, MI_PANEL, MI_RESET, MI_ABOUT, MI_COUNT MI_SERIAL_OUT };
+       MI_LCLEAR, MI_SERIAL_IN MI_RESTORE, MI_CPU, MI_CLK, MI_DIAG_IDS MI_PANEL, MI_RESET, MI_ABOUT, MI_COUNT MI_SERIAL_OUT };
 #endif   /* ((Skiff U4, A3) HINTS; RESET SETTINGS, a row with no value: its dialog) */   /* ((Skiff U3, R8, R2) CLOCK, MIDI IN, TUNE: the unit's, GLOBAL's and SYSTEM's before; CPU: read) */   /* (1.1: the metronome's rows in
                                                                                              * AUDIO; 1.2: RESTORE LAST in SYSTEM, SCALE LEDS
                                                                                              * in CONTROL) */
@@ -49,7 +58,7 @@ static const char *const MI_NAME[MI_COUNT] = {"THEME", "PLAYHEAD", "LARGE", "ANI
                                               "CLOCK", "CLOCK OUT", "MIDI IN", "AUTO CHANNEL",
                                               "T1 CHANNEL", "T2 CHANNEL", "T3 CHANNEL", "T4 CHANNEL", "T5 CHANNEL", "T6 CHANNEL",
                                               "NOTES OUT", "CC OUT", "THRU", "REMOTE", "MIDI LEARN", "LEARN CLEAR",
-                                              MI_SERIAL_NAME "RESTORE LAST", "CPU", "CPU CLOCK", "CALIBRATION", "RESET SETTINGS",
+                                              MI_SERIAL_NAME "RESTORE LAST", "CPU", "CPU CLOCK", MI_DIAG_NAMES "CALIBRATION", "RESET SETTINGS",
                                               "ABOUT"};
 /* 1.0.5: the MENU's tabs (ui_menu.c: ALGORITHM steps between them, PRESETS among one tab's rows; the editor gets a
  * row's tab after its MENU_DESC reply). A tab's rows follow each other in MI order (tests/ui_test.c checks it); the
@@ -57,7 +66,11 @@ static const char *const MI_NAME[MI_COUNT] = {"THEME", "PLAYHEAD", "LARGE", "ANI
  * row joins a tab here, a new tab is appended (its index is what the editor is told) */
 enum { MTAB_DISPLAY, MTAB_CONTROL, MTAB_AUDIO, MTAB_SYSTEM, MTAB_MIDI, MTAB_COUNT };   /* ((Skiff 1.3) MIDI, appended: its
                                                          * rows sit before SYSTEM's in MI order, as value rows must) */
+#if FELUCCA_SNOW
+#define MTAB_ROWS 3u
+#else
 #define MTAB_ROWS 6u
+#endif
 static const char *const MTAB_NAME[MTAB_COUNT] = {"DISPLAY", "CONTROL", "AUDIO", "SYSTEM", "MIDI"};
 static const uint8_t MI_TAB[MI_COUNT] = {
     MTAB_DISPLAY, MTAB_DISPLAY, MTAB_DISPLAY, MTAB_DISPLAY,                 /* COLOR (Skiff #27) PLAYHEAD LARGE ANIM */
@@ -86,7 +99,7 @@ static const uint8_t MI_TAB[MI_COUNT] = {
     MTAB_MIDI, MTAB_MIDI,                                                   /* (1.3) MIDI LEARN, LEARN CLEAR */
     MI_SERIAL_TAB MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM,                    /* USB SERIAL, RESTORE LAST, (Skiff U3) CPU,
                                                                              * (Skiff) CPU CLOCK (SYSTEM's seven scroll) */
-    MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM,                                  /* CALIBRATION, (U4) RESET SETTINGS, ABOUT */
+    MI_DIAG_TABS MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM,                     /* CALIBRATION, (U4) RESET SETTINGS, ABOUT */
 };
 typedef char mtab_fits_ui[sizeof ui.menu_row >= MTAB_COUNT ? 1 : -1];   /* (ui.c: the row last picked per tab) */
 static uint32_t mtab_first(uint32_t t)                 /* a tab's first row */
@@ -169,8 +182,17 @@ static const menu_flag_t *menu_flag(uint32_t row)
 }
 
 /* a row's value as 0..menu_n(row) - 1 in the order the menu steps it (LEDS: OFF DIM LO DIM HI INV, LEDS_MENU) */
+#if FELUCCA_SNOW
+/* Also used by the USB editor's descriptor loop. Keep the extended SYSTEM
+ * dispatch out of that loop and the timer ISR's inlined protocol handler. */
+static __attribute__((noinline)) uint32_t menu_n(uint32_t row)
+#else
 static uint32_t menu_n(uint32_t row)
+#endif
 {
+#if FELUCCA_SNOW
+    if(row>=MI_APEAK&&row<=MI_AIRQ)return 1u; /* read-only timing snapshots */
+#endif
     return row == MI_COLOR ? NPALETTES + (uint32_t)cpal_stored() :   /* ((Skiff #27) CUSTOM, while stored) */
            row == MI_LOWCUT || row == MI_RETURN || (row >= MI_CLICK && row <= MI_COUNTIN) ? 3u :
            row == MI_HOLD ? 4u : row == MI_LEDS ? LEDS_COUNT : row == MI_SCROFF ? NELEM(SCROFF_N) :
@@ -261,8 +283,21 @@ static const char *menu_vname(uint32_t row, uint32_t v)
     case MI_HINTS: return v & 1u ? "OFF" : "ON";
     case MI_PREVIEW: return v & 1u ? "ON" : "OFF";
     case MI_RETURN: return RET_N[v % 3u];
+#if FELUCCA_SNOW
+    case MI_APEAK: case MI_ALAST: case MI_CHSYNTH: case MI_CHPOST: case MI_C1WAIT: case MI_AIRQ:
+#endif
     case MI_TUNE: case MI_CPU: {                       /* "+12 CT"; the audio's share of each half-buffer ("14 %") */
         static char b[20] __attribute__((section(".pool")));
+#if FELUCCA_SNOW
+        if(row>=MI_APEAK&&row<=MI_AIRQ){
+            uint32_t ticks=row==MI_APEAK?snow_profile_max_ticks:row==MI_ALAST?snow_profile_event.total:row==MI_CHSYNTH?snow_profile_event.ch_synth:
+                row==MI_CHPOST?snow_profile_event.ch_post:row==MI_C1WAIT?snow_profile_event.wait:snow_profile_event.irq;
+            uint32_t period=(HALF_FRAMES*1000000u/FS)*FM1_TICKS_PER_US;
+            uint32_t value=row<=MI_ALAST?(ticks/period)*100u+(ticks%period)*100u/period:ticks/FM1_TICKS_PER_US;
+            fmt_int(b,(int32_t)(value>999999u?999999u:value));
+            str_cpy(b+str_len(b),row<=MI_ALAST?" %":" US",sizeof b-str_len(b));return b;
+        }
+#endif
         int32_t c = row == MI_TUNE ? (int32_t)v - 50 : (int32_t)(song.cpu_q8 * 100u / 256u);
         b[0] = row == MI_TUNE && c > 0 ? '+' : 0;
         b[1] = 0;
@@ -279,8 +314,17 @@ static const char *menu_vname(uint32_t row, uint32_t v)
             str_cpy(b + str_len(b), " ", sizeof b - str_len(b));
         }
 #endif
+#if FELUCCA_SNOW
+        if(row==MI_CPU&&c>999)c=999;
+#endif
         fmt_int(b + str_len(b), c);
         str_cpy(b + str_len(b), row == MI_TUNE ? " CT" : " %", sizeof b - str_len(b));
+#if FELUCCA_SNOW
+        if(row==MI_CPU){
+            str_cpy(b+str_len(b)," L",sizeof b-str_len(b));
+            fmt_int(b+str_len(b),(int32_t)(snow_late_count()>999u?999u:snow_late_count()));
+        }
+#endif
         return b;
     }
     case MI_CLK: {                                     /* ((Skiff) "320 MHZ"; set another way than this power-on runs, as
@@ -391,7 +435,10 @@ static void settings_reset(void)
     menu_put(MI_PREVIEW, 0);
     menu_put(MI_RETURN, RET_BAR);
 #if FELUCCA_CPU2
-    menu_put(MI_CPU, 0);                               /* ((Skiff 1.3) 1 CORE) */
+#if FELUCCA_SNOW
+    CPU2_BYTE |= SN_CPU_DEFAULT_APPLIED;
+#endif
+    menu_put(MI_CPU, FELUCCA_SNOW ? 1u : 0u);           /* Snow: 2 CORES; upstream Skiff: 1 CORE */
 #endif
     menu_put(MI_CLK, 0);                               /* ((Skiff) 360 MHZ) */
     settings_save();

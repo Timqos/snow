@@ -383,6 +383,9 @@ static int up_store(uint32_t k, const char *name)
     up_set_name(&r, k, name);
     for (i = 0; i < P_COUNT; i++)
         v[i] = (int16_t)motion_base_value(TSEL, i);
+#if FELUCCA_SNOW
+    for (i = 0; i < 4u; i++) v[P_E0+i] = (int16_t)clamp(v[P_E0+i]+snow_offset[song.sel][i], 0, 127);
+#endif
     up_set_sound(&r, v);                                /* ((2.0) version 6) */
     if (r.engine == ENGI_FM6 && TSEL->p[P_E7] == FM6_OWN && name && name[0]) {   /* (FM6 LAB) its own patch takes a
                                                          * typed name (its first 10: .syx keeps it); a factory patch
@@ -456,6 +459,9 @@ static int up_load(uint32_t k)
 #endif
     {
         fm1_irq_off();                                  /* the audio ISR must not see half a sound */
+#if FELUCCA_SNOW
+        memset(snow_offset[song.sel], 0, sizeof snow_offset[song.sel]);
+#endif
         t->eng_req = r->engine;
         for (i = 0; i < P_COUNT; i++)
             if (!param_kept(i))

@@ -33,6 +33,10 @@ static void motion_unguard(uint32_t f)
 }
 static int motion_param(uint32_t id)
 {
+#if FELUCCA_SNOW
+    if(id==SN_PLAY_MODE)return 0; /* input interpretation is never a sound lock */
+    if((id>=SN_G_DENS&&id<=SN_G_LIVE)||id==SN_G_BASE||(id>=SN_G_STYLE&&id<=SN_G_VARIANT)||(id>=SN_G_SEED_B&&id<=SN_G_SCOPE))return 0;
+#endif
     /* Sound only: transport, routing, voice allocation and discrete engine
      * changes never become automation. FX sends and continuous mix are safe. */
     return id < P_COUNT && (id <= P_REL || (id >= P_ED_FLT && id <= P_LD_AMP) ||
@@ -186,6 +190,9 @@ static int motion_put(track_t *t, uint32_t step, uint32_t id, int16_t value, uin
     motion.event[i].place = (uint16_t)(k << 6 | step);
     motion.event[i].id = (uint8_t)id;
     motion.event[i].lock = kind != 0u;
+#if FELUCCA_SNOW
+    motion.event[i].generated = 0; /* a manual edit takes ownership of this event */
+#endif
     motion.event[i].value = (int8_t)value;                   /* (-64..127: checked above) */
     RING_PUBLISH();
     if (i == motion.count) motion.count++;
@@ -227,6 +234,9 @@ static uint32_t motion_clear_locks(track_t *t, uint32_t step)
 static int motion_capture(track_t *t, uint32_t id, int16_t value)
 {
     uint32_t k = trk_index(t), idx, len, period, f;
+#if FELUCCA_SNOW
+    snow_touch(t,id,value);
+#endif
     if (!motion_param(id)) return 0;
     if (!rec_on(t) || t != TSEL) {
         /* A live edit becomes a new base, even when an earlier motion value is

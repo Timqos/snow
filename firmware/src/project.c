@@ -604,7 +604,8 @@ static int proj_engines_ok(const project_t *q)
 {
     uint32_t t;
     for (t = 0; t < NTRK; t++)
-        if (q->t[t].engine >= NENGINES || (!FELUCCA_LEGACY && !FELUCCA_FM4 && q->t[t].engine == ENGI_DIGITAL))
+        if (q->t[t].engine >= NENGINES || (FELUCCA_SNOW && !eng_allowed(t, q->t[t].engine)) ||
+            (!FELUCCA_LEGACY && !FELUCCA_FM4 && q->t[t].engine == ENGI_DIGITAL))
             return 0;
     return 1;
 }
@@ -1342,6 +1343,10 @@ static void project_capture(project_t *p)
 #endif
     for (i = 0; i < NTRK; i++) {
         for (uint32_t j = 0; j < P_COUNT; j++) p->t[i].p[j] = motion_base_value(&trk[i], j);
+#if FELUCCA_SNOW
+        for (uint32_t j = 0; j < 4u; j++)
+            p->t[i].p[P_E0+j] = (int16_t)clamp(p->t[i].p[P_E0+j]+snow_offset[i][j], 0, 127);
+#endif
         p->t[i].engine = trk[i].eng_req;
         p->t[i].preset = trk[i].preset;
         p->t[i].user = (uint8_t)(user_of(&trk[i]) < UP_SLOTS ? user_of(&trk[i]) + 1u : 0u);   /* ((2.0, #20)) */
@@ -1490,6 +1495,10 @@ static int project_restore_runtime(const project_t *input)
     fm1_irq_off();                                      /* the audio ISR must not see half a project */
     seq_stop();
     launch_drop();                                      /* (Skiff) the bank's staged patterns: not over it (launch.c) */
+#if FELUCCA_SNOW
+    memset(snow_offset, 0, sizeof snow_offset);
+    snow_saved.valid = 0;
+#endif
     transport_req = 0;
 #if FELUCCA_LEGACY
     motion = p->motion;
@@ -1758,6 +1767,9 @@ static uint32_t autosave_sig(void)
         const track_t *t = &trk[i];
         for (j = 0; j < P_COUNT; j++) {
             int16_t v = motion_base_value(t, j);
+#if FELUCCA_SNOW
+            if (j >= P_E0 && j < P_E0+4u) v = (int16_t)clamp(v+snow_offset[i][j-P_E0], 0, 127);
+#endif
             h = as_mix(h, &v, sizeof v);
         }
         h = as_mix(h, &t->eng_req, 1);
@@ -1872,6 +1884,10 @@ static int project_erase(uint32_t slot)
 static void project_new(void)
 {
     uint32_t i, k;
+#if FELUCCA_SNOW
+    memset(snow_offset, 0, sizeof snow_offset);
+    snow_saved.valid = 0;
+#endif
     mom_back(0);                                  /* ((1.3) MOMENTARY: as project_load) */
     memset(drum_mute, 0, sizeof drum_mute);
     transport_stop_now();

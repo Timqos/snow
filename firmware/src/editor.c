@@ -558,7 +558,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
             0x58, 1, ED_SONG2};                         /* (2.0) the song's LIST2, NEW, COPY+, CHAIN, ONCE, the pool's
                                                          * EMPTY, CLEAR UNUSED (editor_song.c; last: an editor before
                                                          * reads up to 49 01 only) */
-        ed_str("FELUCCA " FELUCCA_VERSION, 24);
+        ed_str(FELUCCA_SNOW ? "STATTIC " FELUCCA_VERSION : "FELUCCA " FELUCCA_VERSION, 32);
         ed_b(NENGINES);
         ed_b(P_COUNT > 127u ? 127u : P_COUNT);            /* ((1.3) more: INFO 49 01) */
         ed_b(G_COUNT);

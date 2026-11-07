@@ -39,7 +39,11 @@
 #endif
 _Static_assert(NTRK <= 8 && NPART < NVOICE, "a track mask is a uint8_t; each part protects one voice (voice.c)");
 #define NSTEP 64
+#if FELUCCA_SNOW
+#define HALF_FRAMES 256          /* 5.8 ms, as SLOOP: more deadline headroom for six independent racks. */
+#else
 #define HALF_FRAMES 128          /* I2S half buffer: 2.9 ms at 44.1 kHz (a key waits 0..1 half, then plays 1 half later) */
+#endif
 #define DAC_TICKS 544u           /* TIMER4 ticks per I2S frame (24 MHz / 44,117.6 Hz): (2.2) MIDI OUT's times (usb.c mo) */
 #ifndef AUDIO_RAM
 #define AUDIO_RAM                /* (Skiff) audio code run from RAM on the unit (felucca.c); host builds: nothing */
@@ -58,10 +62,15 @@ _Static_assert(NTRK <= 8 && NPART < NVOICE, "a track mask is a uint8_t; each par
                                   * sounds (fm4_convert.c), settings PER1..PER3, 1.0's FM6 bank. Only the converter
                                   * (web/conv) and its tests build them; 2.0 keeps such a record's bytes (OLD FORMAT) */
 #endif
-#define NENGINES 15u             /* (Skiff) DRUM-X (14) after SLICE (13): the other engines keep their numbers */
+/* Snow: appended machine IDs preserve every upstream stored engine number. */
+#ifndef FELUCCA_SNOW
+#define FELUCCA_SNOW 0
+#endif
+#define ENGI_SNOW 15u
+#define NENGINES (15u + (FELUCCA_SNOW ? 6u : 0u))
 #define ENGI_DIGITAL 1u          /* reserved without FELUCCA_FM4: never selectable (eng_ok), its sounds load as FM6 */
 #define ENGI_SLICE 13u           /* reserved without FELUCCA_SLICE, as DIGITAL is without FELUCCA_FM4 */
-#define NENG_SHOWN (NENGINES - !FELUCCA_FM4 - !FELUCCA_SLICE)   /* the engines one can pick: PRESETS, the EDIT layer,
+#define NENG_SHOWN (FELUCCA_SNOW ? 6u : NENGINES - !FELUCCA_FM4 - !FELUCCA_SLICE)   /* the engines one can pick: PRESETS, the EDIT layer,
                                                 * the editor, in the display order of engines.c ENGINE_ORDER */
 #define UP_SLOTS 32u             /* user presets (upreset.c) */
 #define NELEM(a) (sizeof(a) / sizeof((a)[0]))
@@ -123,6 +132,15 @@ enum {                          /* per-track parameters */
                                                 * lpan_render): stored ids 135..142, after the engine values' (sid_p) */
     P_FOLLOW, P_FMODE, P_FNOTE,                /* (2.1) chord follow (follow.c): the track whose chords it follows, how,
                                                 * by which of their notes; stored ids 143..145 */
+#if FELUCCA_SNOW
+    SN_DTIME, SN_DSYNC, SN_DFB, SN_DCOLOR, SN_DWIDTH,
+    SN_RTYPE, SN_RSIZE, SN_RDAMP, SN_RPRE,
+    SN_CRATE, SN_CDEPTH, SN_CFB,
+    SN_TMIX, SN_TDRIVE, SN_TTONE, SN_TWOW, SN_TFLUT,
+    SN_BMIX, SN_BBITS, SN_BRATE, SN_BTONE,
+    SN_G_STYLE, SN_G_COMPLEX, SN_G_HUMAN, SN_G_ROTATE, SN_G_VARIANT,
+    SN_FX_BYPASS,
+#endif
     P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7,
     P_COUNT
 };
@@ -237,7 +255,7 @@ static uint32_t gsid_get(int16_t *g, const uint8_t *b, uint32_t max)
 #define ENGI_PHYS 9u
 #define ENGI_DRUM 10u
 #define ENGI_DRUMX 14u           /* (Skiff) DRUM-X (eng_drumx.c): a drum track as DRUM's (seq.c drum_track) */
-#define NHEAVY 4u                /* (Skiff phase 6) the tracks that play every engine; the ones after them are light: no
+#define NHEAVY (FELUCCA_SNOW ? 0u : 4u) /* Snow uses no PHYS/GRAIN state; release that RAM for snapshots and FX.
                                   * PHYS, no GRAIN (engines.c eng_allowed: their state is the big one) */
 _Static_assert(NTRK >= NHEAVY, "the light tracks come after the four");
 /* PHYS MODEL DRUM (MODEL 4, before 1.0) -> the DRUM engine, its E values in place: {MODEL, TUNE, TONE, DECY,
@@ -285,7 +303,7 @@ typedef struct {
     int32_t gstep;               /* glide TIME mode: 1/16 st per control tick, 0 = RATE mode */
     int32_t fine;                /* unison detune: phase increment * (1 + fine / 4096) */
     uint32_t ph[3];
-    int32_t s[8];                /* engine state (filters, envs) */
+    int32_t s[FELUCCA_SNOW ? 10 : 8]; /* Snow: separate pitch and FM envelopes */
     uint32_t age;
     uint8_t mvel;                /* mod.c: the note-on velocity (before UNISON scaling) and RAND of the note */
     uint8_t side;                /* (1.3) SPREAD: 0 the left of PAN, 1 the right (voice.c voice_start, fx.c mix_spread) */
@@ -408,9 +426,17 @@ static void nudge_unpack(step_t *s, const uint8_t *b, uint32_t n)
 }
 /* Skiff: a step's trig condition (seq.c step_cond_ok): FILL / !FILL while GLO + F4 is held (or not), A:B on pass A of
  * every B of its track's loop (take.c take_pass). Saved in bit 7 of the step's note bytes (project.c) */
-enum { TC_NONE, TC_FILL, TC_NFILL, TC_1_2, TC_2_2, TC_1_3, TC_2_3, TC_3_3, TC_1_4, TC_2_4, TC_3_4, TC_4_4, TC_COUNT };
+enum { TC_NONE, TC_FILL, TC_NFILL, TC_1_2, TC_2_2, TC_1_3, TC_2_3, TC_3_3, TC_1_4, TC_2_4, TC_3_4, TC_4_4,
+#if FELUCCA_SNOW
+       TC_ORNAMENT,
+#endif
+       TC_COUNT };
 static const char *const TC_NAME[TC_COUNT] = {"--", "FILL", "!FILL", "1:2", "2:2", "1:3", "2:3", "3:3", "1:4", "2:4",
-                                              "3:4", "4:4"};
+                                       "3:4", "4:4"
+#if FELUCCA_SNOW
+                                       ,"ORN 2B"
+#endif
+};
 typedef struct {                 /* a step as formats 1..4 (projects to FUN4) stored it: no hits */
     uint8_t note[4];
     uint8_t n, time, flags, vel;
@@ -445,7 +471,7 @@ static void step_set_rflam(step_t *s, uint32_t v)
  * step byte (bank.c BK_VER2). The record stays 4 bytes: every copy (launch, undo, the tools) the size it was */
 #define MOTION_LOCK 0x80u                       /* (the stored id byte's lock bit; motion_put's kind) */
 #define MOTION_ID(e) ((uint32_t)(e)->id)
-typedef struct { uint16_t place : 9, lock : 1, : 6; uint8_t id; int8_t value; } motion_event_t;
+typedef struct { uint16_t place : 9, lock : 1, generated : 1, : 5; uint8_t id; int8_t value; } motion_event_t;
 typedef struct { uint8_t count, on, rsv[2]; motion_event_t event[MOTION_MAX]; } motion_store_t;
 _Static_assert(sizeof(motion_store_t) == 260u, "motion: a record is 4 bytes");
 #define CHAIN_ROWS 16u
