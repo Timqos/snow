@@ -62,7 +62,13 @@ Completed validation:
 - SHA-256: `a0f5b1711fba5b818e02933e411a3b00b140422b507da0710a22596e7d3e2232`.
 - Previous package rc7 is retained; source PR #3 remains unmerged.
 
-Publication and normal-URL hash verification remain pending.
+Published: https://timqos.github.io/snow/snow/?v=080rc8
+
+- gh-pages: `641e8d6`; successful Pages run: `42375287696`.
+- All 12 normal artifact URLs and the root landing match local hashes; WASM
+  MIME is correct. Verified 2026-11-07 15:05:29 Europe/Kyiv.
+- GitHub source CI is running independently; the complete local STATTIC
+  release pipeline and exact-binary audit have passed.
 
 No physical FM-1 is connected here. Host/static checks cannot prove the
 remaining rasp fixed, nor quantify the unit's peak CPU saving.
