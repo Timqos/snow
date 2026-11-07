@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# STATTIC 0.8.0-rc6 — installation and rollback audit
+# STATTIC 0.8.0-rc7 — installation and rollback audit
 
-The current candidate is **STATTIC 0.8.0-rc6** (formerly Snow). See
+The current candidate is **STATTIC 0.8.0-rc7** (formerly Snow). See
 [the current revision](STATTIC_RELEASE.md) for interface/sound changes and
 physical qualification limits. The current published package's machine-readable
 `update-audit.json` supplies its exact hash and update/rollback evidence.
@@ -56,8 +56,8 @@ and the published Skiff 2.2 package, SHA-256
 - No Snow-specific changes to voltage control, clock switching or GPIO register
   programming were introduced. The same build-time RAM/ROM/HAL guards pass.
 
-Current rc6 region sizes, remaining reserves and exact package verification
-are recorded in [the release work log](STATTIC_RC6_WORK.md). The builder
+Current rc7 region sizes, remaining reserves and exact package verification
+are recorded in [the release work log](STATTIC_RC7_WORK.md). The builder
 enforces at least 4096 bytes of application-slot reserve and 8192 bytes of
 pool reserve. Two of the eight Undo entries move into the data pool, allowing
 the oscillator loop to execute in SRAM; Undo depth stays eight. These are
@@ -65,8 +65,8 @@ static budgets, not measurements of physical stack or CPU headroom.
 
 The published [build metadata](https://timqos.github.io/snow/snow/build.json)
 and [binary audit](https://timqos.github.io/snow/snow/update-audit.json) identify
-the current version, source commit and package SHA-256. The rc6 audit must use
-the exact rc6 binary and test previous rc5 in both directions. Hardware,
+the current version, source commit and package SHA-256. The rc7 audit must use
+the exact rc7 binary and test previous rc6 in both directions. Hardware,
 flash-map, loader, protocol and bootstrap-head behavior remain unchanged
 from the rc4 audit.
 
@@ -74,9 +74,9 @@ from the rc4 audit.
 
 | Path | Software evidence | Physical result |
 | --- | --- | --- |
-| Skiff 2.2 → STATTIC 0.8.0-rc6 | Real packages; OTA staging and C loader tests | Pending |
-| STATTIC 0.8.0-rc6 → Skiff 2.2 | Real packages; C loader, preserved boot head, interrupted-write/resume and unchanged-sector checks | Pending |
-| STATTIC 0.8.0-rc5 ↔ 0.8.0-rc6 | Real packages in both directions; version compatibility checks | Pending |
+| Skiff 2.2 → STATTIC 0.8.0-rc7 | Real packages; OTA staging and C loader tests | Pending |
+| STATTIC 0.8.0-rc7 → Skiff 2.2 | Real packages; C loader, preserved boot head, interrupted-write/resume and unchanged-sector checks | Pending |
+| STATTIC 0.8.0-rc6 ↔ 0.8.0-rc7 | Real packages in both directions; version compatibility checks | Pending |
 | Factory V15/V16 → STATTIC | Real vendor package bootstrap heads used by the C loader tests; head remains intact | Pending |
 | STATTIC → factory V15/V16 | Real vendor package validation/staging and matching-head checks passed | Vendor loader execution on a unit is pending |
 | Saved STATTIC data → Skiff → STATTIC | Released WASM builds boot, respond to PLAY and render finite audio with persisted flash | Music-format compatibility is not asserted |

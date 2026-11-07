@@ -8,7 +8,7 @@ Built on Skiff 2.2 and Felucca. Previously named Snow.
 · [Install STATTIC](https://timqos.github.io/snow/snow/install/)
 · [Factory firmware](https://timqos.github.io/snow/snow/install/factory.html)
 
-The 0.8.0-rc6 candidate retains five HOME pages: sound, generation,
+The 0.8.0-rc7 candidate retains five HOME pages: sound, generation,
 channel mixing, six-channel P1–P3 patterns, and MUTE/SOLO with volume.
 SELECT browses pages; the lower captions identify the physical controls.
 All six channels start at 64 steps. Four-bar generation varies bars 2 and 4;
@@ -23,10 +23,12 @@ On HOME 2/5, K1–K4 generate phrases/locks, sounds, LFOs and effects.
 On HOME 4/5, K1–K4 plus ALGORITHM and PRESETS select six independent patterns.
 Bass and chord phrases use held/tied notes, harmonic movement and
 instrument-specific articulation. Manual synthesis, algorithms, parameter
-ranges and polyphony remain. Two cores are enabled by default, with the
+ranges remain. Two cores are enabled by default, with the
 existing fault fallback and audio deadline protection. Hardware scheduling
-uses measured track costs and a 256-frame buffer. CH uses its existing eight
-voice slots for overlapping release tails, within the unchanged shared budget.
+uses measured track costs and a 256-frame buffer. CH has a strict four-voice limit including
+release tails. Triads and four-note chords remain available; new notes replace
+old tails when all four slots are occupied. Other channel caps and the shared
+8/12-voice budget remain unchanged.
 The oscillator loop executes in fast RAM and the split anticipates new voices
 before their first rendered block. Common sine/triangle waveforms now avoid
 repeated helper dispatch, and synchronized LFO increments are reused until

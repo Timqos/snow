@@ -240,7 +240,7 @@ static void snow_fill(int16_t *p,uint32_t role,uint32_t preset)
  {"MIX",0,0,127,0,F_PCT,0},{"FEEDBACK",0,0,127,0,F_PCT,0}, \
  {"CUTOFF",0,0,127,110,F_CUTOFF,0},{"DRIVE",0,0,127,0,F_PCT,0}}, \
  .presets=SNOW_PATCHES[role],.npresets=10,.knob={P_E0,P_E1,P_E2,P_E3}, \
- .poly=(role==5?NVOICE:4),.ownenv=1,.keep=0xe0,.note_on=snow_note_on,.render=snow_render, \
+ .poly=(role==5?SN_CH_VOICES:4),.ownenv=1,.keep=0xe0,.note_on=snow_note_on,.render=snow_render, \
  .amp=snow_amp,.done=snow_done,.block=snow_block }
 static const engine_t SNOW_ENG[NTRK]={SNOW_MACHINE(0,"KICK"),SNOW_MACHINE(1,"SNARE"),SNOW_MACHINE(2,"HAT"),SNOW_MACHINE(3,"PERC"),SNOW_MACHINE(4,"BASS"),SNOW_MACHINE(5,"CHORD")};
 #undef SNOW_MACHINE

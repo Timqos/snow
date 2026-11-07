@@ -1,4 +1,8 @@
-# STATTIC 0.8.0-rc6 — simulator and manual
+# STATTIC 0.8.0-rc7 — simulator and manual
+
+CH now has a strict four-voice total, including release tails, in NOTES and
+CHORDS. New notes replace old voices at the limit; old tails can end before
+2BAR. Other channels and the shared 8/12-voice budget remain unchanged.
 
 The firmware previously named Snow is now STATTIC. The repository and
 historical URLs retain `snow` so existing links and backups keep working.

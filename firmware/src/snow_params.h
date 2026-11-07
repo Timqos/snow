@@ -4,6 +4,7 @@
  * one-key chords of existing Snow projects; one plays individual notes. */
 #define SN_PLAY_MODE P_ED_FX
 #define SN_CH_RELEASE 113 /* ESYNC index 22: two bars */
+#define SN_CH_VOICES 4u   /* CH total, including held notes and release tails. */
 #define ST_PATTERNS 3u    /* STATTIC: three visible/performance patterns per channel */
 /* Retired lane DECAY slots were zero in Snow: old projects stay neutral. */
 #define SN_DJ_FILTER P_LDECAY5

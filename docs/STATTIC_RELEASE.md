@@ -1,8 +1,23 @@
-# STATTIC 0.8.0-rc6
+# STATTIC 0.8.0-rc7
 
 Experimental FM-1 candidate, previously named Snow. The five user HOME
 mockups in `assets/stattic-home/` and the confirmed control captions are
 the interface reference. See [the recorded agreement](STATTIC_WORK_PLAN.md).
+
+## Changes in rc7
+
+The user explicitly requests fewer CH voices, so three notes plus three
+release tails must not make six active CH voices. Set CH's engine cap to
+four, counting held, released and fading voices, in NOTES/CHORDS and manual
+UNISON. Triads and four-note chords remain available. At capacity, existing
+allocation reuses an old slot rather than adding a hidden release voice;
+old tails may end before their selected 2BAR duration. The underlying array,
+other five channel caps and global 8/12 voice budget remain unchanged.
+
+This lowers the maximum CH voice-rendering work. Rack/effect work still runs
+as configured; a physical FM-1 test is required to assess the reported attack
+noise. The interface, fonts, presets, generation, gains, effects and release
+parameter values are unchanged. The manual now explains the tail tradeoff.
 
 ## Changes in rc6
 
@@ -84,12 +99,11 @@ SYSTEM → CPU also shows L: actual DMA deadline misses since boot, capped at 99
 Exact reciprocal arithmetic replaces hot per-sample /127 operations; sample
 products, full-range int32 cases and immutable factory/FX PCM hashes are checked.
 
-CH's old four-voice cap was separately reproduced cutting old release notes
-when a new four-note chord arrives. It now uses all eight already allocated
-CH slots. No new voice storage or shared-budget increase: 8 voices on one core,
-12 on two cores as before. A real sequencer/mixer test retains four old released
-notes alongside the next four-note chord. More simultaneous held/released notes
-can still exhaust a finite shared budget; deadline guards are retained.
+rc4–rc6 used eight existing CH slots to preserve overlapping releases. In rc7,
+the user chooses a hard maximum of four active CH voices to reduce load,
+including tails. A new triad cannot grow the working set to six voices.
+Incoming notes reuse old slots at capacity. The global budget remains eight
+on one core / twelve on two; the other channel caps and overload guards stay.
 
 Research links:
 - https://github.com/isod89/sloop-fm1
@@ -196,9 +210,10 @@ can engage the existing protective limiter. With USB LEVEL FIXED, MASTER acts
 *after* the limiter, so reducing physical MASTER cannot by itself rule out
 internal limiting. Default levels with 20% pre-master do not engage the limiter
 in that stress test; the four held CH voices remain intact in every case.
-No automatic bass filtering, gain reduction, voice reduction or effect removal
-is used to mask the report. Further common-wave/LFO work reduction needs an
-FM-1 retest, observing whether L stops increasing at the audible click.
+The user now authorizes a strict CH-only four-voice cap to reduce load. Gains,
+filters, effects and synthesis parameters retain their existing behavior.
+Retest CH attacks with BS/KK and observe L; the physical noise is not yet
+confirmed resolved.
 
 Native/WASM tests cover actual playback, parameter-lock ownership, finite
 stereo output, physical encoder/key routing, and a one-minute six-channel
@@ -214,22 +229,22 @@ pattern persistence and browser-save compatibility remain in the suite.
 
 ## Current verification
 
-The rc6 build passed the existing target budgets, complete STATTIC
+The rc7 build must pass the existing target budgets, complete STATTIC
 native/WASM/audio suite, layout sweep at default/minimum/maximum values,
 eight-entry Undo and onset-prediction contracts, and ASan/UBSan checks.
-Desktop/mobile browser checks and a fresh 28-check exact-package update/rollback
-audit passed, retaining previous rc5. Broader upstream UI checks retain all 3,458
+Desktop/mobile browser checks and a fresh exact-package update/rollback
+audit are required before publication, retaining previous rc6. Broader upstream UI checks retain all 3,458
 golden pictures with zero layout/alignment findings.
 The exact package, source commit and update/rollback results are recorded in
 [the published build](https://timqos.github.io/snow/snow/build.json) and
 [the binary audit](https://timqos.github.io/snow/snow/update-audit.json).
 Final region sizes and release verification are recorded in
-[the work log](STATTIC_RC6_WORK.md). Physical audio deadlines require FM-1
+[the work log](STATTIC_RC7_WORK.md). Physical audio deadlines require FM-1
 qualification; desktop or browser timing is not a substitute.
 
 The target regression gate retains all unaffected Skiff limits and the
 byte-reproduced rc3 reference for existing STATTIC paths. Oscillator SRAM
 placement adds no per-sample divisions. The 8/12 shared voice budget,
 256-frame hardware halves, 32-sample control blocks and all synthesis/effect
-parameters remain unchanged from rc5. Installation/loader code is unchanged
+parameters remain unchanged from rc6, except the requested CH-only voice cap. Installation/loader code is unchanged
 from rc4; every new binary still requires its own update/rollback audit.

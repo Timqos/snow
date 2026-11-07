@@ -103,7 +103,7 @@ static void queued_generators(void)
     seq_start();events_block(1);assert(!snow_home_generate(2));launch_drop();assert(!stattic_gen[0].armed);
     puts("HOME 2: unchanged immediate-generator results/seeds, all four knobs enter together at BAR at 90..180 BPM, live mix preserved, batch undo/redo, queued cancellation, six-track locks, STOP and project drop passed");
 }
-static void overlapping_chords(void)
+static void bounded_chords(void)
 {
     c1h_off=1;seq_stop();launch_drop();memset(&motion,0,sizeof motion);panic_req=63;events_block(CTL);
     for(uint32_t k=0;k<NTRK;k++){memset(trk[k].step,0,sizeof trk[k].step);trk[k].p[SN_G_LIVE]=0;}
@@ -113,15 +113,20 @@ static void overlapping_chords(void)
     for(uint32_t j=0;j<2;j++){step_t *s=&t->step[j*8];s->time=ST_NOTE;s->n=4;s->vel=100;memcpy(s->note,chords[j],4);}
     events_block(CTL);song.g[G_BPM]=120;song.g[G_SWING]=0;song.g[G_CLOCK]=0;seq_start();
     int32_t out[CTL*2];uint64_t energy=0;
-    for(uint32_t n=0;n<FS*11u/10u;n+=CTL){mix_block(out,CTL);for(uint32_t i=0;i<CTL*2;i++)energy+=(uint64_t)llabs(out[i]);}
+    for(uint32_t n=0;n<FS*11u/10u;n+=CTL){
+        mix_block(out,CTL);uint32_t count=0;
+        for(uint32_t i=0;i<NVOICE;i++)count+=t->v[i].active!=0;
+        assert(count<=4u);
+        for(uint32_t i=0;i<CTL*2;i++)energy+=(uint64_t)llabs(out[i]);
+    }
     uint32_t active=0,old=0;
     for(uint32_t i=0;i<NVOICE;i++)if(t->v[i].active){
         active++;
         for(uint32_t j=0;j<4;j++)if(t->v[i].note==chords[0][j]){assert(!t->v[i].gate&&t->v[i].s[0]>4096);old++;}
     }
-    assert(SNOW_ENG[5].poly==NVOICE&&active==8&&old==4&&energy>1000000);
+    assert(SNOW_ENG[5].poly==4u&&active==4u&&!old&&energy>1000000);
     assert(t->p[P_REL]==SN_CH_RELEASE&&NVOICE==8);
-    puts("CH sequence: all four old released notes remain audible/active alongside the next four-note chord, using existing eight slots; shared voice budget unchanged");
+    puts("CH sequence: strict four active voices including release tails; the incoming four-note chord replaces the old tails; shared voice budget unchanged");
 }
 static void onset_prediction(void)
 {
@@ -149,5 +154,5 @@ static void eight_undo_entries(void)
 int main(void)
 {
     setvbuf(stdout,0,_IOLBF,0);c1h_off=1;web_nor_erase();web_boot();advance(SNOW_BOOT_MS+200);
-    exact_math();onset_prediction();queued_generators();overlapping_chords();eight_undo_entries();puts("STATTIC REPAIR CONTRACTS PASSED; physical FM-1 deadline validation remains required");return 0;
+    exact_math();onset_prediction();queued_generators();bounded_chords();eight_undo_entries();puts("STATTIC REPAIR CONTRACTS PASSED; physical FM-1 deadline validation remains required");return 0;
 }

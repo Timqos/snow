@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "build/snow-preview"
-RELEASE = "0.8.0-rc6"
+RELEASE = "0.8.0-rc7"
 VERSION = f"v{RELEASE}-stattic"
 
 
@@ -38,6 +38,8 @@ def main():
     run(str(ROOT / "build/stattic_transport_test"))
     run("cc", "-O1", "-w", "-pthread", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/stattic_repair_test", "tests/stattic_repair_test.c", "-lm")
     run(str(ROOT / "build/stattic_repair_test"))
+    run("cc", "-O1", "-w", "-pthread", "-Ibuild/gen", "-Ifirmware/src", "-o", "build/stattic_polyphony_test", "tests/stattic_polyphony_test.c", "-lm")
+    run(str(ROOT / "build/stattic_polyphony_test"))
     for name in ("stattic_type_test", "stattic_pair_audio_test", "stattic_onset_test"):
         run("cc", "-O1", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", f"build/{name}", f"tests/{name}.c", "-lm")
         run(str(ROOT / f"build/{name}"))
