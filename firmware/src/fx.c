@@ -765,21 +765,57 @@ static void events_block(uint32_t n);                    /* seq.c */
  * only core 0 writes wait. Keep the latest missed half, or the busiest half
  * while no miss exists. A separate maximum never loses the worst duration. */
 typedef struct { uint32_t total,ch_synth,ch_post,wait,irq; } snow_profile_t;
+/* Separate, versioned detail keeps the original five-word console layout.
+ * A track has one writer, serial/core masks have only the primary writer.
+ * Reset before dispatch and publish only after every worker has joined. */
+typedef struct {
+    uint32_t track[NPART],serial,primary,worker,worker_tracks,primary_tracks,irq_q8;
+} snow_profile_detail_t;
 static snow_profile_t snow_profile_now;
+static snow_profile_detail_t snow_profile_detail_now;
 static volatile snow_profile_t snow_profile_event; /* foreground SYSTEM reads the ISR's completed snapshot */
+static volatile snow_profile_detail_t snow_profile_detail_event;
 static volatile uint32_t snow_profile_max_ticks;
 static uint8_t snow_profile_had_late;
 static uint32_t snow_ch_block_ticks;
+static uint32_t snow_primary_irq_q8; /* extra wall ticks per 256 primary work ticks */
+static uint32_t snow_serial_mark;
+#ifndef SNOW_MIX_TICKS
+#define SNOW_MIX_TICKS() 0u
+#define SNOW_MIX_HAND 40u
+#endif
+static __attribute__((noinline)) void snow_profile_serial(uint32_t include)
+{
+    uint32_t now=SNOW_MIX_TICKS();
+    if(include)snow_profile_detail_now.serial+=now-snow_serial_mark;
+    snow_serial_mark=now;
+}
 static __attribute__((noinline)) void snow_profile_begin(void)
-{snow_profile_now=(snow_profile_t){0};}
+{
+    snow_profile_now=(snow_profile_t){0};
+    snow_profile_detail_now=(snow_profile_detail_t){0};
+    snow_profile_detail_now.irq_q8=snow_primary_irq_q8;
+}
 static __attribute__((noinline)) void snow_profile_finish(uint32_t total,uint32_t irq,uint32_t late)
 {
     if(total>snow_profile_max_ticks)snow_profile_max_ticks=total;
     if(late||(!snow_profile_had_late&&total>snow_profile_event.total)){
         snow_profile_now.total=total;snow_profile_now.irq=irq;
         snow_profile_event=snow_profile_now;
+        snow_profile_detail_event=snow_profile_detail_now;
     }
     if(late)snow_profile_had_late=1;
+    /* The timer preempts core 0 only. Learn its duty cycle once per half;
+     * estimates below exclude those interruptions, so charge them once to
+     * the primary side of a split. Bound the predictor, never alter clocks.
+     * Scaling long/invalid intervals also keeps the numerator in uint32. */
+    if(total){
+        uint32_t shift=total>0xffffffu?8u:0u;
+        uint32_t interrupted=irq>>shift,work=irq<total?(total-irq)>>shift:0u;
+        uint32_t q=work&&interrupted<work?interrupted*256u/work:256u;
+        if(q>=snow_primary_irq_q8)snow_primary_irq_q8=q;
+        else snow_primary_irq_q8-=(snow_primary_irq_q8-q+7u)/8u;
+    }
 }
 #endif
 #if FELUCCA_CPU2
@@ -793,6 +829,9 @@ static uint16_t part_cost[NPART];                       /* the last block's, per
 #ifndef SNOW_MIX_TICKS
 #define SNOW_MIX_TICKS() 0u
 #define SNOW_MIX_HAND 40u
+#endif
+#ifndef SNOW_MIX_IRQ_TICKS
+#define SNOW_MIX_IRQ_TICKS() 0u
 #endif
 static uint16_t snow_peak_voice[NPART];
 static uint8_t snow_rendered_voices[NPART];
@@ -1293,6 +1332,7 @@ static __attribute__((noinline)) void mix_part(track_t *t,uint32_t n SM_DECL)
 {
 #if FELUCCA_CPU2
     uint32_t before=SNOW_MIX_TICKS();
+    uint32_t primary=sm==&mx[0],irq_before=primary?SNOW_MIX_IRQ_TICKS():0u;
     uint32_t k=(uint32_t)(t-trk),old=part_cost[k];
     uint32_t active=0;
     for(uint32_t v=0;v<NVOICE;v++)active+=t->v[v].active!=0;
@@ -1300,8 +1340,12 @@ static __attribute__((noinline)) void mix_part(track_t *t,uint32_t n SM_DECL)
 #endif
     mix_part_body(t,n SM_ARG(sm));
 #if FELUCCA_CPU2
-    uint32_t ticks=SNOW_MIX_TICKS()-before;
-    if(k==5u)snow_profile_now.ch_post+=ticks-snow_ch_block_ticks;
+    uint32_t interrupted=primary?SNOW_MIX_IRQ_TICKS()-irq_before:0u;
+    uint32_t wall=SNOW_MIX_TICKS()-before,ticks=wall>interrupted?wall-interrupted:0u;
+    snow_profile_detail_now.track[k]+=wall;
+    if(primary)snow_profile_detail_now.primary+=ticks;
+    else snow_profile_detail_now.worker+=ticks;
+    if(k==5u)snow_profile_now.ch_post+=wall-snow_ch_block_ticks;
     if(ticks){
         if(ticks>65535u)ticks=65535u;
         part_cost[k]=(uint16_t)(ticks>old?ticks:(old*7u+ticks+4u)/8u);
@@ -1342,32 +1386,54 @@ static void c1_parts(uint32_t arg)                      /* arg: the tracks (bit 
             mix_part(&trk[i], n, sm);
 }
 
-/* which tracks go to the second core: the split of the last block's costs that leaves the busier core the least; none
- * when that saves less than handing them over costs (C1_HAND) */
+/* Which tracks go to the worker. STATTIC estimates render work separately
+ * from TIMER5, which preempts only the primary core. The objective is the
+ * predicted wall-time critical path, including primary IRQ duty and handoff. */
 #if FELUCCA_SNOW
 #define C1_HAND SNOW_MIX_HAND
 #else
 #define C1_HAND 40u
+#endif
+#if FELUCCA_SNOW
+static struct {uint32_t all,lo,best,primary;} snow_split_search;
+/* Keep the new objective out of the dispatch loop, so target compilation
+ * does not inflate the ISR's inlined loops or duplicate the scoring code. */
+static __attribute__((noinline)) void snow_split_candidate(uint32_t worker,uint32_t mask)
+{
+    uint32_t primary=snow_split_search.all-worker,full=(1u<<NPART)-1u;
+    if(worker<primary){worker=primary;primary=snow_split_search.all-worker;mask=full^mask;}
+    else if(worker==primary&&(full^mask)<mask)mask=full^mask;
+    uint32_t main_wall=primary+((primary*snow_primary_irq_q8+255u)>>8);
+    uint32_t w=(worker>main_wall?worker:main_wall)+C1_HAND;
+    if(w<snow_split_search.lo||(w==snow_split_search.lo&&snow_split_search.best&&
+       (primary<snow_split_search.primary||(primary==snow_split_search.primary&&mask<snow_split_search.best)))){
+        snow_split_search.lo=w;snow_split_search.best=mask;snow_split_search.primary=primary;
+    }
+}
 #endif
 static __attribute__((noinline)) uint32_t mix_split(void)
 {
     uint32_t m, i, best = 0, all = 0, lo;
     for (i = 0; i < NPART; i++)
         all += part_cost[i];
-    lo = all;
 #if FELUCCA_SNOW
+    snow_split_search.all=all;snow_split_search.primary=all;snow_split_search.best=0;
+    snow_split_search.lo=all+((all*snow_primary_irq_q8+255u)>>8);
+    /* At high interrupt duty even handing all tracks to the worker can
+     * beat serial rendering. Its event/master work stays on core 0. */
+    snow_split_candidate(0,0);
     uint32_t a=0,prev=0;
-    for (i = 1; i < (1u << NPART); i++) {
-        m=i^(i>>1);uint32_t bit=m^prev,k=(uint32_t)__builtin_ctz(bit),w;
+    /* Visit each complementary pair once. Its heavier half goes to the
+     * IRQ-free worker: the reverse orientation cannot have a lower maximum.
+     * This halves the search and removes the old CH-on-core-0 tie bias. */
+    for (i = 1; i < (1u << (NPART-1u)); i++) {
+        m=i^(i>>1);uint32_t bit=m^prev,k=(uint32_t)__builtin_ctz(bit);
         if(m&bit)a+=part_cost[k];else a-=part_cost[k];prev=m;
-        if(m==(1u<<NPART)-1u)continue;
-        w = (a > all - a ? a : all - a) + C1_HAND;
-        if (w < lo || (w==lo&&best&&m<best)) {
-            lo = w;
-            best = m;
-        }
+        snow_split_candidate(a,m);
     }
+    best=snow_split_search.best;
 #else
+    lo = all;
     for(m=1;m<(1u<<NPART)-1u;m++){
         uint32_t a=0,w;
         for(i=0;i<NPART;i++)if((m>>i)&1u)a+=part_cost[i];
@@ -1400,6 +1466,9 @@ static __attribute__((noinline)) AUDIO_RAM void perf_master(int32_t *out, uint32
 
 static void mix_block(int32_t *out, uint32_t n)
 {
+#if FELUCCA_SNOW
+    snow_profile_serial(0);
+#endif
     uint32_t i;
     int perf;
     int32_t mg = fx_usb_fixed ? MASTER_FULL : (int32_t)song.master_q12;   /* (USB LEVEL FIXED: MASTER after) */
@@ -1416,9 +1485,16 @@ static void mix_block(int32_t *out, uint32_t n)
         if(C1_ON())snow_cost_onsets();
 #endif
         uint32_t m = C1_ON() ? C1_SPLIT() & ((1u << NPART) - 1u) : 0u;
+#if FELUCCA_SNOW
+        snow_profile_serial(1);
+#endif
         if (m && !C1_RUN(c1_parts, m | n << 8))
             m = 0;
         c1_blocks += m != 0;
+#if FELUCCA_SNOW
+        snow_profile_detail_now.worker_tracks|=m;
+        snow_profile_detail_now.primary_tracks|=((1u<<NPART)-1u)^m;
+#endif
         for (i = 0; i < NPART; i++)
             if (!(m >> i & 1u))
                 mix_part(&trk[i], n, &mx[0]);
@@ -1431,6 +1507,7 @@ static void mix_block(int32_t *out, uint32_t n)
                 c1_parts(m | n << 8);
 #if FELUCCA_SNOW
             snow_profile_now.wait+=SNOW_MIX_TICKS()-wait_before;
+            snow_profile_serial(0);
 #endif
             for (i = 0; i < n; i++) {
                 mix_l[i] += sm->l[i];
@@ -1440,6 +1517,9 @@ static void mix_block(int32_t *out, uint32_t n)
                 send_r[i] += sm->v[i];
             }
         }
+#if FELUCCA_SNOW
+        else snow_profile_serial(0);
+#endif
         for (i = 0; i < NPART; i++)                     /* the LFOs' blocks, track by track (voice.c) */
             track_lfo_end(&trk[i]);
     }
@@ -1460,6 +1540,9 @@ static void mix_block(int32_t *out, uint32_t n)
         rev_side_mix(mix_l, mix_r, n);                  /* HALL: stereo */
     if (perf) {
         AUDIO_FAR(perf_master)(out, n);
+#if FELUCCA_SNOW
+        snow_profile_serial(1);
+#endif
         return;
     }
     for (i = 0; i < n; i++) {
@@ -1469,4 +1552,7 @@ static void mix_block(int32_t *out, uint32_t n)
         out[2u * i] = l;
         out[2u * i + 1u] = r;
     }
+#if FELUCCA_SNOW
+    snow_profile_serial(1);
+#endif
 }

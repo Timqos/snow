@@ -1,9 +1,10 @@
-# STATTIC 0.8.0-rc9 — simulator and manual
+# STATTIC 0.8.0-rc10 — simulator and manual
 
 **Known hardware audio fault in rc9:** physical testing reports about 250
 missed buffers in 3–5 minutes of mixed playback involving CH. It is not
 verified for reliable live use. [USB diagnostic console](https://timqos.github.io/snow/snow/console/)
-collects logs from the existing rc9 without reflashing; see [the guide](STATTIC_USB_CONSOLE.md).
+supports rc9 and rc10; see [the guide](STATTIC_USB_CONSOLE.md).
+rc10 changes core scheduling and adds fuller timing; hardware retesting is required.
 
 CH now has a strict four-voice total, including release tails, in NOTES and
 CHORDS. New notes replace old voices at the limit; old tails can end before

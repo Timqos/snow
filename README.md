@@ -3,7 +3,9 @@
 **Known hardware audio fault in rc9:** physical testing reports about 250
 missed buffers in 3–5 minutes of mixed playback involving CH. It is not
 verified for reliable live use. [USB diagnostic console](https://timqos.github.io/snow/snow/console/)
-collects logs from the existing rc9 without reflashing; see [the guide](docs/STATTIC_USB_CONSOLE.md).
+works with rc9 and rc10; see [the guide](docs/STATTIC_USB_CONSOLE.md).
+The rc10 candidate adds interrupt-aware core scheduling and all-channel timing
+details. Physical audio improvement remains unverified.
 
 Six dedicated instruments: **KK / SD / HH / PR / BS / CH**, ten factory
 sounds each, three oscillators and six synthesis algorithms per instrument.
@@ -13,7 +15,7 @@ Built on Skiff 2.2 and Felucca. Previously named Snow.
 · [Install STATTIC](https://timqos.github.io/snow/snow/install/)
 · [Factory firmware](https://timqos.github.io/snow/snow/install/factory.html)
 
-The 0.8.0-rc9 candidate retains five HOME pages: sound, generation,
+The 0.8.0-rc10 candidate retains five HOME pages: sound, generation,
 channel mixing, six-channel P1–P3 patterns, and MUTE/SOLO with volume.
 SELECT browses pages; the lower captions identify the physical controls.
 All six channels start at 64 steps. Four-bar generation varies bars 2 and 4;

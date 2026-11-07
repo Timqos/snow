@@ -12,12 +12,15 @@ function memoryDump(region,bytes){
 }
 function fixture(){
   const data={late_base:words([800]),peak:words([190000]),had_late:Uint8Array.of(1),event:words([167155,70000,30000,42000,7000]),late_counter:words([1050]),rendered_voices:Uint8Array.of(1,1,1,1,1,4),part_cost:new Uint8Array(12)};
-  let raw=1050,uptime=10000,version=map.version,boots=4,unstable=false,reads=0;
+  data.detail=words([10000,20000,30000,40000,50000,60000,12000,96000,60000,42,21,20]);
+  let raw=1050,uptime=10000,version=map.version,boots=4,unstable=false,unstableDetail=false,reads=0;
   const requested=[];
-  return {requested,set(values){({raw=raw,uptime=uptime,version=version,boots=boots,unstable=unstable}=values);},
+  return {requested,set(values){({raw=raw,uptime=uptime,version=version,boots=boots,unstable=unstable,unstableDetail=unstableDetail}=values);},
     async request(cmd){assert.equal(cmd,'status');requested.push(cmd);return status(raw,uptime,version,boots);},
     setMap(m){this.map=m;},async memory(name){requested.push(name);if(name==='late_counter')return words([raw]);
-      if(name==='event'&&unstable)return words([167155+reads++,70000,30000,42000,7000]);return data[name].slice();}};
+      if(name==='event'&&unstable)return words([167155+reads++,70000,30000,42000,7000]);
+      const result=data[name].slice();if(name==='detail'&&unstableDetail)result[0]=reads++;
+      return result;}};
 }
 assert.equal(parseStatus(status()).preset,'<img src=x onerror=bad()>');
 assert.throws(()=>parseStatus('status\r\n> '),/Incomplete/);
@@ -31,6 +34,16 @@ assert.deepEqual(first.current_rendered_voices,[1,1,1,1,1,4]);
 fake.set({raw:1053,uptime:12000});const second=await captureSample(fake,[map],first);
 assert.equal(second.late,253);assert.equal(second.delta_late,3);assert(!second.reboot);
 fake.set({unstable:true});assert.equal((await captureSample(fake,[map],second)).stages.consistent,false);
+const detailedMap={...map,version:'test-rc10',detail_schema:1,regions:{...map.regions,detail:{address:0x1c1c000,size:48}}};
+validateMap(detailedMap);
+assert.throws(()=>validateMap({...detailedMap,detail_schema:2}),/schema/);
+assert.throws(()=>validateMap({...detailedMap,regions:{...detailedMap.regions,detail:{address:0x10000,size:48}}}),/Invalid/);
+const detail=fixture();detail.set({version:detailedMap.version});const full=await captureSample(detail,[detailedMap]);
+assert.deepEqual(full.stages.track_wall_us,[10000,20000,30000,40000,50000,60000].map(x=>x/24));
+assert.equal(full.stages.serial_us,500);assert.equal(full.stages.primary_work_us,4000);
+assert.equal(full.stages.worker_work_us,2500);assert.equal(full.stages.worker_tracks,42);
+assert.equal(full.stages.primary_irq_overhead_pct,7.8125);
+detail.set({unstableDetail:true});assert.equal((await captureSample(detail,[detailedMap])).stages.consistent,false);
 const old=fixture();old.set({version:'v2.2'});const basic=await captureSample(old,[map]);
 assert.equal(basic.late_scope,'since connection');assert.equal(basic.late,0);assert.deepEqual(old.requested,['status']);
 old.set({raw:1055,uptime:13000});assert.equal((await captureSample(old,[map],basic)).delta_late,5);

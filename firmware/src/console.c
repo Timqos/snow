@@ -225,6 +225,13 @@ static void con_status(void)
         con_puts("\r\n");
         con_kv("clk320_loop_mhz", clk320.loop_mhz);
         con_kv("sfc_mhz", (int32_t)(CLK_MHZ() / 2u / (fm1_sfc_baud() + 1u)));   /* the flash (XIP): HSB (SYS / 2) / (n + 1) */
+#if FELUCCA_SNOW
+        /* Existing HAL checks are read-only. A reported 0 MHz means an
+         * unrecognised source; retain its probe reason and flash divider. */
+        fm1_clk320_t probe;
+        con_kv("clock_probe",fm1_clk320_check(&probe));
+        con_kv("clock_sfc_baud",(int32_t)fm1_sfc_baud());
+#endif
     }
     con_kv("voices_given_up", (int32_t)voice_kills);
     con_kv("track", (int32_t)song.sel + 1);

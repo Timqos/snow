@@ -82,3 +82,20 @@ Published: https://timqos.github.io/snow/snow/console/
   `build/stattic-live-verification-usb.json`.
 - Protected firmware package, WASM, worklet, build metadata and installer
   target hashes are unchanged. No new firmware is needed for this console.
+
+
+## rc10 extension
+
+rc10 retains the rc9 five-word snapshot and adds a versioned 48-byte detail
+region. The logger brackets/double-reads both under one L-counter check;
+unstable details invalidate the sample. Six track wall times may overlap;
+primary/worker work excludes measured primary interruptions. Serial work
+covers event processing, scheduling, merging, LFO end, global performance
+and master work inside mix_block. Core ownership masks cover all control
+blocks in that half, so a channel may appear on both cores at different times.
+These are saved-half timings; current voices/costs remain separately sampled.
+
+The page shows forced voice fades and reports CPU MHz 0 as an unrecognised
+clock source. clock_probe is the existing HAL's read-only configuration
+check; clock_sfc_baud is its existing flash divider. No clocks are changed.
+The rc9 map remains available and does not read the rc10 detail address.

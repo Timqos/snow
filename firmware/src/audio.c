@@ -27,6 +27,10 @@ static uint32_t snow_late_base; /* retained crash counters are not a per-boot UI
 static uint32_t snow_late_count(void){return felucca_dbg.late-snow_late_base;}
 #endif
 static volatile uint32_t t5_nested_ticks;              /* TIMER4 ticks TIMER5 spent nested in this ISR (main.c) */
+#if FELUCCA_SNOW
+static inline __attribute__((always_inline)) uint32_t snow_mix_irq_ticks(void)
+{return t5_nested_ticks;}
+#endif
 static uint32_t audio_cpu_rem;                         /* keep the fractional IIR step: no low-load bias */
 #define SCOPE_N 512u
 static int16_t scope_buf[SCOPE_N];

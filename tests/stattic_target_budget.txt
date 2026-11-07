@@ -22,3 +22,9 @@ snow_mix_sample 56
 snow_sync_inc 0
 stattic_bar 25
 stattic_gen_apply 183
+# rc10 scalar helpers. The target checker counts backward CFG branches in
+# candidate as loop spans (31); there is no C loop. Initial reviewed cost,
+# 35 compiled instructions, at most 32 calls per search including all-worker.
+# Existing dispatch/ISR budgets remain unchanged; search pairs fall to 31.
+snow_split_candidate 31
+snow_profile_serial 0

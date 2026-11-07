@@ -3,8 +3,11 @@
  * CH sequence notes. These are software regressions, not target CPU timing. */
 #include <stdint.h>
 static uint32_t repair_clock,repair_clock_step;
+static uint32_t repair_irq_clock,repair_irq_step;
 static uint32_t repair_ticks(void){repair_clock+=repair_clock_step;return repair_clock;}
+static uint32_t repair_irq_ticks(void){repair_irq_clock+=repair_irq_step;return repair_irq_clock;}
 #define SNOW_MIX_TICKS() repair_ticks()
+#define SNOW_MIX_IRQ_TICKS() repair_irq_ticks()
 #define SNOW_MIX_HAND 40u
 #include "c1_host.h"
 #define STATTIC_TRANSPORT_LIBRARY 1
@@ -19,17 +22,24 @@ static void exact_math(void)
     }
     assert(snow_div127(INT_MIN)==INT_MIN/127&&snow_div127(INT_MAX)==INT_MAX/127);
     for(uint32_t n=0;n<20000;n++){
-        uint32_t all=0,lo,best=0;
+        static const uint16_t duty[]={0,1,8,20,32,64,128,256};
+        snow_primary_irq_q8=duty[n%NELEM(duty)];
+        uint32_t all=0,lo,best=0,best_primary;
         for(uint32_t k=0;k<NPART;k++){
-            r=r*1664525u+1013904223u;part_cost[k]=(uint16_t)(n<64?((n>>k)&1u)*100u:r);all+=part_cost[k];
+            r=r*1664525u+1013904223u;part_cost[k]=(uint16_t)(n<512?(((n/8u)>>k)&1u)*100u:r);all+=part_cost[k];
         }
-        lo=all;
-        for(uint32_t m=1;m<63;m++){
+        lo=all+(all*snow_primary_irq_q8+255u)/256u;best_primary=all;
+        /* Independent exhaustive oracle: every mask, both orientations,
+         * including all tracks on the worker. No Gray pairing here. */
+        for(uint32_t m=1;m<64;m++){
             uint32_t a=0;for(uint32_t k=0;k<NPART;k++)if((m>>k)&1u)a+=part_cost[k];
-            uint32_t w=(a>all-a?a:all-a)+C1_HAND;if(w<lo){lo=w;best=m;}
+            uint32_t primary=all-a,main_wall=primary+(primary*snow_primary_irq_q8+255u)/256u;
+            uint32_t w=(a>main_wall?a:main_wall)+C1_HAND;
+            if(w<lo||(w==lo&&best&&(primary<best_primary||(primary==best_primary&&m<best)))){lo=w;best=m;best_primary=primary;}
         }
         assert(mix_split()==best);
     }
+    snow_primary_irq_q8=0;
     /* Exercise the target-only timing feedback: the renderer's measured
      * cost, not its voice-count fallback, becomes the next split's weight. */
     part_cost[0]=400;repair_clock_step=1000;mix_part(&trk[0],CTL,&mx[0]);
@@ -40,7 +50,26 @@ static void exact_math(void)
     const char *label=menu_vname(MI_CPU,0);assert(strstr(label,"L999")&&strlen(label)<20);
     snow_late_base=650;felucca_dbg.late=651;assert(snow_late_count()==1&&strstr(menu_vname(MI_CPU,0)," L1"));
     snow_late_base=felucca_dbg.late=song.cpu_q8=0;
-    puts("DSP: exact /127 over the full sample-product range, one million int32 cases and boundaries; Gray split matches exhaustive masks including ties");
+    puts("DSP: exact /127; IRQ-aware 31-pair split matches all 63 exhaustive masks over 20,000 costs/duties, including ties, all-on-worker and zero-cost tracks");
+}
+static void irq_accounting(void)
+{
+    snow_primary_irq_q8=0;snow_profile_begin();
+    repair_clock_step=1000;repair_irq_step=400;part_cost[0]=0;
+    mix_part(&trk[0],CTL,&mx[0]);
+    assert(part_cost[0]==600&&snow_profile_detail_now.track[0]==1000&&snow_profile_detail_now.primary==600);
+    uint32_t previous=repair_irq_clock;part_cost[0]=0;
+    mix_part(&trk[0],CTL,&mx[1]);
+    assert(part_cost[0]==1000&&repair_irq_clock==previous&&snow_profile_detail_now.worker==1000);
+    assert(snow_profile_detail_now.track[0]==2000);
+    repair_clock_step=repair_irq_step=0;
+    snow_profile_finish(144000,12000,1);assert(snow_primary_irq_q8==23);
+    assert(snow_profile_detail_event.track[0]==2000&&snow_profile_detail_event.primary==600&&snow_profile_detail_event.worker==1000);
+    for(uint32_t n=0;n<64;n++)snow_profile_finish(144000,0,0);
+    assert(!snow_primary_irq_q8);
+    snow_profile_finish(UINT32_MAX,UINT32_MAX-1u,0);assert(snow_primary_irq_q8==256);
+    snow_primary_irq_q8=0;snow_profile_begin();snow_profile_max_ticks=snow_profile_had_late=0;
+    puts("Scheduling feedback: primary work excludes nested IRQs, worker work never subtracts another core's IRQs; bounded duty learner decays to zero; detail snapshot stays coherent");
 }
 static void queued_generators(void)
 {
@@ -195,5 +224,5 @@ static void eight_undo_entries(void)
 int main(void)
 {
     setvbuf(stdout,0,_IOLBF,0);c1h_off=1;web_nor_erase();web_boot();advance(SNOW_BOOT_MS+200);
-    exact_math();audio_profile();onset_prediction();queued_generators();bounded_chords();eight_undo_entries();puts("STATTIC REPAIR CONTRACTS PASSED; physical FM-1 deadline validation remains required");return 0;
+    exact_math();irq_accounting();audio_profile();onset_prediction();queued_generators();bounded_chords();eight_undo_entries();puts("STATTIC REPAIR CONTRACTS PASSED; physical FM-1 deadline validation remains required");return 0;
 }

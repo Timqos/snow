@@ -4,7 +4,7 @@
 const fs=require('fs'),path=require('path'),http=require('http'),assert=require('node:assert/strict');
 const {chromium}=require('playwright');
 const ROOT=path.resolve(__dirname,'../build/snow-preview'),OUT=path.resolve(__dirname,'../build/stattic-usb-review');
-const map=JSON.parse(fs.readFileSync(path.join(ROOT,'console/maps.json'))).maps[0];
+const map=JSON.parse(fs.readFileSync(path.join(ROOT,'console/maps.json'))).maps.at(-1);
 const mime={'.html':'text/html','.mjs':'text/javascript','.js':'text/javascript','.json':'application/json','.css':'text/css','.svg':'image/svg+xml'};
 (async()=>{
  fs.mkdirSync(OUT,{recursive:true});
@@ -29,12 +29,12 @@ const mime={'.html':'text/html','.mjs':'text/javascript','.js':'text/javascript'
     const port={readable:new ReadableStream({start(c){controller=c;},cancel(){S.cancelled=true;}}),
      writable:new WritableStream({write(bytes){
       const cmd=new TextDecoder().decode(bytes).trim();S.commands.push(cmd);
-      if(cmd==='status'){S.uptime+=2000;push(`status\r\nfelucca ${map.version}\r\nuptime_ms ${S.uptime}\r\ncpu_pct 80\r\naudio_late ${S.late}\r\nboots 4\r\ncpu2 1\r\ncpu2_bad 0\r\ncpu_mhz 360\r\nengine CHORD\r\npreset <img src=x onerror=bad()>\r\n> `);return;}
+      if(cmd==='status'){S.uptime+=2000;push(`status\r\nfelucca ${map.version}\r\nuptime_ms ${S.uptime}\r\ncpu_pct 80\r\naudio_late ${S.late}\r\nvoices_shed 114\r\nboots 4\r\ncpu2 1\r\ncpu2_bad 0\r\ncpu_mhz ${S.mhz??360}\r\nengine CHORD\r\npreset <img src=x onerror=bad()>\r\n> `);return;}
       if(cmd==='crash'){push('crash\r\nno crash record\r\n> ');return;}
       const m=/^memr 0x([0-9a-f]+) (\d+)$/.exec(cmd);if(!m)throw new Error('Unexpected command: '+cmd);
       const entry=Object.entries(map.regions).find(([,r])=>r.address===parseInt(m[1],16)&&r.size===Number(m[2]));if(!entry)throw new Error('Unmapped read');
       const [name,r]=entry;
-      const data={late_base:words([800]),late_counter:words([S.late]),peak:words([190000]),had_late:Uint8Array.of(1),event:words([167155,70000,30000,42000,7000]),rendered_voices:Uint8Array.of(1,1,1,1,1,4),part_cost:new Uint8Array(new Uint16Array([500,600,700,800,900,5000]).buffer)}[name];
+      const data={late_base:words([800]),late_counter:words([S.late]),peak:words([190000]),had_late:Uint8Array.of(1),event:words([167155,70000,30000,42000,7000]),rendered_voices:Uint8Array.of(1,1,1,1,1,4),part_cost:new Uint8Array(new Uint16Array([500,600,700,800,900,5000]).buffer),detail:words([10000,20000,30000,40000,50000,60000,12000,96000,60000,42,21,20])}[name];
       let reply=cmd+'\r\n';for(let i=0;i<data.length;i+=16)reply+=(r.address+i).toString(16).padStart(8,'0')+': '+Array.from(data.slice(i,i+16),x=>x.toString(16).padStart(2,'0')).join(' ')+'\r\n';push(reply+'> ');
      }}),async open(){S.open=true;},async setSignals(signals){if(signals.dataTerminalReady)push(`\r\nFelucca ${map.version} console - 'help'\r\n> `);},async close(){S.open=false;},getInfo(){return {usbVendorId:0x1209,usbProductId:1};}};
     S.drop=()=>controller.close();return port;
@@ -49,9 +49,12 @@ const mime={'.html':'text/html','.mjs':'text/javascript','.js':'text/javascript'
   assert.equal(await page.locator('#cpu').innerText(),'80');assert.equal(await page.locator('#late').innerText(),'250');
   assert.equal(await page.locator('#synth').innerText(),'2,917');assert((await page.locator('#tracks').innerText()).includes('CH: 4 voices'));
   assert.equal(await page.locator('img[src="x"]').count(),0);
-  await page.evaluate(()=>{__usb.late+=3;});await page.locator('#snapshot').click();
+  await page.evaluate(()=>{__usb.late+=3;__usb.mhz=0;});await page.locator('#snapshot').click();
   await page.waitForFunction(()=>document.querySelector('#count').textContent.startsWith('2 samples'));
   assert.equal(await page.locator('#misses').innerText(),'3');assert.equal(await page.locator('#late').innerText(),'253');
+  assert((await page.locator('#firmware').innerText()).includes('clock source unrecognised'));
+  assert((await page.locator('#shed-status').innerText()).includes('114 forced voice fades'));
+  if(map.detail_schema){assert(await page.locator('#failure-detail').isVisible());assert((await page.locator('#critical-path').innerText()).includes('500 µs'));}
   const sent=await page.evaluate(()=>__usb.commands.length);
   await page.locator('#note').fill('CH + KK + BS <svg onload=bad()>');await page.locator('#mark').click();
   assert.equal(await page.evaluate(()=>__usb.commands.length),sent);
@@ -75,7 +78,7 @@ const mime={'.html':'text/html','.mjs':'text/javascript','.js':'text/javascript'
   const main=await context.newPage();await main.setViewportSize({width:390,height:844});
   await main.goto(url.replace('console/',''),{waitUntil:'networkidle'});
   assert.equal(await main.locator('.snow-header nav').getByRole('link',{name:'USB console',exact:true}).count(),1);
-  assert((await main.locator('.hardware-fault').innerText()).includes('Known hardware audio fault'));
+  assert((await main.locator('.hardware-fault').innerText()).includes('Hardware audio validation pending'));
   assert(await main.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await main.screenshot({path:path.join(OUT,'main-console-link-mobile.png'),fullPage:true});
   console.log('USB BROWSER PASSED: explicit port permission only, fragmented CDC, real map decoding, growing L, local markers, JSON download, no MIDI/settings/reset writes, disconnect/reconnect/unplug, unsupported browser and mobile layout. Physical USB remains untested.');

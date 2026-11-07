@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "build/snow-preview"
-RELEASE = "0.8.0-rc9"
+RELEASE = "0.8.0-rc10"
 VERSION = f"v{RELEASE}-stattic"
 
 
@@ -130,7 +130,9 @@ def main():
                 "package_sha256":package_hash}
     (OUT / "build.json").write_text(json.dumps(metadata,indent=2)+"\n")
     shutil.copytree(ROOT / "web/snow/console", OUT / "console", dirs_exist_ok=True)
-    shutil.copy(ROOT / "web/snow/hardware-status.json", OUT / "hardware-status.json")
+    hardware_status=json.loads((ROOT / "web/snow/hardware-status.json").read_text())
+    hardware_status.update(firmware_version=VERSION,package_sha256=package_hash)
+    (OUT / "hardware-status.json").write_text(json.dumps(hardware_status,indent=2)+"\n")
     run("python3", "tools/snow_console_map.py", "--elf", "build/felucca.elf",
         "--package", "build/felucca.fwsc", "--metadata", str(OUT / "build.json"),
         "--maps", str(OUT / "console/maps.json"))

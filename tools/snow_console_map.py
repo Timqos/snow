@@ -43,9 +43,14 @@ def main():
     }
     dbg = symbol('felucca_dbg', 76)
     regions['late_counter'] = {'address': dbg['address'] + 20, 'size': 4}
+    detail = re.search(r'\ssnow_profile_detail_event$', symbols, re.M)
+    if detail:
+        regions['detail'] = symbol('snow_profile_detail_event', 48)
     record = {'version': meta['version'], 'package_sha256': digest,
               'source_commit': meta['source_commit'], 'elf_sha256': hashlib.sha256(a.elf.read_bytes()).hexdigest(),
               'ticks_per_us': 24, 'half_frames': 256, 'sample_rate': 44100, 'regions': regions}
+    if detail:
+        record['detail_schema'] = 1
     catalog = json.loads(a.maps.read_text()) if a.maps.exists() else {'schema': 1, 'maps': []}
     old = next((m for m in catalog['maps'] if m['version'] == record['version']), None)
     if old:
@@ -57,7 +62,7 @@ def main():
         catalog['maps'].append(record)
     a.maps.parent.mkdir(parents=True, exist_ok=True)
     a.maps.write_text(json.dumps(catalog, indent=2) + '\n')
-    print(f"USB console map: {record['version']}, seven read-only regions, exact package {digest}")
+    print(f"USB console map: {record['version']}, {len(regions)} read-only regions, exact package {digest}")
 
 
 if __name__ == '__main__':

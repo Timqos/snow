@@ -1,4 +1,4 @@
-# STATTIC 0.8.0-rc9
+# STATTIC 0.8.0-rc10
 
 **Known hardware audio fault in rc9:** physical testing reports about 250
 missed buffers in 3–5 minutes of mixed playback involving CH. It is not
@@ -8,6 +8,23 @@ collects logs from the existing rc9 without reflashing; see [the guide](STATTIC_
 Experimental FM-1 candidate, previously named Snow. The five user HOME
 mockups in `assets/stattic-home/` and the confirmed control captions are
 the interface reference. See [the recorded agreement](STATTIC_WORK_PLAN.md).
+
+## Changes in rc10
+
+The rc9 USB log independently confirms 96 new missed buffers in 115 seconds,
+458 overload voice fades, and a 6.826 ms peak against 5.805 ms available.
+Both cores answer correctly. rc10 separates measured render work from core
+0 interruptions and minimises their asymmetric critical path. It visits 31
+complementary pairs and can offload CH; handoff/fault protection remains.
+
+A separately versioned detail snapshot adds all six tracks, serial mixer
+work and core ownership to the console. The original rc9 decoder remains.
+Zero CPU MHz is displayed as unrecognised; existing read-only HAL clock
+probe/divider readings are recorded without modifying clocks. Synthesis,
+effects, voice budgets, generation and interface behavior are preserved.
+
+See [the execution record](STATTIC_RC10_WORK.md). Clean hardware playback
+is not yet verified; software checks alone cannot establish it.
 
 ## Changes in rc9
 

@@ -116,7 +116,9 @@ static inline __attribute__((always_inline)) void *audio_far(void *p) { void *vo
 /* ----------------------------------------------------------- sound --- */
 #include "core.h"
 #if FELUCCA_SNOW
+static uint32_t snow_mix_irq_ticks(void); /* audio.c: primary-core nested IRQ counter */
 #define SNOW_MIX_TICKS() fm1_ticks()
+#define SNOW_MIX_IRQ_TICKS() snow_mix_irq_ticks()
 #define SNOW_MIX_HAND (8u * FM1_TICKS_PER_US)
 #endif
 #include "engines.c"             /* dsp.c, the eng_*.c files, the factory patterns */
