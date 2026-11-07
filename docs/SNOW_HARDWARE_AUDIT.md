@@ -1,6 +1,12 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # STATTIC 0.8.0-rc9 — installation and rollback audit
 
+Physical audio testing after rc9 reports persistent deadline misses (about
+250 in 3–5 minutes). This does not invalidate the exact-binary software
+update/rollback results below; it does mean reliable live audio is not
+qualified. See [USB diagnostics](STATTIC_USB_CONSOLE.md) and the published
+[hardware status](https://timqos.github.io/snow/snow/hardware-status.json).
+
 The current candidate is **STATTIC 0.8.0-rc9** (formerly Snow). See
 [the current revision](STATTIC_RELEASE.md) for interface/sound changes and
 physical qualification limits. The current published package's machine-readable

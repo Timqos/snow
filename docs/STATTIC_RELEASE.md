@@ -1,5 +1,10 @@
 # STATTIC 0.8.0-rc9
 
+**Known hardware audio fault in rc9:** physical testing reports about 250
+missed buffers in 3–5 minutes of mixed playback involving CH. It is not
+verified for reliable live use. [USB diagnostic console](https://timqos.github.io/snow/snow/console/)
+collects logs from the existing rc9 without reflashing; see [the guide](STATTIC_USB_CONSOLE.md).
+
 Experimental FM-1 candidate, previously named Snow. The five user HOME
 mockups in `assets/stattic-home/` and the confirmed control captions are
 the interface reference. See [the recorded agreement](STATTIC_WORK_PLAN.md).

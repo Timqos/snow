@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STATTIC · USB diagnostic console</title><link rel="icon" href="../logo.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css?v=1"></head>
+<body><main>
+<header><a class="brand" href="../"><img src="../logo.svg" width="42" height="42" alt="">STATTIC <span>USB console</span></a><nav><a href="../">Simulator &amp; manual</a><a href="../install/factory.html">Factory return</a></nav></header>
+<div class="intro"><p class="eyebrow">HARDWARE DIAGNOSTICS</p><h1>Catch the missed buffer.</h1><p>Connect your FM-1 by USB, play the passage that rasps, mark the moment, then save the log. Official rc9 already includes the serial console; no firmware update is needed.</p></div>
+<aside class="notice"><strong>Known audio fault in rc9.</strong> Mixed playback involving CH can miss audio deadlines. This release is not verified for reliable live performance. This console collects evidence; it does not fix the audio.</aside>
+<section class="connection" aria-label="USB connection">
+<div class="connection-top"><span id="connection" role="status" aria-live="polite">Disconnected</span><span id="firmware">No device connected</span></div>
+<div class="controls"><button id="connect" class="primary">Connect USB &amp; start log</button><button id="pause" disabled>Pause capture</button><button id="snapshot" disabled>One snapshot</button><button id="disconnect" disabled>Disconnect</button></div>
+<p id="support">Use desktop Chrome or Edge. Stop playback, then on the FM-1: hold HOME → SYSTEM → USB SERIAL → ON. If you enabled it now, wait for USB to reappear, then choose the FM-1 serial port. Close other serial terminals first.</p>
+<p id="message" role="status" aria-live="polite">The browser asks for a USB port only when you press Connect.</p>
+</section>
+<section class="metrics" aria-label="Audio counters">
+<article><h2>CPU average</h2><strong id="cpu">—</strong><span>%</span></article>
+<article><h2 id="late-label">Missed buffers</h2><strong id="late">—</strong><span id="late-scope">waiting for device</span></article>
+<article id="miss-card"><h2>New misses in capture</h2><strong id="misses">0</strong><span id="delta">no samples yet</span></article>
+<article><h2>Audio peak</h2><strong id="peak">—</strong><span>% of buffer deadline</span></article>
+</section>
+<section class="stages" aria-labelledby="stage-heading"><div class="section-top"><h2 id="stage-heading">Failure snapshot</h2><span id="stage-mode">Hardware timings unavailable</span></div>
+<div class="stage-grid"><div>Audio last <strong id="last">—</strong><span>%</span></div><div>CH synth <strong id="synth">—</strong><span>µs</span></div><div>CH FX / mix <strong id="fx">—</strong><span>µs</span></div><div>Core 1 wait <strong id="wait">—</strong><span>µs</span></div><div>Nested IRQ <strong id="irq">—</strong><span>µs</span></div></div>
+<p class="subtle">These stage times describe the same saved buffer and may overlap. After a missed deadline, the firmware retains that snapshot across clean buffers and STOP. Stage decoding uses the official rc9 map, selected by the reported version; modified builds may differ.</p>
+<p class="subtle">Current voices and estimated cost per 32-sample block, sampled separately:</p><div id="tracks" class="tracks" aria-label="Current rendered voices"></div></section>
+<section class="recording" aria-labelledby="record-heading"><div class="section-top"><h2 id="record-heading">Capture log</h2><span id="count">0 samples · 0 marks</span></div>
+<div class="controls"><label>Poll interval <select id="interval"><option value="2000">2 seconds</option><option value="5000">5 seconds</option></select></label><label class="note-label">Passage / note <input id="note" maxlength="200" placeholder="CH + BS + KK, changing kick sound"></label><button id="mark" disabled>Mark rasp</button><button id="crash" disabled>Read crash report</button></div>
+<p class="subtle">Markers stay on your computer. Requests run one at a time at a low rate. This records counters and snapshots, not audio or a full instruction trace. Pause capture to compare playback with polling stopped.</p>
+<div class="controls"><button id="export-json" disabled>Save diagnostic log (.json)</button><button id="export-text" disabled>Save readable log (.txt)</button><button id="clear">Clear local log</button></div>
+<div class="table-wrap" role="region" aria-label="Recent diagnostic samples" tabindex="0"><table><thead><tr><th>Time</th><th>CPU %</th><th>L</th><th>Δ L</th><th>CH synth µs</th><th>CH FX µs</th><th>Wait µs</th></tr></thead><tbody id="timeline"><tr><td colspan="7">No samples yet.</td></tr></tbody></table></div>
+<details open><summary>Raw USB console</summary><pre id="raw" tabindex="0">No USB data received.</pre></details></section>
+<section class="howto"><h2>One useful test.</h2><ol><li>Connect and let capture start. Play five channels without CH for a short baseline.</li><li>Enable CH and play the combination that rasps. Press <strong>Mark rasp</strong> when you hear it; add a short note if useful.</li><li>Press STOP on the FM-1, then <strong>Pause capture</strong> here. Save the JSON log and attach it to the conversation.</li></ol><p>The log stays in this tab until you save it. Reloading loses unsaved data. It includes diagnostic text, sound/preset names and notes you enter; nothing is uploaded automatically.</p></section>
+<footer><a href="../">Back to STATTIC</a><span>Read-only status and mapped RAM reads. No installation, settings changes or reboot commands.</span></footer>
+</main><script type="module" src="app.mjs?v=1"></script></body></html>

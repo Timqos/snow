@@ -98,3 +98,9 @@ Published: https://timqos.github.io/snow/snow/?v=080rc9
 
 No physical FM-1 is connected here. Table relocation removes flash accesses;
 its physical timing benefit and whether it cures rasp remain unmeasured.
+
+Subsequent physical report: rc9 still rasps, with approximately 250 L in
+3–5 minutes across mixed playback involving CH. The candidate did not solve
+the fault. A website-only USB console now uses the existing CDC/status/memory
+read commands to collect evidence without another firmware installation.
+See STATTIC_USB_CONSOLE.md; the website labels the known audio failure.

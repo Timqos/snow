@@ -129,6 +129,12 @@ def main():
                 "source_dirty":bool(subprocess.check_output(["git","status","--porcelain"],cwd=source,text=True).strip()),
                 "package_sha256":package_hash}
     (OUT / "build.json").write_text(json.dumps(metadata,indent=2)+"\n")
+    shutil.copytree(ROOT / "web/snow/console", OUT / "console", dirs_exist_ok=True)
+    shutil.copy(ROOT / "web/snow/hardware-status.json", OUT / "hardware-status.json")
+    run("python3", "tools/snow_console_map.py", "--elf", "build/felucca.elf",
+        "--package", "build/felucca.fwsc", "--metadata", str(OUT / "build.json"),
+        "--maps", str(OUT / "console/maps.json"))
+    run("node", "tests/snow_console.mjs")
     run("node", "tests/snow_page.mjs", str(OUT / "index.html"))
     print(f"STATTIC prototype: {OUT}")
 
