@@ -6,6 +6,12 @@
  * pattern and the pattern parameters of its track_t). The parts share one budget of
  * NVOICE sounding voices (voice.c). */
 #include <stdint.h>
+#ifndef FELUCCA_STATTIC
+#define FELUCCA_STATTIC 0
+#endif
+#define STATTIC_CHANNELS 6u
+#define STATTIC_CH_VOICES 4u
+#define STATTIC_CH_RELEASE 113 /* ESYNC_NAMES[22]: 2BAR */
 #define NVOICE 8                 /* voices per part, and the budget shared by all parts */
 #define NPOLY 8
 #define NPART 3                  /* synth parts: tracks 1..3 */
@@ -20,7 +26,8 @@ enum { V_POLY, V_MONO, V_LEGATO, V_UNISON };   /* P_VOICE */
 /* SLOOP 2.4: FM6 (eng_fm6.c) is engine 9 in every build; SLICE, when built, comes last (10). Projects and user
  * presets store the engine index as a byte, and no shipped SLOOP was built with SLICE, so its number is stored
  * nowhere: FM6 may take 9 and SLICE moves up (engines.c ENGINES[], params.c N_ENGNAME follow this order) */
-#define NENGINES (12 + FELUCCA_SLICE)
+#define NENGINES (12 + FELUCCA_SLICE + (FELUCCA_STATTIC ? STATTIC_CHANNELS : 0u))
+#define ENGI_STATTIC (12u + FELUCCA_SLICE)
 #define ENGI_GRAIN 8u            /* GRAIN, PHYS, NOISE (SLOOP 2.5, appended after FM6: the stores keep the numbers) */
 #define ENGI_PHYS 10u
 #define ENGI_NOISE 11u
@@ -71,6 +78,9 @@ enum {                          /* per-track parameters */
     P_ESYNC,                                   /* ENV SYNC: ATK DEC REL as note values of the tempo (voice.c) */
     P_LSYNC, P_LTRIG, P_LPOL,                  /* LFO 2: SYNC to the tempo, TRIG (NOTE / FREE), POL (BI / UNI) (voice.c) */
     P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7,
+#if FELUCCA_STATTIC
+#include "stattic_params.h"
+#endif
     P_COUNT
 };
 
@@ -123,7 +133,7 @@ typedef struct {
     int32_t gstep;               /* glide: 1/4096 semitone per control tick, 0 = RATE (GLIDE: the time an octave takes) */
     int32_t fine;                /* unison detune: phase increment * (1 + fine / 4096) */
     uint32_t ph[3];
-    int32_t s[8];                /* engine state (filters, envs) */
+    int32_t s[FELUCCA_STATTIC ? 10 : 8]; /* STATTIC: independent pitch and FM envelopes */
     uint32_t age;
 } voice_t;
 

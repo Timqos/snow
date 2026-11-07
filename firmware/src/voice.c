@@ -695,6 +695,12 @@ static void engine_block(track_t *t)
 _Static_assert(CTL == 32, "esync_one: 4.6 CTL in Q16 is 9646899");
 static uint32_t esync_k[NTRK][3];   /* ATK's step, DEC's and REL's coefficient (Q16): the part's, this block (env_tick);
                                      * per track (dualcore: a part renders on each core at once) */
+#if FELUCCA_STATTIC
+static uint32_t stattic_env_coef(const track_t *t, uint32_t i)
+{
+    return esync_k[(uint32_t)(t - trk) % NTRK][i % 3u];
+}
+#endif
 static uint32_t esync_one(uint32_t quarter, int32_t v, uint32_t i)
 {
     uint32_t u = ESYNC_UNITS[esync_idx(v)], T = quarter * u / 96u, x, x2, x3, x4;   /* T: samples */
@@ -726,6 +732,14 @@ static __attribute__((noinline)) void esync_coef(const track_t *t)   /* (not inl
         ek[1] = ENV_EXP[p[P_DEC] & 127];
         ek[2] = ENV_EXP[p[P_REL] & 127];
     }
+#if FELUCCA_STATTIC
+    /* STATTIC's CH release is expressed in note values even when attack
+     * and decay are free-running. Keep the advertised 2BAR a real tail. */
+    if (t->engine == ENGI_STATTIC + 5u && !p[P_ESYNC]) {
+        uint32_t q = (uint32_t)FS * 60u / (uint32_t)clamp(song.g[G_BPM], 20, 300);
+        ek[2] = esync_one(q, p[P_REL], 2);
+    }
+#endif
 }
 
 /* one control tick (CTL samples) of the amplitude envelope; returns Q15 */

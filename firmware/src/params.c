@@ -69,6 +69,9 @@ static const char *const N_ENGNAME[] = {"ANALOG", "DIGITAL", "PHASE", "LOFI", "S
 #if FELUCCA_SLICE
                                              "SLICE",
 #endif
+#if FELUCCA_STATTIC
+                                             "KICK", "SNARE", "HAT", "PERC", "BASS", "CHORD",
+#endif
 };
 
 #define PD(l, f, mn, mx, df) {l, f, mn, mx, df, 0, 0}
@@ -140,6 +143,9 @@ static const param_desc_t TP[P_COUNT] = {
     [P_LSYNC] = PE("SYNC", N_LSYNC, 0),           /* LFO 2: OFF = RATE, as before */
     [P_LTRIG] = PE("TRIG", N_LTRIG, 0),
     [P_LPOL] = PE("POL", N_LPOL, 0),
+#if FELUCCA_STATTIC
+#include "stattic_param_desc.h"
+#endif
 };
 /* a preset's extra parameters (preset_t.x) into p, each clamped to its range */
 static void preset_extras(int16_t *p, const preset_t *pr)

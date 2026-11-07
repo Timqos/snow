@@ -2997,7 +2997,7 @@ static const uint8_t MIDI_CC_MAP[][2] = {
  * interrupts off; ml_arm / ml_heard hand it a CC heard while learning */
 #define ML_N 16u
 #define ML_E0 120u
-_Static_assert(P_E0 < ML_E0 && P_COUNT - P_E0 == 8, "MIDI LEARN: a code per parameter");
+_Static_assert(P_E0 < ML_E0 && P_E7 - P_E0 == 7, "MIDI LEARN: native engine parameter codes");
 static volatile uint16_t ml_tab[ML_N];
 static volatile uint8_t ml_arm, ml_heard;  /* the UI waits for a CC; the CC that came meanwhile + 1 (0 none) */
 static uint32_t ml_id(uint32_t code)        /* an entry's code -> P_* id, P_COUNT: none this firmware knows */
