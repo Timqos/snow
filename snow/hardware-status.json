@@ -1,12 +1,21 @@
 {
   "schema": 1,
-  "firmware_version": "v0.8.0-rc9-stattic",
-  "package_sha256": "6c65c5167fc5b9a3ed7eda0151e81ff0fe42ea7ef915eb9ca11831ed6dba17a8",
-  "status": "reported-audio-deadline-failure",
-  "reported_date": "2026-11-07",
-  "source": "User test on a physical FM-1; no USB audio recording",
-  "observation": "Approximately 250 missed audio buffers in 3–5 minutes of mixed playback involving CH; combinations include CH+KK+BS and sometimes CH+HH+SD.",
+  "status": "hardware-retest-required",
   "reliable_live_performance_verified": false,
+  "candidate_changes": "IRQ-aware work estimates and asymmetric core split; detailed failure timing; unchanged synthesis and effects.",
+  "last_physical_result": {
+    "schema": 1,
+    "firmware_version": "v0.8.0-rc9-stattic",
+    "package_sha256": "6c65c5167fc5b9a3ed7eda0151e81ff0fe42ea7ef915eb9ca11831ed6dba17a8",
+    "status": "reported-audio-deadline-failure",
+    "reported_date": "2026-11-07",
+    "source": "User test on a physical FM-1; no USB audio recording",
+    "observation": "Approximately 250 missed audio buffers in 3\u20135 minutes of mixed playback involving CH; combinations include CH+KK+BS and sometimes CH+HH+SD.",
+    "reliable_live_performance_verified": false,
+    "diagnostics": "console/",
+    "firmware_changed_for_console": false
+  },
   "diagnostics": "console/",
-  "firmware_changed_for_console": false
+  "firmware_version": "v0.8.0-rc10-stattic",
+  "package_sha256": "19143e04d33405079e03dbc97ac15450d9dd124ba9c8e3aec10d7787adf27f47"
 }

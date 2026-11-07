@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-import {SerialConsole,CaptureLog,captureSample} from './core.mjs?v=1';
+import {SerialConsole,CaptureLog,captureSample} from './core.mjs?v=2';
 const $=id=>document.getElementById(id),names=['KK','SD','HH','PR','BS','CH'];
 let log=new CaptureLog(),link=null,timer=null,busy=false,recording=false,last=null,misses=0,rawTimer=null;
 const catalog=fetch('maps.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Diagnostic map unavailable.');return r.json();});
@@ -23,11 +23,21 @@ function render(sample){
   text('cpu',num(sample.status.cpu_pct));text('late',num(sample.late));text('late-scope',sample.late_scope);
   text('misses',num(misses));text('delta',`${num(sample.delta_late)} since previous sample`);
   $('miss-card').classList.toggle('detected',misses>0);
-  text('firmware',`${sample.status.version} · ${sample.status.cpu2?'2 cores':'1 core'} · ${sample.status.cpu_mhz??'?'} MHz`);
+  const clock=sample.status.cpu_mhz>0?`${sample.status.cpu_mhz} MHz`:'clock source unrecognised';
+  text('firmware',`${sample.status.version} · ${sample.status.cpu2?'2 cores':'1 core'} · ${clock}`);
+  text('shed-status',`Voice protection: ${num(sample.status.voices_shed)} forced voice fades since boot, across all channels.`);
   const p=sample.stages?.consistent?sample.stages:null;
   for(const [id,key] of [['peak','peak_pct'],['last','last_pct'],['synth','ch_synth_us'],['fx','ch_fx_mix_us'],['wait','worker_wait_us'],['irq','irq_us']])
     text(id,num(p?.[key],id==='peak'||id==='last'?1:0));
   text('stage-mode',p?p.mode:sample.map?'Snapshot changed while reading; raw replies saved.':'Basic status only: no matching official firmware map.');
+  $('failure-detail').hidden=!p?.track_wall_us;
+  $('failure-tracks').replaceChildren();
+  p?.track_wall_us?.forEach((us,i)=>{
+    const node=document.createElement('span'),bit=1<<i;
+    const owner=(p.worker_tracks&bit)?(p.primary_tracks&bit)?'both cores in this half':'core 1':'core 0';
+    node.textContent=`${names[i]}: ${num(us)} µs · ${owner}`;$('failure-tracks').append(node);
+  });
+  text('critical-path',p?.track_wall_us?`Serial events / mix / master: ${num(p.serial_us)} µs · Core 0 work: ${num(p.primary_work_us)} µs · Core 1 work: ${num(p.worker_work_us)} µs · Primary IRQ overhead model: ${num(p.primary_irq_overhead_pct,1)}%`:'');
   $('tracks').replaceChildren();sample.current_rendered_voices?.forEach((voices,i)=>{
     const node=document.createElement('span');node.textContent=`${names[i]}: ${voices} voice${voices===1?'':'s'} · ~${num(sample.current_track_estimate_us?.[i])} µs/block`;$('tracks').append(node);
   });

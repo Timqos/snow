@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // USB CDC diagnostics for the existing STATTIC console. No device writes or resets.
-export const VERSION = '1';
+export const VERSION = '2';
 export const MAX_RAW = 2 * 1024 * 1024;
 export const MAX_SAMPLES = 6000;
 const encoder = new TextEncoder();
@@ -41,6 +41,10 @@ export function validateMap(map) {
       map.ticks_per_us !== 24 || map.half_frames !== 256 || map.sample_rate !== 44100)
     throw new Error('Unsupported diagnostic map.');
   const sizes = {late_base:4, peak:4, had_late:1, event:20, late_counter:4, rendered_voices:6, part_cost:12};
+  if(map.detail_schema!==undefined){
+    if(map.detail_schema!==1)throw new Error('Unsupported diagnostic detail schema.');
+    sizes.detail=48;
+  }else if(map.regions?.detail)throw new Error('Unversioned diagnostic detail region.');
   for (const [name, size] of Object.entries(sizes)) {
     const r = map.regions?.[name];
     if (!r || !Number.isInteger(r.address) || r.size !== size || r.address < 0x1c00000 || r.address + size > 0x1c80000)
@@ -146,15 +150,27 @@ export async function captureSample(link, maps, previous=null) {
     for(let attempt=0;attempt<2;attempt++){
       const before=word(await link.memory('late_counter'));
       const peak=word(await link.memory('peak')),had=(await link.memory('had_late'))[0];
-      const first=await link.memory('event'),second=await link.memory('event');
+      const first=await link.memory('event'),detail=map.detail_schema?await link.memory('detail'):null;
+      const second=await link.memory('event'),detail2=map.detail_schema?await link.memory('detail'):null;
       const after=word(await link.memory('late_counter'));sample.raw_late=after;
-      if(before===after&&same(first,second)&&had<=1&&peak>=word(first)){
+      if(before===after&&same(first,second)&&(!detail||same(detail,detail2))&&had<=1&&peak>=word(first)){
         const view=new DataView(first.buffer,first.byteOffset,first.byteLength),us=Math.floor(map.half_frames*1e6/map.sample_rate);
         sample.stages={consistent:true,mode:had?'latest missed half':'busiest half before first miss',
           peak_ticks:peak,total_ticks:view.getUint32(0,true),
           peak_pct:peak/(us*map.ticks_per_us)*100,last_pct:view.getUint32(0,true)/(us*map.ticks_per_us)*100,
           ch_synth_us:view.getUint32(4,true)/map.ticks_per_us,ch_fx_mix_us:view.getUint32(8,true)/map.ticks_per_us,
-          worker_wait_us:view.getUint32(12,true)/map.ticks_per_us,irq_us:view.getUint32(16,true)/map.ticks_per_us};break;
+          worker_wait_us:view.getUint32(12,true)/map.ticks_per_us,irq_us:view.getUint32(16,true)/map.ticks_per_us};
+        if(detail){
+          const extra=new DataView(detail.buffer,detail.byteOffset,detail.byteLength),ticks=map.ticks_per_us;
+          sample.stages.track_wall_us=Array.from({length:6},(_,i)=>extra.getUint32(i*4,true)/ticks);
+          sample.stages.serial_us=extra.getUint32(24,true)/ticks;
+          sample.stages.primary_work_us=extra.getUint32(28,true)/ticks;
+          sample.stages.worker_work_us=extra.getUint32(32,true)/ticks;
+          sample.stages.worker_tracks=extra.getUint32(36,true);
+          sample.stages.primary_tracks=extra.getUint32(40,true);
+          sample.stages.primary_irq_overhead_pct=extra.getUint32(44,true)*100/256;
+        }
+        break;
       }
     }
     if(!sample.stages)sample.stages={consistent:false,reason:'Snapshot was unstable or invalid in both reads; raw replies retained.'};
