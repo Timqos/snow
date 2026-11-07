@@ -59,5 +59,36 @@ and read-only settings, worst-width menu labels/values, sanitizers, existing
 target budgets, full STATTIC native/WASM/worker/browser suite, exact rc9 binary
 audit with previous rc8 both ways, then published URL/hash verification.
 
+Completed validation:
+
+- All three target table addresses and exact startup-image byte hashes pass;
+  oscillator/envelope code and all their compiled callees stay in SRAM.
+- The complete local STATTIC native/WASM/worker/audio suite passes, including
+  all 2,592 immutable operator configurations and final state, factory/FX/onset
+  references, strict CH4, one-minute six-channel strong-FX playback, actual
+  two-bar release at 90/120/150/180 BPM, 64-step generation, shared-BAR changes
+  and eight Undo entries. No reference hashes or target budgets were raised.
+- Snapshot selection, peak retention, last-missed stages, read-only rows and
+  boot-reset contracts pass, including ASan/UBSan. Every menu timing value
+  at its width limit passes with zero clipped/shortened text.
+- Real Chromium/AudioWorklet desktop/mobile controls, read-only diagnostic
+  interaction and factory return pass. SYSTEM timing frames were visually
+  inspected. Browser values are zero because hardware timing is not emulated.
+- All 28 exact-binary update/rollback checks pass, including rc8 both ways,
+  matching V15/V16 heads, preserved loader behavior and OTA/loader sanitizers.
+
+Firmware/audit source: `676c7090c30831133eddaedf1e8f5e5afa66bf03`.
+File: `stattic-0.8.0-rc9.fwsc`, 610,430 B.
+SHA-256: `6c65c5167fc5b9a3ed7eda0151e81ff0fe42ea7ef915eb9ca11831ed6dba17a8`.
+Previous packages, including rc8, remain available; source PR #3 is unmerged.
+
+Remaining hardware follow-up: track-level splitting keeps all CH voices on
+one core. Symmetric mask ties prefer the lower integer, hence CH (bit 5)
+stays on core 0; average load is not evidence that both cores are saturated.
+Do not change this policy on an unmeasured assumption in this candidate.
+Use the new CH/worker/IRQ stage snapshot to assess the next scheduling step.
+
+Publication and normal-URL hash verification remain pending.
+
 No physical FM-1 is connected here. Table relocation removes flash accesses;
 its physical timing benefit and whether it cures rasp remain unmeasured.

@@ -284,11 +284,11 @@ pattern persistence and browser-save compatibility remain in the suite.
 
 ## Current verification
 
-The rc9 candidate requires the existing target budgets, complete STATTIC
+The rc9 build passed the existing target budgets, complete STATTIC
 native/WASM/audio suite, layout sweep at default/minimum/maximum values,
 eight-entry Undo and onset-prediction contracts, and ASan/UBSan checks.
 Desktop/mobile browser checks and 28 exact-package update/rollback checks
-must pass, retaining previous rc8. Broader upstream UI checks retain all 3,458
+passed, retaining previous rc8. Broader upstream UI checks retain all 3,458
 golden pictures with zero layout/alignment findings.
 The exact package, source commit and update/rollback results are recorded in
 [the published build](https://timqos.github.io/snow/snow/build.json) and
