@@ -32,10 +32,37 @@ Evidence before/following implementation:
   snow_render has three waveform-helper call sites instead of four; snow_amp
   has no calls. All three compiled functions/callees execute in SRAM.
 
-Remaining release work: complete the STATTIC native/WASM/worker/audio suite,
-sanitizers and target budgets; build with rc8 identity; audit the exact binary
-and previous rc7 update/return; check browser controls and publish normal URL
-hashes. Retain previous packages, installation protections and source PR.
+Completed validation:
+
+- Complete STATTIC native/WASM/worker/audio suite passes, including strict
+  CH4, eight Undo entries, full 64-step generation, shared-BAR controls,
+  minute-long six-channel strong-FX playback, real two-bar release at
+  90/120/150/180 BPM and unchanged factory/FX/onset PCM captures.
+- New estimator regression and 2,592-sound operator reference both pass
+  ASan/UBSan. The regression was observed failing on rc7 before the fix.
+- All existing target loop budgets and memory/HAL guards pass without raised
+  limits. snow_render has three waveform call sites, snow_amp has none; all
+  oscillator/envelope compiled calls stay in executable SRAM. Static loop
+  scores are layout estimates, not elapsed physical CPU measurements.
+- Real Chromium/AudioWorklet desktop/mobile controls pass, including five
+  HOME pages, CH OCT+ hold, six pattern encoders, BAR mute/solo and factory
+  validation with no unsolicited MIDI request.
+- The exact rc8 package passes all 28 update/rollback checks, including rc7
+  upgrade/downgrade, V15/V16 matching heads and OTA/loader sanitizers.
+
+| Region | Used | Limit | Free |
+| --- | ---: | ---: | ---: |
+| Application | 574,848 B | 581,564 B | 6,716 B |
+| Data + BSS | 88,760 B | 98,304 B | 9,544 B |
+| Data pool | 348,148 B | 356,352 B | 8,204 B |
+| Executable RAM + ramx | 24,036 B | 24,576 B | 540 B |
+
+- Firmware/audit source: `0dfb8f113121790352b68c835be455e3bedd67cf`.
+- File: `stattic-0.8.0-rc8.fwsc`, 610,430 bytes.
+- SHA-256: `a0f5b1711fba5b818e02933e411a3b00b140422b507da0710a22596e7d3e2232`.
+- Previous package rc7 is retained; source PR #3 remains unmerged.
+
+Publication and normal-URL hash verification remain pending.
 
 No physical FM-1 is connected here. Host/static checks cannot prove the
 remaining rasp fixed, nor quantify the unit's peak CPU saving.
