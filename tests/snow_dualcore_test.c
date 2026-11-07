@@ -12,9 +12,11 @@ static dual_result_t render_scene(uint32_t scene,int dual,const char *mask)
 {
     dual_result_t r={2166136261u,0,0};
     c1h_off=!dual;
-    if(mask)setenv("C1_MASK",mask,1);
+    int irq_model=mask&&!strcmp(mask,"irq-auto");
+    if(mask)setenv("C1_MASK",irq_model?"auto":mask,1);
     web_nor_erase();web_boot();advance(SNOW_BOOT_MS+200);
     web_snow_demo();
+    if(irq_model)snow_primary_irq_q8=32;
     if(scene)for(uint32_t k=0;k<NTRK;k++)assert(!snow_random_sound(k));
     if(scene==2){
         for(uint32_t k=0;k<NTRK;k++){assert(!snow_pattern_select(k,1));assert(!snow_generate(k,1));assert(!snow_pattern_select(k,0));}
@@ -61,14 +63,14 @@ static dual_result_t fork_scene(uint32_t scene,int dual,const char *mask)
 int main(void)
 {
     setvbuf(stdout,0,_IOLBF,0);
-    static const char *const splits[]={"1","7","21","42","62","rot","auto"};
+    static const char *const splits[]={"1","7","21","42","62","63","rot","auto","irq-auto"};
     for(uint32_t scene=0;scene<3;scene++){
         dual_result_t reference=fork_scene(scene,0,0);
         for(uint32_t m=0;m<NELEM(splits);m++){
             dual_result_t got=fork_scene(scene,1,splits[m]);
             assert(got.hash==reference.hash&&got.peak==reference.peak&&got.jobs>0);
         }
-        printf("Snow scene %u: one/two-core audio identical over seven real worker splits, including auto and FX bypass/re-enable\n",scene);
+        printf("Snow scene %u: one/two-core audio identical over nine real worker splits, including all-worker, IRQ-aware auto and FX bypass/re-enable\n",scene);
     }
     puts("SNOW DUAL-CORE MIXER PASSED (host threads, not physical CPU timing)");
     return 0;
