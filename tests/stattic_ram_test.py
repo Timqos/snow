@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 listing = Path("build/felucca.dis").read_text()
-for name in ("snow_wave", "snow_render"):
+for name in ("snow_wave", "snow_render", "snow_amp"):
     body = re.split(r"^" + name + r":\s*$", listing, flags=re.M)[1]
     body = re.split(r"^[A-Za-z_]\w*:\s*$", body, flags=re.M)[0]
     instructions = re.findall(r"^\s*([0-9a-f]+):\s+.*", body, re.M)

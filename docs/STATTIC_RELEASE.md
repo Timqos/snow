@@ -1,8 +1,35 @@
-# STATTIC 0.8.0-rc7
+# STATTIC 0.8.0-rc8
 
 Experimental FM-1 candidate, previously named Snow. The five user HOME
 mockups in `assets/stattic-home/` and the confirmed control captions are
 the interface reference. See [the recorded agreement](STATTIC_WORK_PLAN.md).
+
+## Changes in rc8
+
+Physical rc7 testing correlates each residual attack rasp with an increase
+in SYSTEM's L counter (66 to 92), at up to 78% averaged CPU on two cores.
+Random kick sounds change its occurrence; other channels may also provoke it.
+This establishes missed audio deadlines during the fault, without identifying
+one channel as its sole cause or proving that the four-voice cap was enough.
+
+- Fix a reproduced scheduling error: an active zero-sustain voice can render
+  no samples. Comparing active allocation against last rendered count adds a
+  fictitious onset every block, inflating that track's scheduling weight.
+  Compare against the previous allocation count instead. The regression fails
+  on rc7 and verifies no accumulating false cost over 256 silent-held blocks.
+- FM CHAIN computes the modulator phase first and evaluates its waveform once.
+  The previous first evaluation was discarded. All algorithms, oscillators,
+  phases, feedback and noise state retain exact integer results.
+- Run the synth envelope in executable SRAM alongside oscillator rendering,
+  including its inlined helpers. Target assembly must show no flash calls
+  from these three audio functions. No data-pool allocation is added.
+- Preserve strict CH4, release settings, other voice budgets, sound parameters,
+  presets, random streams, effects, gains, interface, fonts and controls.
+  An immutable rc7 reference checks 2,592 manual sound configurations and
+  their final voice state; existing audio and worker-equivalence checks remain.
+
+These remove unnecessary work and a real estimator bug. They do not establish
+physical FM-1 timing or promise the rasp is cured before a hardware retest.
 
 ## Changes in rc7
 
@@ -229,22 +256,22 @@ pattern persistence and browser-save compatibility remain in the suite.
 
 ## Current verification
 
-The rc7 build passed the existing target budgets, complete STATTIC
+The rc8 candidate requires the existing target budgets, complete STATTIC
 native/WASM/audio suite, layout sweep at default/minimum/maximum values,
 eight-entry Undo and onset-prediction contracts, and ASan/UBSan checks.
 Desktop/mobile browser checks and 28 exact-package update/rollback checks
-passed, retaining previous rc6. Broader upstream UI checks retain all 3,458
+must pass, retaining previous rc7. Broader upstream UI checks retain all 3,458
 golden pictures with zero layout/alignment findings.
 The exact package, source commit and update/rollback results are recorded in
 [the published build](https://timqos.github.io/snow/snow/build.json) and
 [the binary audit](https://timqos.github.io/snow/snow/update-audit.json).
 Final region sizes and release verification are recorded in
-[the work log](STATTIC_RC7_WORK.md). Physical audio deadlines require FM-1
+[the work log](STATTIC_RC8_WORK.md). Physical audio deadlines require FM-1
 qualification; desktop or browser timing is not a substitute.
 
 The target regression gate retains all unaffected Skiff limits and the
 byte-reproduced rc3 reference for existing STATTIC paths. Oscillator SRAM
 placement adds no per-sample divisions. The 8/12 shared voice budget,
 256-frame hardware halves, 32-sample control blocks and all synthesis/effect
-parameters remain unchanged from rc6, except the requested CH-only voice cap. Installation/loader code is unchanged
+parameters retain rc7 behavior and the requested CH-only voice cap. Installation/loader code is unchanged
 from rc4; every new binary still requires its own update/rollback audit.

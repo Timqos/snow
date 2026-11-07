@@ -773,6 +773,7 @@ static uint16_t part_cost[NPART];                       /* the last block's, per
 #endif
 static uint16_t snow_peak_voice[NPART];
 static uint8_t snow_rendered_voices[NPART];
+static uint8_t snow_active_voices[NPART];
 /* A kick/bass onset can add work before last block's timer has seen it.
  * Predict that first block from current voices and the measured busy cost. */
 static __attribute__((noinline)) void snow_cost_onsets(void)
@@ -780,10 +781,13 @@ static __attribute__((noinline)) void snow_cost_onsets(void)
     for(uint32_t k=0;k<NPART;k++){
         uint32_t active=0;
         for(uint32_t v=0;v<NVOICE;v++)active+=trk[k].v[v].active!=0;
-        if(active>snow_rendered_voices[k]){
+        /* A held zero-sustain voice remains active but renders no samples.
+         * Compare allocation counts, otherwise its cost grows every block
+         * and eventually pushes real work onto the same core. */
+        if(active>snow_active_voices[k]){
             uint32_t unit=snow_peak_voice[k];
             if(!unit)unit=SNOW_MIX_HAND*8u; /* first onset: conservative until measured */
-            uint32_t estimate=part_cost[k]+(active-snow_rendered_voices[k])*unit;
+            uint32_t estimate=part_cost[k]+(active-snow_active_voices[k])*unit;
             part_cost[k]=(uint16_t)(estimate>65535u?65535u:estimate);
         }
     }
@@ -1260,6 +1264,9 @@ static __attribute__((noinline)) void mix_part(track_t *t,uint32_t n SM_DECL)
 #if FELUCCA_CPU2
     uint32_t before=SNOW_MIX_TICKS();
     uint32_t k=(uint32_t)(t-trk),old=part_cost[k];
+    uint32_t active=0;
+    for(uint32_t v=0;v<NVOICE;v++)active+=t->v[v].active!=0;
+    snow_active_voices[k]=(uint8_t)active;
 #endif
     mix_part_body(t,n SM_ARG(sm));
 #if FELUCCA_CPU2

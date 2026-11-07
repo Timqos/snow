@@ -126,7 +126,7 @@ static int snow_done(track_t *t,voice_t *v)
 {
     return v->s[1]>0 && (!t->p[SN_MODE] || v->s[1]==3) && v->s[0]<4096;
 }
-static int32_t snow_amp(track_t *t,voice_t *v,int32_t adsr)
+static SNOW_RENDER_RAM int32_t snow_amp(track_t *t,voice_t *v,int32_t adsr)
 {
     const int16_t *p=t->p;
     if(!v->active)return 0;
@@ -198,10 +198,12 @@ static SNOW_RENDER_RAM void snow_render(track_t *t,voice_t *v,int32_t *out,uint3
         int32_t idx=index0+(((index-index0)*(int32_t)(i+1u))>>CTL_LOG2);
         int32_t third=third_on?snow_wave_fast(c,inc3,(uint32_t)p[SN_WAVE3],pw):0;
         int32_t feedback=prev*feedback_gain;
-        int32_t mod=snow_wave_fast(b+(uint32_t)feedback,incm,(uint32_t)p[SN_WAVE2],pw);
+        /* FM CHAIN changes the modulator's phase, not its waveform count.
+         * Evaluate it once; the old first result was discarded each sample. */
+        uint32_t modph=b+(uint32_t)feedback;
+        if(alg==1u)modph+=(uint32_t)third*(uint32_t)idx;
+        int32_t mod=snow_wave_fast(modph,incm,(uint32_t)p[SN_WAVE2],pw);
         uint32_t shift=(uint32_t)mod*(uint32_t)idx;
-        if(alg==1)mod=snow_wave_fast(b+(uint32_t)third*(uint32_t)idx+(uint32_t)feedback,incm,(uint32_t)p[SN_WAVE2],pw);
-        if(alg==1)shift=(uint32_t)mod*(uint32_t)idx;
         if(alg==2)shift=(uint32_t)snow_div2(mod+third,1)*(uint32_t)idx;
         if(alg>=3)shift=0;
         int32_t x=snow_wave_fast(a+shift,inc,(uint32_t)p[SN_WAVE1],pw);

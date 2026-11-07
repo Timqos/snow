@@ -131,7 +131,7 @@ static void bounded_chords(void)
 static void onset_prediction(void)
 {
     seq_stop();panic_req=63;events_block(CTL);
-    for(uint32_t k=0;k<NPART;k++){memset(trk[k].v,0,sizeof trk[k].v);snow_peak_voice[k]=0;snow_rendered_voices[k]=0;part_cost[k]=k<4?1000:k==5?6000:0;}
+    for(uint32_t k=0;k<NPART;k++){memset(trk[k].v,0,sizeof trk[k].v);snow_peak_voice[k]=0;snow_rendered_voices[k]=snow_active_voices[k]=0;part_cost[k]=k<4?1000:k==5?6000:0;}
     uint32_t old=mix_split();trk[4].v[0].active=1;snow_peak_voice[4]=4000;
     snow_cost_onsets();assert(part_cost[4]==4000);
     uint32_t next=mix_split();assert(((next>>4)^(next>>5))&1u);
@@ -141,6 +141,18 @@ static void onset_prediction(void)
     peak[0]=peak[0]>sum-peak[0]?peak[0]:sum-peak[0];peak[1]=peak[1]>sum-peak[1]?peak[1]:sum-peak[1];assert(peak[1]<peak[0]);
     memset(trk[4].v,0,sizeof trk[4].v);
     puts("New low-note onset: predict work before worker dispatch; busy CH and new BS are split, peak estimated worker work falls before the first rendered block");
+    /* An active voice can render no samples at exact zero sustain. The
+     * estimator must not add a fresh onset on every subsequent block. */
+    track_t *ch=&trk[5];apply_preset_to(ch,0);ch->p[SN_MODE]=1;ch->p[P_SUS]=0;
+    memset(ch->v,0,sizeof ch->v);voice_t *v=&ch->v[0];
+    v->active=v->gate=1;v->stage=2;v->s[1]=1;v->s[2]=v->s[8]=1<<24;
+    snow_peak_voice[5]=4000;part_cost[5]=1000;
+    mix_part(ch,CTL,&mx[0]);assert(v->active&&!snow_rendered_voices[5]);
+    for(uint32_t n=0;n<256;n++){
+        uint32_t before=part_cost[5];snow_cost_onsets();
+        assert(part_cost[5]==before);mix_part(ch,CTL,&mx[0]);
+    }
+    puts("Silent held voice: no repeated fictitious onset or accumulating core-split weight across 256 blocks");
 }
 static void eight_undo_entries(void)
 {
