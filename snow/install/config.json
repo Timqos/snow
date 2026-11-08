@@ -1,7 +1,7 @@
 {
-  "version": "STATTIC 0.9.0-S1 \u00b7 770f413",
+  "version": "STATTIC 0.9.0-S1 \u00b7 4f48b5e",
   "product": "FM-1_990",
-  "sha256": "cc71827b4bd5fc91dea7958c258b081ed75d293ec1ff14858b1b1ac3f0178c40",
-  "package": "../firmware/stattic-0.9.0-sloop-rc1-770f413.fwsc",
-  "source_commit": "770f413cab2c4ab75830ffe1f0ca943c1ef4f9b1"
+  "sha256": "e7e92f7ecefbe1decbe35a549f3e2e3809b276b845f2d0eeb4c2ca3e398d16f9",
+  "package": "../firmware/stattic-0.9.0-sloop-rc1-4f48b5e.fwsc",
+  "source_commit": "4f48b5e079833975e78e7562b475f6532dfee049"
 }
