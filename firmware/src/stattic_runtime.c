@@ -85,6 +85,10 @@ static void stattic_undo_mark(const track_t *t,uint32_t session)
 static int stattic_undo(int redo)
 {
     uint32_t f=STATTIC_GUARD_SAVE(),mask[ST_PARAM_WORDS];stattic_mask_all(mask);
+    /* (fix) undo/redo bring back sounds and patterns, never a MUTE from the time of the
+     * snapshot: mute has its own bar queue (stattic_mute_set); restoring it here
+     * re-muted channels the player had unmuted since */
+    mask[P_MUTE/32u]&=~(1u<<(P_MUTE%32u));
     if(redo?stattic_history_at>=stattic_history_n:!stattic_history_at){STATTIC_GUARD_RESTORE(f);return 0;}
     uint32_t index=redo?stattic_history_at:stattic_history_at-1u,group=(*stattic_history_entry(index)).session;
     uint32_t bar=stattic_when();

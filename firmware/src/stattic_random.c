@@ -20,7 +20,11 @@ static void snow_family_mask(uint32_t family,uint32_t *mask)
         for(uint32_t id=P_LD_PIT;id<=P_LD_AMP;id++)mask[id/32u]|=1u<<(id%32u);
         for(uint32_t id=P_ED_FLT;id<=P_ED_SHP;id++)mask[id/32u]|=1u<<(id%32u);
         for(uint32_t id=P_M1SRC;id<=P_M4AMT;id++)mask[id/32u]|=1u<<(id%32u);
-    }
+    }    /* (fix) the mixer is the player's: a page of the family may show MUTE or
+     * LEVEL, but no generator randomises them. HOME 2 K2 muted channels at random
+     * (MUTE drawn 0/1) and K4 drew each channel's LEVEL. */
+    mask[P_MUTE/32u]&=~(1u<<(P_MUTE%32u));
+    mask[P_LEVEL/32u]&=~(1u<<(P_LEVEL%32u));
 }
 static void snow_edit_mask(uint32_t *mask){snow_family_mask(FAM_EDIT,mask);}
 static uint32_t snow_sound_state[7];
