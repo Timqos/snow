@@ -3525,6 +3525,9 @@ static void events_block(uint32_t n)
     }
     if (pr)
         arp_keep_req = 0;
+#if FELUCCA_STATTIC
+    uint32_t ev_t0=STATTIC_PROFILE_TICKS();
+#endif
     keyboard_block();
     drum_audition_poll();                             /* (the editor's DRUM SYNTH page) */
     strum_block(n);                                   /* (voice.c: the strummed notes due) */
@@ -3664,7 +3667,11 @@ static void events_block(uint32_t n)
         mi_pen[0] = mi_pen[1] = mi_pen[2] = mi_pen[3] = 0;
     }
 #if FELUCCA_STATTIC
+    uint32_t ev_t1=STATTIC_PROFILE_TICKS();
+    stattic_profile.ev_in_now+=ev_t1-ev_t0;
     stattic_runtime_tick();
+    uint32_t ev_t2=STATTIC_PROFILE_TICKS();
+    stattic_profile.ev_rt_now+=ev_t2-ev_t1;
 #endif
 #if FELUCCA_STATTIC
     uint32_t order=fol_order();
@@ -3677,6 +3684,9 @@ static void events_block(uint32_t n)
     roll_block(adv);
     for (i = 0; i < NPART; i++)
         arp_tick(&trk[i], adv);
+#if FELUCCA_STATTIC
+    stattic_profile.ev_seq_now+=STATTIC_PROFILE_TICKS()-ev_t2;
+#endif
     if (song.playing) {
         song.tick++;
         clk_pos += adv;

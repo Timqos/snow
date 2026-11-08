@@ -77,6 +77,9 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
 #endif
         fm1_audio_ack_half();
         audio_halves++;
+#if FELUCCA_STATTIC
+        uint32_t st_c1 = cpu1_job_ticks, st_wait = cpu1_wait_ticks;   /* (this half's, before the load figures clear them) */
+#endif
 #if FELUCCA_CPU1
         cpu1_load_half(HALF_FRAMES * 1000000u / FS);     /* core 1's load and core 0's wait for it (fx.c) */
 #endif
@@ -100,6 +103,12 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
             stattic_profile.bad_nested=t5_nested_ticks/FM1_TICKS_PER_US;
             stattic_profile.bad_events=stattic_profile.events_last/FM1_TICKS_PER_US;
             stattic_profile.bad_buses=stattic_profile.buses_last/FM1_TICKS_PER_US;
+            stattic_profile.bad_c0=stattic_profile.c0_last/FM1_TICKS_PER_US;
+            stattic_profile.bad_c1=st_c1/FM1_TICKS_PER_US;stattic_profile.bad_wait=st_wait/FM1_TICKS_PER_US;
+            stattic_profile.bad_split=stattic_profile.split_last;
+            stattic_profile.bad_ev_in=stattic_profile.ev_in_last/FM1_TICKS_PER_US;
+            stattic_profile.bad_ev_rt=stattic_profile.ev_rt_last/FM1_TICKS_PER_US;
+            stattic_profile.bad_ev_seq=stattic_profile.ev_seq_last/FM1_TICKS_PER_US;
 #endif
         }                         /* the DMA moved on while we rendered */
         felucca_dbg.halves++;

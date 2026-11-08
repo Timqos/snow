@@ -200,7 +200,7 @@ static void con_status(void)
     con_kv("diag_schema",3);con_kv("audio_half_us",HALF_FRAMES*1000000u/FS);
     {   /* (rasp fix 1) which channel racks run (bit 0 BS .. 3 DR; asleep = no cost) and the idle master reverb */
         uint32_t awake=0;for(uint32_t k=0;k<NTRK;k++)awake|=(uint32_t)snow_fx[k].running<<k;
-        con_kv("rasp_fix",1);con_kv("racks_awake",(int32_t)awake);con_kv("master_rev_idle",rev_clean);
+        con_kv("rasp_fix",2);con_kv("racks_awake",(int32_t)awake);con_kv("master_rev_idle",rev_clean);
     }
     con_kv("audio_last_us",(int32_t)felucca_dbg.last_us);con_kv("audio_late",(int32_t)felucca_dbg.late);
     con_kv("profile_halves",(int32_t)profile.halves);
@@ -211,6 +211,13 @@ static void con_status(void)
     con_kv("late_bs_total_us",(int32_t)(profile.bad[0][2]/FM1_TICKS_PER_US));
     con_kv("late_sy_total_us",(int32_t)(profile.bad[1][2]/FM1_TICKS_PER_US));
     con_kv("late_dr_total_us",(int32_t)(profile.bad[3][2]/FM1_TICKS_PER_US));
+    con_kv("late_c0_units_us",(int32_t)profile.bad_c0);con_kv("late_c1_units_us",(int32_t)profile.bad_c1);
+    con_kv("late_wait_us",(int32_t)profile.bad_wait);con_kv("late_split",(int32_t)profile.bad_split);
+    con_kv("late_ev_in_us",(int32_t)profile.bad_ev_in);con_kv("late_ev_rt_us",(int32_t)profile.bad_ev_rt);
+    con_kv("late_ev_seq_us",(int32_t)profile.bad_ev_seq);
+    con_kv("c0_units_us",(int32_t)(profile.c0_last/FM1_TICKS_PER_US));con_kv("split",(int32_t)profile.split_last);
+    con_kv("ev_in_us",(int32_t)(profile.ev_in_last/FM1_TICKS_PER_US));con_kv("ev_rt_us",(int32_t)(profile.ev_rt_last/FM1_TICKS_PER_US));
+    con_kv("ev_seq_us",(int32_t)(profile.ev_seq_last/FM1_TICKS_PER_US));
     con_kv("events_last_us",(int32_t)(profile.events_last/FM1_TICKS_PER_US));
     con_kv("events_max_us",(int32_t)(profile.events_max/FM1_TICKS_PER_US));
     con_kv("buses_last_us",(int32_t)(profile.buses_last/FM1_TICKS_PER_US));
