@@ -19,11 +19,12 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
-    env:
-      JIELI_TOOLCHAIN: ${{ runner.temp }}/jieli/toolchain
-      AC79_SDK: ${{ runner.temp }}/ac79
     steps:
       - uses: actions/checkout@v4
+      - name: Tool locations
+        run: |
+          echo "JIELI_TOOLCHAIN=$RUNNER_TEMP/jieli/toolchain" >> "$GITHUB_ENV"
+          echo "AC79_SDK=$RUNNER_TEMP/ac79" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
