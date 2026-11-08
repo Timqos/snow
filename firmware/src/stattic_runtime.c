@@ -260,6 +260,67 @@ static void stattic_parameter_locks(track_t *t,stattic_pattern_t *p,const int16_
     }
     (void)role;
 }
+/* A lock's value: base moved by sp/3..sp (dir +1 up, -1 down, 0 either way;
+ * turned round at the range's end), so it never equals what the step had. */
+static int16_t stattic_lock_val(const param_desc_t *d,int32_t base,int32_t sp,int32_t dir,uint32_t *r)
+{
+    int32_t m=sp/3+(int32_t)snow_int(r,0,(uint32_t)(sp-sp/3));
+    m=dir?m*dir:snow_prob(r,50)?m:-m;
+    if(base+m>d->max||base+m<d->min)m=-m;
+    return (int16_t)clamp(base+m,d->min,d->max);
+}
+/* (the owner) HOME 2 K4 on BS: the steps' parameter locks anew, the notes stay.
+ * PARM AMT sets how many (at 0 still a few: the knob asks for them). */
+static void stattic_bass_locks(track_t *t,stattic_pattern_t *p,const int16_t *base,uint32_t *r)
+{
+    static const uint8_t ids[6]={P_E6,P_E0,P_E3,P_E7,P_REV,P_E2};   /* CUTOFF TONE DECAY DRIVE FX SEND SWEEP */
+    static const uint8_t spread[6]={20,16,22,24,40,12};
+    static const int8_t dir[6]={0,0,0,1,1,0};                           /* (DRIVE and FX SEND: only up) */
+    uint32_t chance=25u+(uint32_t)base[SN_G_STYLE]*60u/100u,made=0,first=snow_int(r,0,NSTEP-1u);
+    for(uint32_t i=0;i<NLOCK;i++)p->lock[i].step=LOCK_FREE;
+    for(uint32_t i=0;i<NSTEP&&made<NLOCK;i++){
+        uint32_t step=(first+i)%NSTEP;
+        if(!stattic_step_on(&p->step[step])||!snow_prob(r,chance))continue;
+        uint32_t pick=snow_int(r,0,5),id=ids[pick];
+        p->lock[made++]=(plock_t){(uint8_t)step,(uint8_t)id,stattic_lock_val(track_desc(t,id),base[id],spread[pick],dir[pick],r)};
+        if(made<NLOCK&&snow_prob(r,25)){                     /* (sometimes two on one step) */
+            uint32_t two=(pick+1u+snow_int(r,0,4))%6u;id=ids[two];
+            p->lock[made++]=(plock_t){(uint8_t)step,(uint8_t)id,stattic_lock_val(track_desc(t,id),base[id],spread[two],dir[two],r)};
+        }
+    }
+}
+/* (the owner) HOME 2 K1..K4 on DR: the category's own steps get their locks anew.
+ * Locks act on the whole step: on a step another category also plays, a lock
+ * of this category's kind is made anew, another kind stays. Kick: LENGTH BEND DRIVE; snare: FILTER LENGTH DRIVE; hat: FILTER
+ * LENGTH PAN; percussion: PAN BEND FILTER. PARM AMT 0: none. */
+static uint32_t stattic_cat_hits(const dstep_t *d,uint32_t cat,int others)
+{
+    uint32_t m=dstep_mask(d),hit=0;
+    for(uint32_t l=0;l<16u;l++)if((m>>l)&1u)hit|=(ST_LANE_CATEGORY[l]==cat)!=others;
+    return hit;
+}
+static void stattic_drum_locks(track_t *t,stattic_pattern_t *p,const int16_t *base,uint32_t cat,const uint8_t *was,uint32_t *r)
+{
+    static const uint8_t ids[4][3]={{P_E4,P_E3,P_E2},{P_E1,P_E4,P_E2},{P_E1,P_E4,P_PAN},{P_PAN,P_E3,P_E1}};
+    uint32_t amount=(uint32_t)base[SN_G_STYLE],made=0;uint8_t taken[NSTEP]={0};
+    for(uint32_t i=0;i<NLOCK;i++){
+        plock_t *l=&p->lock[i];if(l->step>=NSTEP)continue;
+        int mine=l->param==ids[cat&3u][0]||l->param==ids[cat&3u][1]||l->param==ids[cat&3u][2];
+        if(was[l->step]&&(mine||!stattic_cat_hits(&p->drum[l->step],cat,1)))l->step=LOCK_FREE;
+        else{taken[l->step]=1;made++;}
+    }
+    if(!amount)return;
+    uint32_t first=snow_int(r,0,NSTEP-1u);
+    for(uint32_t i=0;i<NSTEP&&made<NLOCK;i++){
+        uint32_t step=(first+i)%NSTEP;
+        if(taken[step]||!stattic_cat_hits(&p->drum[step],cat,0)||!snow_prob(r,amount*70u/100u))continue;
+        uint32_t id=ids[cat&3u][snow_int(r,0,2)];
+        int32_t sp=id==P_PAN?12:id==P_E4?26:id==P_E1?40:20,dir=id==P_E1?-1:id==P_E2?1:0;   /* (FILTER only closes, DRIVE only adds) */
+        uint32_t slot=0;while(slot<NLOCK&&p->lock[slot].step!=LOCK_FREE)slot++;if(slot==NLOCK)break;
+        p->lock[slot]=(plock_t){(uint8_t)step,(uint8_t)id,stattic_lock_val(track_desc(t,id),base[id],sp,dir,r)};
+        made++;
+    }
+}
 static int stattic_prepare(uint32_t k,uint32_t knob)
 {
     if(k>=NTRK||knob>(k==TRK_DRUM?7u:3u))return 1;
@@ -301,7 +362,9 @@ static int stattic_prepare(uint32_t k,uint32_t knob)
         uint32_t cat=knob-4u,seed=snow_next_seed(snow_seed(&candidate));
         static const uint8_t lane[4]={0,2,4,13};
         step_t phrase[NSTEP];uint8_t shots[16];
+        uint8_t was[NSTEP];
         for(uint32_t i=0;i<NSTEP;i++){
+            was[i]=(uint8_t)stattic_cat_hits(&next.pattern.drum[i],cat,0);
             for(uint32_t l=0;l<16u;l++)if(ST_LANE_CATEGORY[l]==cat)dstep_clr(&next.pattern.drum[i],l);
             candidate.step[i].time=ST_REST;
         }
@@ -311,12 +374,20 @@ static int stattic_prepare(uint32_t k,uint32_t knob)
             dstep_set(&next.pattern.drum[i],ln,vel_lvl(phrase[i].vel),0);
             next.pattern.micro[i]=stattic_phrase_micro[i];
         }
+        stattic_drum_locks(&trk[k],&next.pattern,next.p,cat,was,&seed);
         memcpy(shots,next.shots,sizeof shots);stattic_drum_random(shots,&seed);
         for(uint32_t l=0;l<16u;l++)if(ST_LANE_CATEGORY[l]==cat)next.shots[l]=shots[l];
         snow_seed_put(&candidate,seed);
         const uint8_t ids[]={SN_G_SEED,SN_G_SEED_B,SN_G_SEED_C,SN_G_SEED_D};
         for(uint32_t i=0;i<NELEM(ids);i++){next.p[ids[i]]=candidate.p[ids[i]];mask[ids[i]/32u]|=1u<<(ids[i]%32u);}
         what|=ST_CHANGE_PATTERN|ST_CHANGE_SHOTS|ST_CHANGE_SOUND;
+    }else if(knob==3u&&k==0u){
+        uint32_t seed=snow_next_seed(snow_seed(&candidate));
+        stattic_bass_locks(&trk[k],&next.pattern,next.p,&seed);
+        snow_seed_put(&candidate,seed);
+        const uint8_t ids[]={SN_G_SEED,SN_G_SEED_B,SN_G_SEED_C,SN_G_SEED_D};
+        for(uint32_t i=0;i<NELEM(ids);i++){next.p[ids[i]]=candidate.p[ids[i]];mask[ids[i]/32u]|=1u<<(ids[i]%32u);}
+        what|=ST_CHANGE_PATTERN|ST_CHANGE_SOUND;              /* (SOUND: only the seeds, the mask) */
     }else if(knob==1u&&k==TRK_DRUM){
         uint32_t seed=snow_next_seed(snow_seed(&candidate));stattic_drum_random(next.shots,&seed);
         snow_seed_put(&candidate,seed);

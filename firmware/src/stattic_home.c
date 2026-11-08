@@ -104,7 +104,7 @@ static void stattic_footer(uint32_t page)
         for(uint32_t n=0;n<4;n++){
             static const char *const drk[4]={"K1:G/KICK","K2:G/SNR","K3:G/HAT","K4:G/PRC"};
             static const char *const drp[4]={"K1:FILTER","K2:DRIVE","K3:BEND","K4:LENGTH"};   /* (DR: what they do to the samples) */
-            const char *text=page==1u&&song.sel==TRK_DRUM?drk[n]:page==0u&&song.sel==TRK_DRUM?drp[n]:keys[page][n];
+            const char *text=page==1u&&song.sel==0u&&n==3u?"K4:G/LCK":page==1u&&song.sel==TRK_DRUM?drk[n]:page==0u&&song.sel==TRK_DRUM?drp[n]:keys[page][n];
             stattic_text(n&1u?134:6,y+(2u+n/2u)*ST_HINT_PITCH,text,T_TEXT,ST_HINT_W,ST_HINT_H,9);
         }
     }
@@ -127,7 +127,7 @@ static void stattic_page_body(uint32_t page)
         }else if(page==1u){
             stattic_text(16,71,"GEN",T_TEXT,14,20,3);stattic_small_icon(0,76,66);
             cv_rect(125,65,103,30,T_THEME);{static const char *const drn[4]={"KICK","SNARE","HAT","PERC"};
-            stattic_text(134,71,song.sel==TRK_DRUM?drn[stattic_focus[1]&3u]:ST_GEN_NAMES[stattic_focus[1]],T_INK,13,21,6);}
+            stattic_text(134,71,song.sel==TRK_DRUM?drn[stattic_focus[1]&3u]:song.sel==0u&&stattic_focus[1]==3u?"G/LCK":ST_GEN_NAMES[stattic_focus[1]],T_INK,13,21,6);}
         }else{
             stattic_text(16,71,"MIXER",T_TEXT,13,20,5);
             cv_rect(99,65,62,30,T_THEME);stattic_text(108,71,ST_MIX_NAMES[stattic_focus[2]],T_INK,13,21,3);
