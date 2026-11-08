@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Build the STATTIC FM-1 firmware package in the cloud and offer it as a download
+# (Actions run > Artifacts). Same pinned JieLi compiler and checked SDK files as codex/cloud-build.
+name: STATTIC firmware
+
+on:
+  push:
+    branches: ['claude/**', 'codex/stattic-*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stattic-fw-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      JIELI_TOOLCHAIN: ${{ runner.temp }}/jieli/toolchain
+      AC79_SDK: ${{ runner.temp }}/ac79
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Python build dependencies
+        run: python -m pip install Pillow==13.0.0 fonttools==4.61.1
+      - name: Pinned and verified JieLi compiler
+        run: bash tools/cloud_toolchain.sh "$RUNNER_TEMP/jieli"
+      - name: Checked AC79 SDK files
+        run: python tools/cloud_sdk.py "$AC79_SDK"
+      - name: Firmware (STATTIC)
+        run: mkdir -p build && python tools/build.py --stattic 2>&1 | tee build/stattic-build.log
+      - name: STATTIC host checks (C)
+        run: |
+          python tools/gen_tables.py build/gen/felucca_tables.h >/dev/null
+          cc -O2 -w -fwrapv -Ibuild/gen -Ifirmware/src -Ifirmware/hal tests/stattic_mix_test.c -lm -lpthread -o build/stattic_mix
+          for m in 1 2; do CORES=$m build/stattic_mix; done
+          python tests/stattic_engine_vectors.py
+          python tests/stattic_fx_vectors.py
+      - name: Firmware package
+        uses: actions/upload-artifact@v4
+        with:
+          name: stattic-firmware-${{ github.sha }}
+          path: |
+            build/*.fwsc
+            build/stattic-build.log
+          retention-days: 30
+          if-no-files-found: error
