@@ -74,6 +74,7 @@ if(factory){
  const res=await fetch('config.json',{cache:'no-store'});if(!res.ok)throw new Error('Cannot load the release configuration.');config=await res.json();if(config.previewOnly)throw new Error('Local preview: no firmware package is offered for installation.');
  const pkg=await fetch(config.package,{cache:'no-store'});if(!pkg.ok)throw new Error('Cannot download the firmware package.');
  image=await verifyPackage(new Uint8Array(await pkg.arrayBuffer()),config);
+ $('package-hash').textContent='SHA-256: '+config.sha256;
  say(navigator.requestMIDIAccess?`${config.version}: firmware identity and SHA-256 verified. Connect only the FM-1 you intend to update.`:'Web MIDI SysEx is unavailable. Use desktop Chrome or Edge on this HTTPS page.');
 }catch(error){say(error.message+' No device connection or write was attempted.');}
 update();
