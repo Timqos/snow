@@ -202,15 +202,23 @@ def build_app():
        OUT / "fm1_cpu1.o", OUT / "felucca.o", "-o", elf)
     for sect in ("text.bin", "data.bin", "ramtext.bin", "c1text.bin", "hottext.bin"):
         (OUT / sect).unlink(missing_ok=True)
-    *_, syms, dis, rt = tc_all(("common/bin/objcopy", "-O", "binary", "-j", ".text", elf, OUT / "text.bin"),
+    *_, syms, dis, rt, hotdis = tc_all(("common/bin/objcopy", "-O", "binary", "-j", ".text", elf, OUT / "text.bin"),
                                ("common/bin/objcopy", "-O", "binary", "-j", ".data", elf, OUT / "data.bin"),
                                ("common/bin/objcopy", "-O", "binary", "-j", ".ram_text", elf, OUT / "ramtext.bin"),
                                ("common/bin/objcopy", "-O", "binary", "-j", ".c1_text", elf, OUT / "c1text.bin"),
                                ("common/bin/objcopy", "-O", "binary", "-j", ".hot_text", elf, OUT / "hottext.bin"),
                                ("common/bin/objdump", "-t", elf),
                                ("common/bin/objdump", "-d", elf),
-                               ("common/bin/objdump", "-d", "-j", ".ram_text", elf))
+                               ("common/bin/objdump", "-d", "-j", ".ram_text", elf),
+                               ("common/bin/objdump", "-d", "-j", ".hot_text", elf))
     (OUT / "felucca.dis").write_text(dis)
+    hot_calls = {}                                       # (STATTIC) what the SRAM code still calls in the flash
+    for ln in hotdis.splitlines():
+        mm = re.search(r"\bcall\b.*<([^>+]+)", ln)
+        if mm:
+            hot_calls[mm.group(1)] = hot_calls.get(mm.group(1), 0) + 1
+    if hot_calls:
+        print("hot_text calls:", ", ".join(f"{k} x{v}" for k, v in sorted(hot_calls.items())))
 
     def symv(name):
         return int(re.search(r"^([0-9a-f]+) .*\s" + name + r"$", syms, re.M).group(1), 16)
