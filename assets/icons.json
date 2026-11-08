@@ -82,12 +82,11 @@
   "w_rtri",
   "w_rtrp",
   "tape",
+  "drum",
   "mouth",
   "trio",
   "drawbar",
   "slice",
-  "grain",
-  "phys",
-  "drum"
+  "grain"
  ]
 }

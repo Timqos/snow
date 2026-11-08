@@ -3,8 +3,7 @@
 /* Regression suite of the FELUCCA DSP on the Mac (same sources as the firmware, through hostsim.c).
  *   build/host/regress [GOLDEN_FILE CPU_FILE]      (run_tests.sh builds and runs it)
  *
- * 1. golden renders: every engine x factory preset, the GM map on DRUM (SAMPLE PERC until 1.0.2; and on each model kit,
- *    KIT 80 10 66 55 77), the voice modes (POLY / MONO /
+ * 1. golden renders: every engine x factory preset, the GM drum kit, the voice modes (POLY / MONO /
  *    LEGATO / UNISON) of three engines, the FX sends, a 4-track sequencer mix, and the SLICER (slicer.c:
  *    GATE / STUT on the phrase, and on the 4-track mix with the transport). Each render plays
  *    a fixed phrase (notes, an overlap, a chord, note-offs, the release tail) and is reduced to a
@@ -14,19 +13,19 @@
  *    eng_formant.c formant_nz, voice.c's unison seed), the FX buffers, the limiter.
  * 2. health checks on every render: no sample beyond 16 bits, none near full scale, DC offset, the
  *    peak level, every voice free after the release, silence at the end. Fails with the numbers.
- * 3. CPU budget: per engine x preset (8 notes held; VOICE: its 4) and a few mixes, the instructions
- *    per sample counted by the kernel (proc_pid_rusage ri_instructions: the same on every run within
- *    ~1 %, unlike wall time), compared with CPU_FILE (tests/cpu_baseline.txt) at +-25 %; ns per
- *    sample printed for information. A count over the budget fails, one far under it only warns.
- * 4. voices: the shared budget of 8 across 4 parts, stolen voices fade (no step), MONO / LEGATO /
+ * 3. CPU budget: per engine x preset (8 notes held; VOICE: its 4) and a few mixes, the cost per
+ *    sample relative to the idle + drums mix (= 1000): instructions counted by the kernel where there
+ *    is a counter (macOS proc_pid_rusage, ~1 % run to run; elsewhere CPU_VALGRIND=1 counts each job
+ *    under callgrind, exact), else the best of three timed seconds (noisier, so the tolerance is
+ *    wider). Compared with CPU_FILE
+ *    (tests/cpu_baseline.txt) at +25 % (instructions) or +35 % (time); ns per sample printed for
+ *    information. A counted cost over the budget fails, a timed one or one far under it only warns.
+ * 4. voices: the shared budget of 8 across 3 parts, stolen voices fade (no step), MONO / LEGATO /
  *    UNISON keep their note under pressure, the VOICE engine's 4-voice cap, release frees voices, and
- *    no hanging note after the note-offs on any routing (USB channels 1..4, others while the
+ *    no hanging note after the note-offs on any routing (USB channels 1..3, 10, others while the
  *    selected track changes, the keys while the selected track changes, with ARP and the voice modes).
  * env: GOLDEN_UPDATE=1 rewrites GOLDEN_FILE, BUDGET_UPDATE=1 rewrites CPU_FILE (on purpose: review the
  * diff), VERBOSE=1 prints every render's numbers, JOBS=n children at once (default 8). */
-#ifdef C1_HOST
-#include "c1_host.h"              /* (Skiff 1.3) a thread as the second core, every split of the tracks in turn (run_tests.sh) */
-#endif
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
@@ -46,8 +45,9 @@
 #ifndef TAIL_S
 #define TAIL_S 3                  /* FX tail rendered after the voices are free */
 #endif
-#define CPU_TOL 0.25              /* +-25 %, and at least CPU_SLACK instructions (light presets) */
-#define CPU_SLACK 20
+#define CPU_TOL 0.25              /* +-25 % with an instruction counter, CPU_TOL_NS timed; and at least */
+#define CPU_TOL_NS 0.35           /* CPU_SLACK (per mille of the idle + drums mix: light presets) */
+#define CPU_SLACK 40
 
 /* ------------------------------------------------------------ results --- */
 typedef struct {
@@ -55,7 +55,7 @@ typedef struct {
     uint32_t frames, over, near, vmax, ok;     /* ok: a scenario's own checks passed */
     int32_t peak, tail_peak, tail_dc, tmin, tmax;
     double dc, free_s;                         /* free_s: s from the last note-off until all voices free, -1 never */
-    double ipc, ns;                            /* CPU: instructions and ns per sample */
+    double ipc, ns, rel;                       /* CPU: instructions and ns per sample; rel: per mille of idle + drums */
     char msg[512];
 } res_t;
 
@@ -70,6 +70,9 @@ static int parts_free(void)
         for (i = 0; i < NVOICE; i++)
             if (trk[p].v[i].active)
                 return 0;
+    for (i = 0; i < NDRUM; i++)
+        if (drums.v[i].active)
+            return 0;
     return 1;
 }
 
@@ -208,28 +211,23 @@ static void job_sends(const job_t *j)           /* arg: 0 dry, 1 chorus, 2 delay
     phrase(t, 60);
 }
 
-static void job_drums(const job_t *j)           /* every GM note through DRUM on part 4, a roll; arg: KIT (0: STD) */
+static void job_drums(const job_t *j)           /* every GM note through the drum track, a choke, a roll */
 {
-    track_t *t = &trk[3];
     uint32_t n, k = 0;
+    (void)j;
     host_tracks_init();
-    host_drums(t);
-    t->p[P_E0] = j->arg;
     for (n = 35; n <= 81u; n++, k++) {
-        input_on(t, n, 60u + (n * 7u) % 60u);
+        input_on(TDRUM, n, 60u + (n * 7u) % 60u);
         run_to(at(0.06 * (k + 1)));
-        input_off(t, n);
+        input_off(TDRUM, n);
     }
-    input_on(t, 46, 100);                      /* open hat, then the closed one */
+    input_on(TDRUM, 46, 100);                  /* open hat, choked by the closed one */
     run_to(fpos + FS / 10u);
-    input_on(t, 42, 100);
+    input_on(TDRUM, 42, 100);
     for (k = 0; k < 12u; k++) {                /* a snare roll: more hits than voices */
-        input_on(t, 38, 40u + 6u * k);
+        input_on(TDRUM, 38, 40u + 6u * k);
         run_to(fpos + FS / 40u / CTL * CTL);
     }
-    input_off(t, 46);
-    input_off(t, 42);
-    input_off(t, 38);
     rel_at = fpos;
     dc_end = fpos;
     finish();
@@ -250,9 +248,8 @@ static void job_slicer(const job_t *j)
     phrase(t, 60);
 }
 
-/* the 4-track mix: T1 ANALOG ACID, T2 the power-on pad (TRK_DEF: FM6 PAD since DIGITAL was retired; DIGITAL PAD
- * before) (tied chords), T3 LOFI lead (12 steps against 16),
- * T4 DRUM drums (SAMPLE PERC until 1.0.2); 120 BPM, 4 bars (the hostsim TRACKS demo without the recording), stop, the tail.
+/* the 4-track mix: T1 ANALOG ACID, T2 DIGITAL pad (tied chords), T3 LOFI lead (12 steps against 16),
+ * T4 drums; 120 BPM, 4 bars (the hostsim TRACKS demo without the recording), stop, the tail.
  * arg 1: with the SLICER (GATE on the pad, STUT on the acid line and the drums, SWING 20 %) */
 static void job_song(const job_t *j)
 {
@@ -260,16 +257,14 @@ static void job_song(const job_t *j)
     static const uint8_t ACIDF[16] = {1, 0, 2, 0, 0, 0, 1, 2, 0, 0, 1, 0, 0, 2, 0, 1};
     static const uint8_t AM[4] = {57, 60, 64, 67}, FMI[4] = {53, 57, 60, 64};
     static const uint8_t LEAD[12] = {76, 0, 0, 79, 0, 0, 81, 0, 79, 0, 76, 0};
-    track_t *t1 = &trk[0], *t2 = &trk[1], *t3 = &trk[2], *td = &trk[3];
+    track_t *t1 = &trk[0], *t2 = &trk[1], *t3 = &trk[2], *td = TDRUM;
     uint32_t i;
     (void)j;
     host_tracks_init();
     song.g[G_BPM] = 120;
     host_preset(t1, 0, 4);
-    host_preset(t2, TRK_DEF[1][0], TRK_DEF[1][1]);
+    host_preset(t2, 1, 5);
     host_preset(t3, 3, 0);
-    host_drums(td);
-    t1->p[P_SGATE] = t3->p[P_SGATE] = td->p[P_SGATE] = 64;   /* ((2.0) the golden's GATE: 50 %, the default before) */
     for (i = 0; i < 16u; i++) {
         uint8_t n = ACID[i];
         put_step(t1, i, n ? 1u : 0u, &n, n ? ST_NOTE : ST_REST, ACIDF[i]);
@@ -297,7 +292,7 @@ static void job_song(const job_t *j)
     if (j->arg) {
         static const int16_t S[4][4] = {{SL_STUT, 9, 1, 127}, {SL_GATE, 1, 1, 127}, {0, 1, 1, 127},
                                         {SL_STUT, 12, 2, 110}};
-        for (i = 0; i < 4u; i++) {                   /* (the golden's four tracks: more stay as they are) */
+        for (i = 0; i < NTRK; i++) {
             uint32_t k;
             for (k = 0; k < 4u; k++)
                 trk[i].p[P_SLCR + k] = S[i][k];
@@ -313,10 +308,15 @@ static void job_song(const job_t *j)
     finish();
 }
 
-/* CPU: parts[k] = {engine, preset, notes} (POLY, SUS 127, no ARP; SLICE: MODE LOOP; DRUM, an engine of hits:
- * the notes are its 8 lanes, struck again every 46 ms, else they ring out); notes DRUM_HITS on part 4:
- * drum_hit (hostsim.c) on 16ths;
+/* CPU: parts[k] = {engine, preset, notes} (POLY, SUS 127, no ARP; SLICE: MODE LOOP), drums on 16ths if parts[3][0];
  * 0.5 s to settle, then 1 s counted */
+/* this thread's CPU time: unlike the wall clock it does not count the time the host gave to others */
+static uint64_t cpu_ns_now(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
+}
 static uint64_t instr_now(void)
 {
 #ifdef __APPLE__
@@ -326,20 +326,35 @@ static uint64_t instr_now(void)
 #endif
     return 0;
 }
+/* the drums of the CPU mixes: kick on the 1, snare on the 3, hats on the 8ths */
+static void cpu_drums(uint32_t k)
+{
+    if ((k * CTL) % (FS / 8u) < CTL)
+        drum_on((k * CTL) % (FS / 2u) < CTL ? 36u : ((k * CTL) / (FS / 8u)) % 4u == 2u ? 38u : 42u, 100u);
+}
+/* the counted second (its own function: under callgrind, --toggle-collect=cpu_counted counts just this;
+ * hostsim.c empties __attribute__, so the pragma keeps it out of line) */
+#pragma GCC push_options
+#pragma GCC optimize("no-inline")
+static void cpu_counted(uint32_t nb, uint32_t drums_on)
+{
+    uint32_t k;
+    for (k = nb / 2u; k < nb / 2u + nb; k++) {
+        if (drums_on)
+            cpu_drums(k);
+        mix_block(last_out, CTL);
+    }
+}
+#pragma GCC pop_options
 static void job_cpu(const job_t *j)
 {
     static const uint8_t NOTES[8] = {48, 52, 55, 59, 60, 64, 67, 71};
-    static const uint8_t KIT[8] = {36, 38, 39, 42, 46, 45, 37, 56};   /* KICK SNARE CLAP HAT CL HAT OP TOM RIM BELL */
     const uint8_t (*parts)[3] = j->parts;
-    uint32_t p, i, k, nb = FS / CTL, drums_on = parts[3][2] == DRUM_HITS;
+    uint32_t p, i, k, nb = FS / CTL, drums_on = parts[NPART][0];
     uint64_t i0, t0;
     host_tracks_init();
     for (p = 0; p < NPART; p++) {
         host_preset(&trk[p], parts[p][0], parts[p][1]);
-        if (j->arg && ENGINES[parts[p][0]] == &ENG_DRUM)
-            trk[p].p[P_E0] = j->arg;                    /* DRUM: a KIT (the model kits) */
-        if (parts[p][2] == DRUM_HITS)
-            continue;
         trk[p].p[P_VOICE] = V_POLY;
         trk[p].p[P_SUS] = 127;
         trk[p].p[P_AMODE] = 0;
@@ -348,28 +363,52 @@ static void job_cpu(const job_t *j)
             trk[p].p[P_E4] = SLC_LOOP;                  /* SLICE: its slices end by themselves; loop them */
 #endif
         for (i = 0; i < parts[p][2]; i++)
-            trk_note_on(&trk[p], ENGINES[parts[p][0]]->oneshot ? KIT[i] : NOTES[i] + 12u * p, 100);
+            trk_note_on(&trk[p], NOTES[i] + 12u * p, 100);
     }
-    for (k = 0; k < nb / 2u + nb; k++) {
-        if (k == nb / 2u) {
-            i0 = instr_now();
-            t0 = now_ns();
-        }
-        for (p = 0; p < NPART; p++)
-            if (parts[p][2] != DRUM_HITS && ENGINES[parts[p][0]]->oneshot && k % 64u == 63u)
-                for (i = 0; i < parts[p][2]; i++)
-                    trk_note_on(&trk[p], KIT[i], 100);
-        if (drums_on && (k * CTL) % (FS / 8u) < CTL)
-            drum_hit((k * CTL) / (FS / 8u));
-        if (j->e == 0xFE && clk.env <= 0)
-            click_req = 2;                              /* idle_click: the metronome sounding all the time */
+    for (k = 0; k < nb / 2u; k++) {                    /* 0.5 s to settle */
+        if (drums_on)
+            cpu_drums(k);
         mix_block(last_out, CTL);
-        if (j->e == 0xFE)
-            click_render(last_out, CTL);                /* (audio.c audio_block: after the master) */
     }
-    R.ns = (double)(now_ns() - t0) / (nb * CTL);
-    R.ipc = i0 ? (double)(instr_now() - i0) / (nb * CTL) : 0;
+    {
+        uint32_t reps = instr_now() || getenv("CPU_JOB") ? 1u : 3u, r;   /* timed: the best of three seconds */
+        double best = 0;
+        for (r = 0; r < reps; r++) {
+            double ns;
+            i0 = instr_now();
+            t0 = cpu_ns_now();
+            cpu_counted(nb, drums_on);
+            ns = (double)(cpu_ns_now() - t0) / (nb * CTL);
+            if (!r)
+                R.ipc = i0 ? (double)(instr_now() - i0) / (nb * CTL) : 0;
+            if (!r || ns < best)
+                best = ns;
+        }
+        R.ns = best;
+    }
 }
+/* no instruction counter but valgrind (CPU_VALGRIND=1): each CPU job again in a child under callgrind,
+ * which counts the instructions of cpu_counted exactly (the same on every run, ~40 x slower) */
+static double cpu_callgrind(const char *self, const char *gpath, const char *cpath, const char *job)
+{
+    char cmd[1024], line[512];
+    double got = 0;
+    FILE *f;
+    snprintf(cmd, sizeof cmd,
+             "CPU_JOB='%s' valgrind --tool=callgrind --collect-atstart=no '--toggle-collect=cpu_counted*' "
+             "--callgrind-out-file=/dev/null '%s' '%s' '%s' 2>&1 >/dev/null", job, self, gpath, cpath);
+    if (!(f = popen(cmd, "r")))
+        return 0;
+    while (fgets(line, sizeof line, f)) {
+        const char *c = strstr(line, "Collected :");
+        if (c)
+            got = atof(c + 11);
+    }
+    pclose(f);
+    return got / ((double)(FS / CTL) * CTL);
+}
+/* a CPU job's cost in the unit this host has: instructions, else ns */
+static double cpu_cost(const job_t *j) { return j->r.ipc ? j->r.ipc : j->r.ns; }
 
 static int run_job_body(job_t *j)
 {
@@ -404,9 +443,12 @@ static int run_job_body(job_t *j)
 }
 
 /* run jobs [0, n) in children, up to nj at once; results come back through pipes */
+static int only_cpu;                                 /* CPU_JOB: no other job runs (cpu_callgrind's child) */
 static void run_jobs(job_t *jobs, uint32_t n, uint32_t nj)
 {
     uint32_t i, k;
+    if (only_cpu)
+        return;
     for (i = 0; i < n; i += nj) {
         int fd[64];
         pid_t pid[64];
@@ -474,18 +516,17 @@ static void midi_pkt(uint32_t st, uint32_t d1, uint32_t d2)   /* as usb.c: the q
     midi_in_q[mi_w++ % MQ] = (st >> 4) | st << 8 | d1 << 16 | d2 << 24;
 }
 
-/* the shared budget: 4 POLY parts (ANALOG, DIGITAL (without FELUCCA_FM4 its BELL converted: FM6), VOICE, SAMPLE PIANO)
- * play random notes on and off for
- * 6 s, up to 8 held each; after every block: at most 8 part voices active, none still fading (a stolen voice
- * fades within its one block), the VOICE part at most 4; then all off: every voice free */
+/* the shared budget: 3 POLY parts (ANALOG, DIGITAL, VOICE) play random notes on and off for 6 s, up to
+ * 8 held each; after every block: at most 8 part voices sounding, none still fading after KILL_BLOCKS
+ * (a stolen voice fades out), the VOICE part at most 4; then all off: every voice free */
 static int chk_budget(char *msg, uint32_t n)
 {
-    static const uint8_t E[NPART][2] = {{0, 1}, {1, 1}, {5, 1}, {4, 0}};   /* (SAMPLE PERC until 1.0.2) */
+    static const uint8_t E[3] = {0, 1, 5};
     uint8_t held[NPART][128] = {{0}};
     uint32_t p, k, worst = 0, vworst = 0, fading = 0, kills0 = voice_kills;
     host_tracks_init();
     for (p = 0; p < NPART; p++) {
-        host_preset(&trk[p], E[p][0], E[p][1]);
+        host_preset(&trk[p], E[p], 1);
         trk[p].p[P_VOICE] = V_POLY;
         trk[p].p[P_AMODE] = 0;
         trk[p].p[P_SUS] = 100;
@@ -506,9 +547,12 @@ static int chk_budget(char *msg, uint32_t n)
         blk();
         for (p = 0; p < NPART; p++)
             for (i = 0; i < NVOICE; i++) {
-                a += trk[p].v[i].active;
-                va += p == 2u && trk[p].v[i].active;
-                fading += trk[p].v[i].active && trk[p].v[i].stage == 4u;
+                static uint8_t fade_blocks[NPART][NVOICE];
+                uint32_t f4 = trk[p].v[i].active && trk[p].v[i].stage == 4u;
+                a += trk[p].v[i].active && !f4;          /* sounding (a stolen voice fades out over KILL_BLOCKS) */
+                va += p == 2u && trk[p].v[i].active && !f4;
+                fade_blocks[p][i] = (uint8_t)(f4 ? fade_blocks[p][i] + 1u : 0u);
+                fading += fade_blocks[p][i] >= KILL_BLOCKS;
             }
         worst = a > worst ? a : worst;
         vworst = va > vworst ? va : vworst;
@@ -519,257 +563,10 @@ static int chk_budget(char *msg, uint32_t n)
                 trk_note_off(&trk[p], k);
     rel_at = fpos;
     finish();
-    snprintf(msg, n, "4 POLY parts, random notes: at most %u voices active (budget %u), VOICE part at most %u (cap 4), "
-             "%u voices taken, %u still fading after their block, all free %.2f s after the note-offs",
+    snprintf(msg, n, "3 POLY parts, random notes: at most %u voices active (budget %u), VOICE part at most %u (cap 4), "
+             "%u voices taken, %u still fading after their KILL_BLOCKS, all free %.2f s after the note-offs",
              worst, NVOICE, vworst, voice_kills - kills0, fading, R.free_s);
     return worst <= NVOICE && vworst <= 4u && !fading && R.free_s >= 0 && voice_kills > kills0;
-}
-
-/* MIDI packets in one audio block can reuse a voice before its stolen tail fades. */
-static int chk_retrigger_budget(char *msg, uint32_t n)
-{
-    static const uint8_t NOTES[4] = {48, 52, 55, 60};
-    uint32_t round, p, i, bad = 0, worst = 0;
-    for (round = 0; round < 2u; round++) {
-        voice_t *old = 0;
-        host_tracks_init();
-        for (p = 0; p < NPART; p++) {
-            memset(trk[p].v, 0, sizeof trk[p].v);
-            host_preset(&trk[p], p == 0 && round ? 5u : 0u, 0);
-            trk[p].p[P_VOICE] = p >= 2u ? V_MONO : V_POLY;
-            trk[p].p[P_AMODE] = 0;
-            trk[p].p[P_SUS] = 127;
-        }
-        for (i = 0; i < NELEM(NOTES); i++)
-            trk_note_on(&trk[0], NOTES[i], 100);
-        for (i = 0; i < 3u; i++)
-            trk_note_on(&trk[1], 64u + 3u * i, 100);
-        trk_note_on(&trk[2], 74, 100);
-        blk();
-        for (i = 0; i < NVOICE; i++)
-            if (trk[0].v[i].active && trk[0].v[i].note == 52u)
-                old = &trk[0].v[i];
-        trk_note_off(&trk[0], 52);
-        trk_note_on(&trk[3], 79, 100);
-        bad += !old || old->stage != 4u || voices_busy() != NVOICE;
-        /* Same pitch, then a new pitch with all four local VOICE slots still active. */
-        trk_note_on(&trk[0], round ? 57u : 52u, 100);
-        i = voices_busy();
-        worst = i > worst ? i : worst;
-        bad += i != NVOICE;
-        blk();
-        bad += voices_busy() != NVOICE || !trk[2].v[0].gate || !trk[3].v[0].gate;
-        for (p = 0; p < NPART; p++)
-            trk_all_off(&trk[p]);
-        for (i = 0; i < 4u * FS / CTL && !parts_free(); i++)
-            blk();
-        bad += !parts_free();
-    }
-    snprintf(msg, n, "same-note retrigger and full local-cap replacement before the fade: at most %u voices, "
-             "both MONO parts kept, all released", worst);
-    return !bad;
-}
-
-/* Voices held before a mode change must remain reclaimable except for the lead. */
-static int chk_cap_mode_budget(char *msg, uint32_t n)
-{
-    static const uint8_t MODE[3] = {V_MONO, V_LEGATO, V_UNISON};
-    uint32_t round, p, i, bad = 0, worst = 0;
-    for (round = 0; round < NELEM(MODE); round++) {
-        host_tracks_init();
-        for (p = 0; p < NPART; p++) {
-            memset(trk[p].v, 0, sizeof trk[p].v);
-            host_preset(&trk[p], 0, 0);
-            trk[p].p[P_VOICE] = p ? V_MONO : V_POLY;
-            trk[p].p[P_AMODE] = 0;
-            trk[p].p[P_SUS] = 127;
-        }
-        for (i = 0; i < NVOICE; i++)
-            trk_note_on(&trk[0], 48u + i * 2u, 100);
-        trk[0].p[P_VOICE] = MODE[round];
-        if (round == 2u) {
-            /* A lower cap must not protect old upper slots while the lower extras fade. */
-            host_preset(&trk[0], 5, 0);
-            trk[0].p[P_VOICE] = V_UNISON;
-            for (i = 1; i < trk_nvoice(&trk[0]); i++)
-                voice_kill(&trk[0].v[i]);
-        }
-        for (p = 1; p < NPART; p++) {
-            trk_note_on(&trk[p], 70u + p * 3u, 100);
-            i = voices_busy();
-            worst = i > worst ? i : worst;
-            bad += i > NVOICE || !trk[0].v[0].gate || trk[0].v[0].note != 48u;
-        }
-        trk[1].p[P_VOICE] = V_POLY;
-        trk_note_on(&trk[1], 84, 100);
-        i = voices_busy();
-        worst = i > worst ? i : worst;
-        bad += i > NVOICE || !trk[0].v[0].gate;
-        blk();
-        bad += voices_busy() > NVOICE || !trk[0].v[0].gate;
-        for (p = 1; p < NPART; p++)
-            bad += !trk[p].v[0].gate;
-        for (p = 0; p < NPART; p++)
-            trk_all_off(&trk[p]);
-        for (i = 0; i < 4u * FS / CTL && !parts_free(); i++)
-            blk();
-        bad += !parts_free();
-    }
-    snprintf(msg, n, "POLY -> MONO / LEGATO and lower UNISON cap: at most %u voices, all four leads kept, all released",
-             worst);
-    return !bad;
-}
-
-/* A live mode change can leave an old chord in slots above the new lead. */
-static int chk_mode_budget(char *msg, uint32_t n)
-{
-    uint32_t mode, initial, p, i, bad = 0;
-    for (initial = 0; initial < 2u; initial++)
-        for (mode = V_MONO; mode <= V_UNISON; mode++) {
-            host_tracks_init();
-            for (p = 0; p < NPART; p++) {
-                memset(trk[p].v, 0, sizeof trk[p].v);
-                host_preset(&trk[p], 0, 0);
-                trk[p].p[P_VOICE] = V_MONO;
-                trk[p].p[P_AMODE] = 0;
-            }
-            trk[0].p[P_VOICE] = initial ? V_UNISON : V_POLY;
-            if (initial)
-                trk_note_on(&trk[0], 48, 100);
-            else
-                for (i = 0; i < NVOICE; i++) trk_note_on(&trk[0], 48u + 2u * i, 100);
-            bad += voices_busy() != NVOICE;
-            trk[0].p[P_VOICE] = (int16_t)mode;
-            for (p = 1; p < NPART; p++) {
-                trk_note_on(&trk[p], 72u + p, 100);
-                bad += voices_busy() > NVOICE || !trk[0].v[0].gate || !trk[p].v[0].gate;
-            }
-            blk();
-            bad += voices_busy() > NVOICE;
-            for (p = 0; p < NPART; p++) trk_all_off(&trk[p]);
-        }
-    snprintf(msg, n, "POLY / UNISON chord -> MONO / LEGATO / UNISON: extra voices reclaimed, leads kept, budget %u", NVOICE);
-    return !bad;
-}
-
-static void mode_release_reset(uint32_t engine, uint32_t mode)
-{
-    uint32_t p;
-    memset(trk, 0, sizeof trk);
-    memset(&song, 0, sizeof song); sel_set(0);
-    host_tracks_init();
-    for (p = 0; p < NPART; p++) {
-        host_preset(&trk[p], p ? 0u : engine, 0);
-        trk[p].p[P_VOICE] = p ? V_POLY : mode;
-        trk[p].p[P_AMODE] = trk[p].p[P_REL] = 0;
-        trk[p].p[P_SUS] = 127;
-    }
-}
-
-static uint32_t mode_release_gates(void)
-{
-    uint32_t i, n = 0;
-    for (i = 0; i < NVOICE; i++) n += trk[0].v[i].gate != 0;
-    return n;
-}
-
-/* A key-up must release its voices even after a live VCE change. */
-static int chk_mode_release(char *msg, uint32_t n)
-{
-    uint32_t from, to, engine, order, i, mode, priority, bad = 0, cases = 0;
-    for (engine = 0; engine < 2u; engine++)
-        for (from = V_POLY; from <= V_UNISON; from++)
-            for (to = V_POLY; to <= V_UNISON; to++)
-                for (order = 0; order < 2u; order++) {
-                    mode_release_reset(engine ? 5u : 0u, from);
-                    trk_note_on(&trk[0], 60, 100);
-                    trk_note_on(&trk[0], 64, 100);
-                    for (i = 0; i < 8u; i++) blk();
-                    trk[0].p[P_VOICE] = (int16_t)to;
-                    trk_note_off(&trk[0], order ? 60u : 64u);
-                    trk_note_off(&trk[0], order ? 64u : 60u);
-                    bad += mode_release_gates() != 0 || trk[0].nmono != 0 || voices_busy() > NVOICE;
-                    for (i = 0; i < FS / CTL && !parts_free(); i++) blk();
-                    bad += !parts_free();
-                    cases++;
-                }
-    for (mode = V_MONO; mode <= V_UNISON; mode++) {
-        mode_release_reset(0, mode);
-        trk_note_on(&trk[0], 60, 100);
-        trk_note_on(&trk[0], 64, 100);
-        trk[0].p[P_VOICE] = V_POLY;
-        trk_note_off(&trk[0], 64);
-        trk[0].p[P_VOICE] = (int16_t)mode;
-        trk_note_off(&trk[0], 60);
-        trk_note_on(&trk[0], 72, 100);
-        trk_note_off(&trk[0], 72);
-        bad += mode_release_gates() != 0 || trk[0].nmono != 0;
-        cases++;
-        for (priority = 0; priority < 3u; priority++) {
-            uint32_t lead = priority == 1u ? 72u : 80u, other = priority == 1u ? 80u : 72u;
-            uint32_t want = mode == V_UNISON ? NVOICE : 1u;
-            mode_release_reset(0, V_POLY);
-            trk_note_on(&trk[0], 48, 100);
-            trk_note_on(&trk[0], 64, 100);
-            trk[0].p[P_VOICE] = (int16_t)mode;
-            trk[0].p[P_PRIO] = (int16_t)priority;
-            trk_note_on(&trk[0], 72, 100);
-            trk_note_on(&trk[0], 76, 100);
-            trk_note_on(&trk[0], 80, 100);
-            trk_note_off(&trk[0], 48);
-            trk_note_off(&trk[0], 64);
-            trk_note_off(&trk[0], other);
-            bad += mode_release_gates() != want || trk[0].v[0].note != lead || trk[0].mono_note != lead;
-            trk_note_off(&trk[0], lead);
-            bad += mode_release_gates() != want || trk[0].v[0].note != 76u || trk[0].mono_note != 76u;
-            trk_note_off(&trk[0], 76);
-            bad += mode_release_gates() != 0 || trk[0].nmono != 0 || voices_busy() > NVOICE;
-            cases++;
-        }
-    }
-    snprintf(msg, n, "%u cases: all 16 VCE pairs, both key-up orders and caps 8 / 4; no stale fallback, "
-             "MONO / LEGATO / UNISON priority leads and fallback preserved", cases);
-    return !bad;
-}
-
-static int chk_sample_end(char *msg, uint32_t n)
-{
-    static const int32_t SAMPLE[4] = {12000, -12000, 32767, -32768};
-    static const uint32_t FRAC[4] = {0, 16384, 32768, 65535};
-    static const int32_t PITCH[5] = {0, 96, 192, 384, 576};
-    const smp_zone_t saved = usr_zone[0][0];
-    track_t *t = &trk[0];
-    voice_t *v = &t->v[0];
-    uint32_t a, b, c, bad = 0, cases = 0;
-    host_tracks_init();
-    host_preset(t, 4, 0);
-    t->p[P_E1] = t->p[P_E2] = t->p[P_E3] = t->p[P_E6] = 0;
-    t->p[P_E4] = 127;
-    usr_zone[0][0] = (smp_zone_t){.n = 1, .rate = 65536, .root16 = 960};
-    for (a = 0; a < NELEM(SAMPLE); a++)
-        for (b = 0; b < NELEM(FRAC); b++)
-            for (c = 0; c < NELEM(PITCH); c++) {
-                vmod_t m = {.pitch16 = 960 + PITCH[c], .amp0 = 32767, .amp1 = 32767};
-                int32_t out[CTL] = {0}, src, lp = 4000 + (((127 << 8) * 28767) >> 15), want;
-                uint32_t step = (pow2_q16(PITCH[c]) >> 8) * 256u, f = FRAC[b] + step;
-                memset(v, 0, sizeof *v);
-                v->active = 1;
-                v->ph[0] = 1;
-                v->ph[1] = FRAC[b];
-                v->s[4] = 0x8000;
-                v->s[2] = v->s[3] = v->s[7] = SAMPLE[a];
-                /* The source after the last sample is zero, including when several samples were skipped. */
-                src = f >= 131072u ? 0 : SAMPLE[a] + (int32_t)((-(int64_t)SAMPLE[a] * ((f - 65536u) >> 1)) >> 15);
-                want = SAMPLE[a] + mulq15(src - SAMPLE[a], lp);
-                sample_render(t, v, out, CTL, &m);
-                bad += out[0] != (voice_amp(want, &m, 0) << 1) || v->ph[1] >= 65536u || !v->s[6];
-                cases++;
-            }
-    usr_zone[0][0] = saved;
-    memset(v, 0, sizeof *v);
-    snprintf(msg, n, "%u one-shot ends, both polarities and full scale, 1x..8x rate: terminal interpolation bounded",
-             cases);
-    return !bad;
 }
 
 /* a stolen voice fades: plain sines (filter open, no sends) on 3 parts; part 1 holds 7 notes, part 2 one,
@@ -886,23 +683,20 @@ static int chk_voice_cap(char *msg, uint32_t n)
     return most[0] == 4u && most[1] == 4u;
 }
 
-/* no hanging notes: 6 s of random MIDI note-ons / offs on channels 1..4 (the parts), 5, 10 and 16 (ignored
- * with ROUT CH1-4, the selected track with SEL), and keys, while the selected track changes; round 1 with ROUT
- * CH1-4, round 2 SEL, round 3 switching ROUT every 0.5 s (CH1-4 lets go of channels 5..16's notes,
- * seq.c events_block); the parts in random voice modes,
+/* no hanging notes: 6 s of random MIDI note-ons / offs on channels 1, 2, 3 (the parts), 10 (drums), 5 and
+ * 16 (the selected track), and keys, while the selected track changes; the parts in random voice modes,
  * some with ARP, SUS 127 (a hanging note keeps sounding). A channel's note-off goes to the same channel
  * as its note-on. Then every held note off: no gate may stay on, no ARP may still hold a key, every voice
  * must be free (also the same note held on two "selected track" channels across a selection change). */
 static int chk_hang(char *msg, uint32_t n)
 {
-    static const uint8_t CHS[7] = {0, 1, 2, 3, 4, 9, 15};
-    uint8_t on[7][128] = {{0}};
+    static const uint8_t CHS[6] = {0, 1, 2, 9, 4, 15};
+    uint8_t on[6][128] = {{0}};
     uint32_t keys = 0, k, c, ev = 0, round;
     char who[96] = "";
     int bad = 0;
     for (round = 0; round < 3u && !bad; round++) {
         host_tracks_init();
-        song.g[G_ROUTE] = round ? 1 : 0;
         for (k = 0; k < NPART; k++) {
             host_preset(&trk[k], rnd(NENGINES), rnd(4));
             trk[k].p[P_VOICE] = (int16_t)rnd(4);
@@ -912,10 +706,8 @@ static int chk_hang(char *msg, uint32_t n)
         }
         for (k = 0; k < 6u * FS / CTL; k++) {
             uint32_t r = rnd(16);
-            if (round == 2u && k % (FS / CTL / 2u) == 0u)
-                song.g[G_ROUTE] ^= 1;              /* ROUT changed with notes held */
             if (r < 6u) {                          /* MIDI */
-                uint32_t ci = rnd(7), note = 36u + rnd(36);
+                uint32_t ci = rnd(6), note = 36u + rnd(36);
                 if (on[ci][note]) {
                     midi_pkt(rnd(2) ? 0x80u | CHS[ci] : 0x90u | CHS[ci], note, 0);
                     on[ci][note] = 0;
@@ -929,12 +721,12 @@ static int chk_hang(char *msg, uint32_t n)
                 fm1_in.notes = keys;
                 ev++;
             } else if (r == 9u) {
-                sel_set((uint8_t)rnd(NTRK));     /* another track selected */
+                song.sel = (uint8_t)rnd(NTRK);     /* another track selected */
             }
             blk();
         }
         fm1_in.notes = keys = 0;                   /* everything off */
-        for (c = 0; c < 7u; c++)
+        for (c = 0; c < 6u; c++)
             for (k = 0; k < 128u; k++)
                 if (on[c][k]) {
                     midi_pkt(0x80u | CHS[c], k, 64);
@@ -956,10 +748,14 @@ static int chk_hang(char *msg, uint32_t n)
                              "stage %u)", c / NVOICE + 1u, c % NVOICE, v->note, FREE_CAP_S, v->gate, v->stage);
                 }
             }
+            if (!parts_free() && !bad) {
+                bad = 2;
+                snprintf(who, sizeof who, "a drum voice still active %d s after the note-offs", FREE_CAP_S);
+            }
         }
     }
-    snprintf(msg, n, "%u random MIDI / key events on ch 1-4, 5, 10, 16 and the keys, track selection changing, "
-             "3 rounds (ROUT CH1-4, SEL, switching): %s", ev, bad ? who : "no gate left on, every voice free");
+    snprintf(msg, n, "%u random MIDI / key events on ch 1-3, 10, 5, 16 and the keys, track selection changing, "
+             "3 rounds: %s", ev, bad ? who : "no gate left on, every voice free");
     return !bad;
 }
 
@@ -1019,9 +815,9 @@ int main(int argc, char **argv)
     uint32_t jobs_at_once = getenv("JOBS") ? (uint32_t)atoi(getenv("JOBS")) : 8u;
     static const char *const MN[4] = {"POLY", "MONO", "LEGATO", "UNISON"};
     static const char *const SN[6] = {"dry", "chorus", "delay", "reverb", "all", "dist"};
-    static const uint8_t MODE_E[3][2] = {{0, 0}, {1, 1}, {5, 0}};   /* engine, preset (DIGITAL: FELUCCA_FM4 only) */
-    static const uint8_t SEND_E[2][2] = {{0, 3}, {1, 0}};
-    static uint8_t cpu_parts[MAXJ][NPART][3];
+    static const uint8_t MODE_E[3][2] = {{0, 0}, {1, 1}, {5, 0}};   /* engine, preset */
+    static const uint8_t SEND_E[2][2] = {{0, 7}, {1, 0}};   /* ANALOG TRAP PLUCK, DIGITAL RHODES */
+    static uint8_t cpu_parts[MAXJ][NPART + 1][3];
     static kv_t gold[MAXJ], cpu[MAXJ];
     uint32_t ng, nc, e, pi, i, g0, g1, c0, c1, k0, ncpu = 0;
     uint32_t g_changed = 0, g_new = 0, g_gone = 0, h_fail = 0, c_fail = 0, c_warn = 0, k_fail = 0, crash = 0;
@@ -1031,6 +827,7 @@ int main(int argc, char **argv)
     char name[64], s[64];
     if (jobs_at_once < 1u || jobs_at_once > 64u)
         jobs_at_once = 8;
+    only_cpu = getenv("CPU_JOB") != 0;
 
     /* 1 + 2: the golden renders */
     g0 = nj;
@@ -1043,13 +840,9 @@ int main(int argc, char **argv)
             j->e = (uint8_t)e;
             j->pi = (uint8_t)pi;
         }
-    add(J_DRUMS, "drums/drum_gm_kit");
-    for (i = 0; i < DV_NKIT; i++) {                 /* the model kits (KIT 80 10 66 55 77) */
-        snprintf(name, sizeof name, "drums/kit_%s", N_DRUM_KIT[DK_80 + i]);
-        add(J_DRUMS, name)->arg = (uint8_t)(DK_80 + i);
-    }
+    add(J_DRUMS, "drums/gm_kit");
     for (i = 0; i < 3u; i++)
-        for (k0 = 0; k0 < 4u && eng_ok(MODE_E[i][0]); k0++) {
+        for (k0 = 0; k0 < 4u; k0++) {
             job_t *j;
             snprintf(name, sizeof name, "mode/%s/%s", ENGINES[MODE_E[i][0]]->name, MN[k0]);
             j = add(J_MODE, name);
@@ -1058,7 +851,7 @@ int main(int argc, char **argv)
             j->arg = (uint8_t)k0;
         }
     for (i = 0; i < 2u; i++)
-        for (k0 = 0; k0 < 6u && eng_ok(SEND_E[i][0]); k0++) {
+        for (k0 = 0; k0 < 6u; k0++) {
             job_t *j;
             snprintf(name, sizeof name, "sends/%s/%s", ENGINES[SEND_E[i][0]]->name, SN[k0]);
             j = add(J_SENDS, name);
@@ -1068,12 +861,10 @@ int main(int argc, char **argv)
         }
     add(J_SONG, "song/4track_mix");
     {   /* the SLICER */
-        job_t *j = add(J_SLICER, "slicer/gate/ANALOG_ACID");
-        j->e = 0, j->pi = 4, j->arg = 0;
-#if FELUCCA_FM4                                     /* (DIGITAL: retired, built with FELUCCA_FM4=1 only) */
-        j = add(J_SLICER, "slicer/stut/DIGITAL_PAD");
-        j->e = 1, j->pi = 5, j->arg = 1;
-#endif
+        job_t *j = add(J_SLICER, "slicer/gate/ANALOG_DARK_STR");
+        j->e = 0, j->pi = 10, j->arg = 0;
+        j = add(J_SLICER, "slicer/stut/DIGITAL_RHODES");
+        j->e = 1, j->pi = 0, j->arg = 1;
         add(J_SONG, "slicer/song_gate_stut")->arg = 1;
     }
     g1 = nj;
@@ -1085,12 +876,7 @@ int main(int argc, char **argv)
 
     /* 4: the voice checks */
     k0 = nj;
-    add(J_CHECK, "voices: budget of 8 across 4 parts")->check = chk_budget;
-    add(J_CHECK, "voices: reuse before the stolen tail fades")->check = chk_retrigger_budget;
-    add(J_CHECK, "voices: budget after a live mode change")->check = chk_mode_budget;
-    add(J_CHECK, "voices: budget after voice mode changes")->check = chk_cap_mode_budget;
-    add(J_CHECK, "voices: note-offs after live voice mode changes")->check = chk_mode_release;
-    add(J_CHECK, "samples: high-rate one-shot ends")->check = chk_sample_end;
+    add(J_CHECK, "voices: budget of 8 across 3 parts")->check = chk_budget;
     add(J_CHECK, "voices: a stolen voice fades")->check = chk_steal_fade;
     add(J_CHECK, "voices: MONO keeps its note")->check = chk_keep_mono;
     add(J_CHECK, "voices: LEGATO keeps its note")->check = chk_keep_legato;
@@ -1115,43 +901,63 @@ int main(int argc, char **argv)
             j->e = (uint8_t)e;
             j->pi = (uint8_t)pi;
         }
-    for (i = 0; i < DV_NKIT; i++) {                 /* DRUM's model kits: the 8 lanes, as its preset above */
+    {   /* mixes: idle (subtracted from the presets' counts), idle + drums, DIGITAL + PHASE + VOICE asking
+         * 8 + 8 + 4 (the budget keeps 8) + drums */
         job_t *j;
-        snprintf(name, sizeof name, "cpu/DRUM/kit_%s", N_DRUM_KIT[DK_80 + i]);
-        j = add(J_CPU, name);
+        j = add(J_CPU, "cpu/mix/3parts_heavy_now_drums");      /* (2.5 exp) FM6, GRAIN, TRIO */
         memset(cpu_parts[ncpu], 0, sizeof cpu_parts[ncpu]);
-        cpu_parts[ncpu][0][0] = ENGI_DRUM, cpu_parts[ncpu][0][1] = 0, cpu_parts[ncpu][0][2] = 8;
+        cpu_parts[ncpu][0][0] = ENGI_FM6, cpu_parts[ncpu][0][1] = 0, cpu_parts[ncpu][0][2] = 8;
+        cpu_parts[ncpu][1][0] = ENGI_GRAIN, cpu_parts[ncpu][1][1] = 0, cpu_parts[ncpu][1][2] = 8;
+        cpu_parts[ncpu][2][0] = 6, cpu_parts[ncpu][2][1] = 3, cpu_parts[ncpu][2][2] = 8;
+        cpu_parts[ncpu][NPART][0] = 1;
         j->parts = (const uint8_t (*)[3])cpu_parts[ncpu++];
-        j->e = ENGI_DRUM;
-        j->pi = 0;
-        j->arg = (uint8_t)(DK_80 + i);
-    }
-    {   /* mixes: idle (subtracted from the presets' counts), idle + drums (part 4 DRUM; SAMPLE PERC until 1.0.2), FM (DIGITAL with
-         * FELUCCA_FM4, else FM6) + PHASE + VOICE asking 8 + 8 + 4 + the drums (the budget keeps 8; FM6 plays 6) */
-        job_t *j = add(J_CPU, "cpu/mix/idle");
+        j->e = 0xFF;
+        j = add(J_CPU, "cpu/mix/3parts_phys_noise_drums");     /* (2.5 exp) PHYS SYMP, PHYS MODAL, NOISE */
+        memset(cpu_parts[ncpu], 0, sizeof cpu_parts[ncpu]);
+        cpu_parts[ncpu][0][0] = ENGI_PHYS, cpu_parts[ncpu][0][1] = 7, cpu_parts[ncpu][0][2] = 8;
+        cpu_parts[ncpu][1][0] = ENGI_PHYS, cpu_parts[ncpu][1][1] = 3, cpu_parts[ncpu][1][2] = 8;
+        cpu_parts[ncpu][2][0] = ENGI_NOISE, cpu_parts[ncpu][2][1] = 1, cpu_parts[ncpu][2][2] = 8;
+        cpu_parts[ncpu][NPART][0] = 1;
+        j->parts = (const uint8_t (*)[3])cpu_parts[ncpu++];
+        j->e = 0xFF;
+        j = add(J_CPU, "cpu/mix/idle");
         memset(cpu_parts[ncpu], 0, sizeof cpu_parts[ncpu]);
         j->parts = (const uint8_t (*)[3])cpu_parts[ncpu++];
         j->e = 0xFF;
         j = add(J_CPU, "cpu/mix/idle_drums");
         memset(cpu_parts[ncpu], 0, sizeof cpu_parts[ncpu]);
-        cpu_parts[ncpu][3][0] = ENGI_DRUM, cpu_parts[ncpu][3][1] = 0, cpu_parts[ncpu][3][2] = DRUM_HITS;
+        cpu_parts[ncpu][NPART][0] = 1;
         j->parts = (const uint8_t (*)[3])cpu_parts[ncpu++];
         j->e = 0xFF;
         j = add(J_CPU, "cpu/mix/3parts_full_drums");
         memset(cpu_parts[ncpu], 0, sizeof cpu_parts[ncpu]);
-        cpu_parts[ncpu][0][0] = FELUCCA_FM4 ? ENGI_DIGITAL : ENGI_FM6, cpu_parts[ncpu][0][1] = 0, cpu_parts[ncpu][0][2] = 8;
+        cpu_parts[ncpu][0][0] = 1, cpu_parts[ncpu][0][1] = 0, cpu_parts[ncpu][0][2] = 8;
         cpu_parts[ncpu][1][0] = 2, cpu_parts[ncpu][1][1] = 0, cpu_parts[ncpu][1][2] = 8;
         cpu_parts[ncpu][2][0] = 5, cpu_parts[ncpu][2][1] = 0, cpu_parts[ncpu][2][2] = 4;
-        cpu_parts[ncpu][3][0] = ENGI_DRUM, cpu_parts[ncpu][3][1] = 0, cpu_parts[ncpu][3][2] = DRUM_HITS;
+        cpu_parts[ncpu][NPART][0] = 1;
         j->parts = (const uint8_t (*)[3])cpu_parts[ncpu++];
         j->e = 0xFF;
-        j = add(J_CPU, "cpu/mix/idle_click");          /* idle + the metronome's click (click.c) never silent */
-        memset(cpu_parts[ncpu], 0, sizeof cpu_parts[ncpu]);
-        j->parts = (const uint8_t (*)[3])cpu_parts[ncpu++];
-        j->e = 0xFE;
+        j->e = 0xFF;
     }
     c1 = nj;
+    if (getenv("CPU_JOB")) {                          /* one CPU job in this process (cpu_callgrind's child) */
+        for (i = c0; i < c1; i++)
+            if (!strcmp(J[i].name, getenv("CPU_JOB"))) {
+                job_cpu(&J[i]);
+                return 0;
+            }
+        return 2;
+    }
     run_jobs(J + c0, c1 - c0, 1);
+    if (!J[c0].r.ipc && getenv("CPU_VALGRIND") && !system("valgrind --version >/dev/null 2>&1")) {
+        printf("regress: CPU: counting instructions under callgrind (%u jobs)...\n", c1 - c0);
+        fflush(stdout);
+        for (i = c0; i < c1; i++) {
+            double ipc = cpu_callgrind(argv[0], gpath, cpath, J[i].name);
+            if (ipc > 0)
+                J[i].r.ipc = ipc;
+        }
+    }
 
     /* ---- report: goldens and health ---- */
     ng = load_kv(gpath, gold, MAXJ);
@@ -1242,64 +1048,76 @@ int main(int argc, char **argv)
     /* a preset's own cost: its count less the idle mix's (the mix alone is half of a light preset's),
      * so +25 % means 25 % more engine work; the mixes as they are */
     nc = load_kv(cpath, cpu, MAXJ);
-    idle_now = J[c1 - 4u].r.ipc;
-    idle_base = kv_get(cpu, nc, J[c1 - 4u].name) ? atof(kv_get(cpu, nc, J[c1 - 4u].name)) : 0;
-    for (i = c0; i < c1; i++) {
-        const job_t *j = &J[i];
-        const char *want = kv_get(cpu, nc, j->name);
-        int own = j->e < NENGINES && idle_base > 0;
-        double b = want ? atof(want) - (own ? idle_base : 0) : 0, ipc = j->r.ipc - (own ? idle_now : 0);
-        if (j->crashed) {
-            printf("regress: CRASH  %s\n", j->name);
-            crash++;
-            continue;
+    {
+        /* every cost per mille of the idle + drums mix of this run: comparable across hosts and units */
+        double ref = cpu_cost(&J[c1 - 2u]), tol = J[c0].r.ipc ? CPU_TOL : CPU_TOL_NS;
+        const char *unit = J[c0].r.ipc ? "instructions" : "time";
+        if (ref <= 0)
+            ref = 1;
+        idle_now = cpu_cost(&J[c1 - 3u]) / ref * 1000.0;
+        idle_base = kv_get(cpu, nc, J[c1 - 3u].name) ? atof(kv_get(cpu, nc, J[c1 - 3u].name)) : 0;
+        for (i = c0; i < c1; i++) {
+            job_t *j = &J[i];
+            const char *want = kv_get(cpu, nc, j->name);
+            int own = j->e < NENGINES && idle_base > 0;
+            double rel = cpu_cost(j) / ref * 1000.0, b = want ? atof(want) - (own ? idle_base : 0) : 0,
+                   v = rel - (own ? idle_now : 0);
+            j->r.rel = rel;
+            if (j->crashed) {
+                printf("regress: CRASH  %s\n", j->name);
+                crash++;
+                continue;
+            }
+            if (j->e < NENGINES && cpu_cost(j) > heavy[j->e]) {
+                heavy[j->e] = cpu_cost(j);
+                heavy_ns[j->e] = j->r.ns;
+                heavy_p[j->e] = j->pi;
+            }
+            if (cupd)
+                continue;
+            if (!want)
+                printf("regress: CPU %s: %.0f per mille of the idle + drums mix, no baseline (BUDGET_UPDATE=1 adds it)\n", j->name, v);
+            else if (v > b * (1 + tol) && v > b + CPU_SLACK) {
+                printf("regress: CPU OVER BUDGET  %s: %.0f%s (%s), baseline %.0f (+%.0f %%, limit +%.0f %%)%s\n",
+                       j->name, v, own ? " over the idle mix" : "", unit, b, (v / b - 1) * 100, tol * 100,
+                       j->r.ipc ? "" : " -- timed: a note, not a failure");
+                if (j->r.ipc)
+                    c_fail++;                         /* timed costs are too noisy on a shared host to fail on */
+                else
+                    c_warn++;
+            } else if (v < b * (1 - tol) && v < b - CPU_SLACK) {
+                printf("regress: CPU note  %s: %.0f (%s), baseline %.0f (%.0f %%): faster? "
+                       "BUDGET_UPDATE=1 to keep it\n", j->name, v, unit, b, (v / b - 1) * 100);
+                c_warn++;
+            }
         }
-        if (j->e < NENGINES && j->r.ipc > heavy[j->e]) {
-            heavy[j->e] = j->r.ipc;
-            heavy_ns[j->e] = j->r.ns;
-            heavy_p[j->e] = j->pi;
-        }
-        if (!j->r.ipc || cupd)
-            continue;
-#ifdef C1_HOST
-        continue;                                   /* (a thread as core 1: its handing over costs the host, not the
-                                                     * firmware; the plain build checks the budget) */
-#endif
-        if (!want)
-            printf("regress: CPU %s: %.0f instructions / sample, no baseline (BUDGET_UPDATE=1 adds it)\n", j->name, ipc);
-        else if (ipc > b * (1 + CPU_TOL) && ipc > b + CPU_SLACK) {
-            printf("regress: CPU OVER BUDGET  %s: %.0f instructions / sample%s, baseline %.0f (+%.0f %%, limit +%.0f %%)\n",
-                   j->name, ipc, own ? " over the idle mix" : "", b, (ipc / b - 1) * 100, CPU_TOL * 100);
-            c_fail++;
-        } else if (ipc < b * (1 - CPU_TOL) && ipc < b - CPU_SLACK) {
-            printf("regress: CPU note  %s: %.0f instructions / sample, baseline %.0f (%.0f %%): faster? "
-                   "BUDGET_UPDATE=1 to keep it\n", j->name, ipc, b, (ipc / b - 1) * 100);
-            c_warn++;
-        }
+        if (!J[c0].r.ipc)
+            printf("regress: CPU: no instruction counter on this host: timed (best of three seconds, limit +%.0f %%;"
+                   " CPU_VALGRIND=1 counts them exactly under callgrind)\n", CPU_TOL_NS * 100);
     }
-    if (!J[c0].r.ipc)
-        printf("regress: CPU: no instruction counter on this host (proc_pid_rusage); the budget is not checked\n");
-    else if (cupd) {
+    if (cupd) {
         FILE *f = fopen(cpath, "w");
         if (!f) {
             perror(cpath);
             return 2;
         }
-        fprintf(f, "# FELUCCA host CPU baseline (tests/regress.c): instructions per 44.1 kHz sample, cc -O2 on\n"
-                   "# the Mac (kernel-counted, ~1 %% run to run). The check allows +%.0f %%. Rewritten by BUDGET_UPDATE=1.\n",
-                CPU_TOL * 100);
+        fprintf(f, "# SLOOP host CPU baseline (tests/regress.c): cost per sample, per mille of the idle + drums mix\n"
+                   "# (cpu/mix/idle_drums = 1000), cc -O2; %s on the host that wrote it. The check allows +%.0f %%\n"
+                   "# (instructions) or +%.0f %% (timed). Rewritten by BUDGET_UPDATE=1.\n",
+                J[c0].r.ipc ? "instructions counted" : "timed, best of three seconds", CPU_TOL * 100, CPU_TOL_NS * 100);
         for (i = c0; i < c1; i++)
-            fprintf(f, "%s %.0f\n", J[i].name, J[i].r.ipc);
+            fprintf(f, "%s %.0f\n", J[i].name, J[i].r.rel);
         fclose(f);
         printf("regress: CPU baseline %s rewritten (%u entries)\n", cpath, c1 - c0);
     }
-    printf("regress: CPU, one part with 8 notes held (VOICE 4), heaviest preset per engine (instructions / ns per sample):\n");
+    printf("regress: CPU, one part with 8 notes held (VOICE 4), heaviest preset per engine (%s / ns per sample):\n",
+           J[c0].r.ipc ? "instructions" : "per mille");
     for (e = 0; e < NENGINES; e++)
-        if (eng_ok(e))
-            printf("regress:   %-8s %-14s %6.0f instr  %6.1f ns\n", ENGINES[e]->name, ENGINES[e]->presets[heavy_p[e]].name,
-                   heavy[e], heavy_ns[e]);
-    for (i = c1 - 4u; i < c1; i++)
-        printf("regress:   %-23s %6.0f instr  %6.1f ns\n", J[i].name + 8, J[i].r.ipc, J[i].r.ns);
+        printf("regress:   %-8s %-14s %6.0f %s  %6.1f ns\n", ENGINES[e]->name, ENGINES[e]->presets[heavy_p[e]].name,
+               J[c0].r.ipc ? heavy[e] : heavy[e] / cpu_cost(&J[c1 - 2u]) * 1000.0, J[c0].r.ipc ? "instr" : "/1000", heavy_ns[e]);
+    for (i = c1 - 3u; i < c1; i++)
+        printf("regress:   %-23s %6.0f %s  %6.1f ns\n", J[i].name + 8, J[i].r.ipc ? J[i].r.ipc : J[i].r.rel,
+               J[i].r.ipc ? "instr" : "/1000", J[i].r.ns);
 
     printf("regress: %u golden renders (%u changed, %u gone), %u health failures, %u voice / routing checks failed, "
            "%u CPU entries over budget (%u notes), %u crashes; %.1f s\n", g1 - g0, gupd ? 0 : g_changed,

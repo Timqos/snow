@@ -1,15 +1,17 @@
-Samples from Versilian Studios' VSCO-2 Community Edition and VCSL, both released
-under CC0 1.0 (public domain). Thanks to Versilian Studios / Sam Gossner.
-Only the first ~1 s of each file is used.
+Samples in the SAMPLE engine's built-in sets. All CC0 1.0 (public domain).
 
-PIANO/00_GPiano_sus_C1_v2_rr1_Player.wav  <-  sgossner/VCSL: Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C1_v2_rr1_Player.wav
-PIANO/01_GPiano_sus_C2_v2_rr1_Player.wav  <-  sgossner/VCSL: Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C2_v2_rr1_Player.wav
-PIANO/02_GPiano_sus_C3_v2_rr1_Player.wav  <-  sgossner/VCSL: Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C3_v2_rr1_Player.wav
-PIANO/03_GPiano_sus_C4_v2_rr1_Player.wav  <-  sgossner/VCSL: Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C4_v2_rr1_Player.wav
-PIANO/04_GPiano_sus_C5_v2_rr1_Player.wav  <-  sgossner/VCSL: Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C5_v2_rr1_Player.wav
-FLUTE/00_LDFlute_susvib_C4_v1_1.wav  <-  sgossner/VSCO-2-CE: Woodwinds/Flute/susvib/LDFlute_susvib_C4_v1_1.wav
-FLUTE/01_LDFlute_susvib_C5_v1_1.wav  <-  sgossner/VSCO-2-CE: Woodwinds/Flute/susvib/LDFlute_susvib_C5_v1_1.wav
-FLUTE/02_LDFlute_susvib_C6_v1_1.wav  <-  sgossner/VSCO-2-CE: Woodwinds/Flute/susvib/LDFlute_susvib_C6_v1_1.wav
-SAX/00_BrettTenor_NV_Main_A#1_vl2_rr1.wav  <-  sgossner/VCSL: Aerophones/Reed Aerophones/Tenor Saxophone/Non-Vibrato/BrettTenor_NV_Main_A#1_vl2_rr1.wav
-SAX/01_BrettTenor_NV_Main_A#2_vl2_rr1.wav  <-  sgossner/VCSL: Aerophones/Reed Aerophones/Tenor Saxophone/Non-Vibrato/BrettTenor_NV_Main_A#2_vl2_rr1.wav
-SAX/02_BrettTenor_NV_Main_A#3_vl2_rr1.wav  <-  sgossner/VCSL: Aerophones/Reed Aerophones/Tenor Saxophone/Non-Vibrato/BrettTenor_NV_Main_A#3_vl2_rr1.wav
+PIANO  VCSL (Versilian Community Sample Library), Grand Piano (Steinway B), sustain, close mics
+       (until 2.1 the piano was VCSL's Upright Piano (Knight), DUSTY; it is no longer in the tree)
+VIBES  VCSL, Vibraphone (hard mallets)                    https://github.com/sgossner/VCSL
+BASS   VSCO-2 Community Edition, Solo Contrabass pizzicato
+HORNS  VSCO-2 Community Edition, Trumpet + Tenor Trombone staccato
+STRGS  VSCO-2 Community Edition, Violin + Viola sections spiccato
+FLUTE  VSCO-2 Community Edition, Flute (susvib)           https://github.com/sgossner/VSCO-2-CE
+SCRCH  Sonic Pi sample set (freesound.org CC0 recordings): vinyl_scratch (hello_flowers),
+       vinyl_backspin (il112), vinyl_rewind (TasmanianPower)
+       https://github.com/sonic-pi-net/sonic-pi/tree/main/etc/samples
+KIT    VCSL: the acoustic drum kit of the GM map (bass drum, snare, side stick, claps, hi-hat, toms,
+       suspended cymbal, cowbell) and hand percussion (tambourine, shaker, conga, claves, woodblock)
+
+Thanks to Versilian Studios / Sam Gossner and to the Sonic Pi project.
+Retuned, cut and coloured by tools/gen_builtin_hiphop.py (gen_hiphop_pack.py's chain).

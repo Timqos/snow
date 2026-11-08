@@ -1,162 +1,107 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* ANALOG: two band-limited oscillators (saw / square / tri / sine / PWM),
- * noise, drive and a trapezoidal low-pass.
- * (Skiff 1.3, from Felucca 1.5) WAVE SYNC and SUB (appended: WAVE 0..4 play as they always did; firmware before reads
- * them as PWM) are two more oscillator pairs (analog_render_x):
- *   SYNC  OSC 2 a saw hard-synced to OSC 1 (a saw): it restarts with OSC 1's every cycle, band-limited at the restart
- *         (polyBLEP scaled by the step the restart makes). DTN (shown SYNC) sets OSC 2 above OSC 1, 3/16 semitone a
- *         step (127: +23.8 semitones), and the SHP routings sweep it (ENV DEST / LFO DEST SHP, the matrix's SHP: 3/16
- *         semitone a step of shape, as PWM takes them for its width): the sync sweep. MIX between the two as for
- *         every pair (OSC 2 alone at 127)
- *   SUB   OSC 1 a saw, OSC 2 a square an octave below it (detuned by DTN in cents as before): MIX (shown SUB) is the
- *         sub oscillator's level */
-static const char *const N_ANALOG_WAVE[] = {"SAW", "SQR", "TRI", "SIN", "PWM", "SYNC", "SUB"};
-enum { AW_SYNC = 5, AW_SUB = 6 };
-static const param_desc_t ANALOG_SYNC = {"SYNC", 0, 0, 127, 10, F_INT, 0};   /* DTN's range and default */
-static const param_desc_t ANALOG_SUB = {"SUB", 0, 0, 127, 64, F_PCT, 0};      /* MIX's */
-
-static const param_desc_t *analog_desc(const track_t *t, uint32_t k)
-{
-    if (k == 1u && t->p[P_E0] == AW_SYNC)
-        return &ANALOG_SYNC;
-    if (k == 2u && t->p[P_E0] == AW_SUB)
-        return &ANALOG_SUB;
-    return 0;
-}
+ * noise, drive and a trapezoidal state-variable filter: low-pass, or (2.6, TYPE) band-pass / high-pass. */
+static const char *const N_ANALOG_WAVE[] = {"SAW", "SQR", "TRI", "SIN", "PWM"};
 
 static void analog_note_on(track_t *t, voice_t *v)
 {
     (void)t;
+    if (!v->env && !v->env_out)
+        v->ph[0] = 0;                                 /* a fresh note: from phase 0 (an 808 starts the same every time) */
     v->ph[1] = v->ph[0] + 0x40000000u;
     v->s[0] = v->s[1] = 0;                            /* filter */
     if (!v->s[2])
         v->s[2] = 0x1234567 + (int32_t)v->age;        /* noise state */
-    v->s[3] = 0;                                      /* SYNC: no restart pending */
 }
 
-/* WAVE SYNC / SUB: OSC 1 a saw, OSC 2 the synced saw / the sub square; then noise, drive and the filter as
- * analog_render. Its own function: analog_render's loop stays what it was */
-static __attribute__((noinline)) void analog_render_x(track_t *t, voice_t *v, int32_t *out, uint32_t n,
-                                                      const vmod_t *m)
+/* the filter's TYPE (SLOOP 2.6, after Felucca 1.5 by Leo Kuroshita, #104: track parameter P_FTYPE, EDIT > FILTER):
+ * the SVF's outputs (dsp.c tsvf_lp, written out here with the taps: Simper's trapezoidal state-variable filter), 0 LP
+ * the low-pass as always (tsvf_lp itself: the same steps, bit for bit), 1 BP its band-pass v1, 2 HP in - k v1 - v2. At
+ * the cutoff the three peak alike (1/k, k the damping RES sets: 2 at RES 0, ~0.15 at 127), so the soft knee after them
+ * and the level stay as LP's */
+static inline int32_t analog_tap(const tsvf_t *c, int32_t k, int32_t in, int32_t *ic1, int32_t *ic2, uint32_t ft)
 {
-    const int16_t *p = t->p;
-    uint32_t sub = p[P_E0] == AW_SUB, i;
-    int32_t det = p[P_E1], mix = p[P_E2], noise = p[P_E3];
-    int32_t cut = (p[P_E4] << 8) + m->cutoff + (p[P_E7] * (v->pitch16 - 60 * 16) >> 4);
-    tsvf_t flt;
-    int32_t drive = 32768 + p[P_E6] * 512;
-    int32_t m2 = mix * 258, m1 = 32767 - m2;
-    int32_t nz = noise * 200, drv = p[P_E6];
-    uint32_t ph0 = v->ph[0], ph1 = v->ph[1], inc1 = m->inc, inc2;
-    int32_t ic1 = v->s[0], ic2 = v->s[1], nst = v->s[2];
-    int32_t jl = v->s[3];                             /* SYNC: 1 + the step of a restart a sample ago (16 bits), 0 none */
-    if (sub) {                                        /* an octave below OSC 1, DTN as OSC 2 always had it */
-        inc2 = (det ? cents_inc(m->pitch16, det, 0) : inc1) >> 1;
-    } else {                                          /* DTN and the shape above OSC 1, 3/16 semitone a step */
-        inc2 = pitch_inc(clamp(m->pitch16 + det * 3 + (((m->shape - (64 << 8)) * 3) >> 8), 0, 2047));
-        if (m->fine)
-            inc2 += (uint32_t)((int32_t)(inc2 >> 12) * m->fine);
-    }
-    tsvf_coef(&flt, cut, p[P_E5]);
-    for (i = 0; i < n; i++) {
-        int32_t a = osc_saw(ph0, inc1), b, s;
-        if (sub) {
-            b = osc_pulse(ph1, inc2, 0x80000000u);
-        } else {
-            int32_t bl = blep(ph1, inc2);
-            if (jl) {                                 /* just restarted: the step was jl - 1, not a whole cycle */
-                bl = (bl * ((jl - 1) >> 1)) >> 15;
-                jl = 0;
-            }
-            b = (int32_t)(ph1 >> 16) - 32768 - bl;
-            if (ph0 > 0xFFFFFFFFu - inc1)             /* OSC 1 restarts it before the next sample: round that step */
-                b -= (blep(ph0, inc1) * (int32_t)(ph1 >> 17)) >> 15;
-        }
-        ph0 += inc1;
-        ph1 += inc2;
-        if (!sub && ph0 < inc1) {                     /* OSC 1 wrapped: OSC 2 restarts at the same point */
-            uint32_t f = ph0 / ((inc1 >> 16) | 1u);   /* the part of a sample since, 0..65535 */
-            uint32_t at = ph1 - f * (inc2 >> 16);     /* OSC 2 at the wrap */
-            jl = (int32_t)(at >> 16) + 1;
-            ph1 = f * (inc2 >> 16);
-        }
-        s = mulq15(a, m1) + mulq15(b, m2);
-        if (nz)
-            s += mulq15((int32_t)(noise32(&nst) >> 17) - 16384, nz);
-        if (drv)
-            s = softclip(((s >> 2) * (drive >> 2)) >> 11);
-        s = soft_knee(tsvf_lp(&flt, s >> 1, &ic1, &ic2), 16000) << 1;
-        out[i] += voice_amp(s, m, i) << 1;
-    }
-    v->ph[0] = ph0;
-    v->ph[1] = ph1;
-    v->s[0] = ic1;
-    v->s[1] = ic2;
-    v->s[2] = nst;
-    v->s[3] = jl;
+    int32_t v3 = in - *ic2;
+    int32_t v1 = (c->a1 * *ic1 + c->a2 * v3) >> 13;
+    int32_t v2 = *ic2 + ((c->a2 * *ic1 + c->a3 * v3) >> 13);
+    *ic1 = clamp(2 * v1 - *ic1, -150000, 150000);
+    *ic2 = clamp(2 * v2 - *ic2, -150000, 150000);
+    return ft == 1u ? v1 : in - ((k * v1) >> 12) - v2;
 }
+#define ANALOG_K(res) (8192 - (res) * 7600 / 127)     /* tsvf_coef's damping, Q12 */
 
-/* WAVE 0..4: the loop as it always was */
-static inline __attribute__((always_inline)) void analog_osc(track_t *t, voice_t *v, int32_t *out, uint32_t n,
-                                                             const vmod_t *m)
+/* the voice through the filter TYPE ft: analog_render's loop with ft 0 (a constant: LP, the code as it always was),
+ * analog_render_f's with BP / HP (its own copy: the LP loop gains nothing) */
+static inline __attribute__((always_inline)) void analog_body(track_t *t, voice_t *v, int32_t *out, uint32_t n,
+                                                              const vmod_t *m, uint32_t ft)
 {
     const int16_t *p = t->p;
     uint32_t wave = (uint32_t)p[P_E0], i;
     int32_t det = p[P_E1], mix = p[P_E2], noise = p[P_E3];
     int32_t cut = (p[P_E4] << 8) + m->cutoff + (p[P_E7] * (v->pitch16 - 60 * 16) >> 4);
     tsvf_t flt;
-    int32_t drive = 32768 + p[P_E6] * 512;                       /* 1x .. 3x */
+    int32_t drive = 32768 + p[P_E6] * 768;                       /* 1x .. 4x */
+    int32_t dw = p[P_E6] * 258;                                  /* DRV: dry -> driven (a clean range low) */
     uint32_t inc1 = m->inc;
-    uint32_t inc2 = det ? cents_inc(m->pitch16, det, 0) : inc1;      /* DTN in cents */
+    /* DTN in cents: whole 1/16 semitones from the table, the rest as a fine factor */
+    int32_t d16 = det * 16 / 100, rem = det * 16 - d16 * 100;            /* rem: 1/1600 semitone */
+    uint32_t inc2 = pitch_inc(clamp(m->pitch16 + d16, 0, 2047));
+    inc2 += (uint32_t)((int32_t)(inc2 >> 12) * (rem * 2367 / 16000));
     uint32_t pw = 0x80000000u + (uint32_t)((m->shape - (64 << 8)) << 15);
     int32_t m2 = mix * 258, m1 = 32767 - m2;                    /* osc mix Q15 */
     int32_t nz = noise * 200, drv = p[P_E6];
     uint32_t ph0 = v->ph[0], ph1 = v->ph[1];                  /* state in locals: out[] may alias v->s[] */
     int32_t ic1 = v->s[0], ic2 = v->s[1], nst = v->s[2];
+    int32_t fk = ft ? ANALOG_K(p[P_E5]) : 0;
     tsvf_coef(&flt, cut, p[P_E5]);
+    if (det == 0)
+        inc2 = inc1;
     for (i = 0; i < n; i++) {
-        int32_t a, b, s;
+        int32_t a, b = 0, s;
         switch (wave) {
         case 1:
             a = osc_pulse(ph0, inc1, 0x80000000u);
-            b = osc_pulse(ph1, inc2, 0x80000000u);
+            if (m2)
+                b = osc_pulse(ph1, inc2, 0x80000000u);
             break;
         case 2:
             a = osc_tri(ph0);
-            b = osc_tri(ph1);
+            if (m2)
+                b = osc_tri(ph1);
             break;
         case 3:
             a = osc_sine(ph0);
-            b = osc_sine(ph1);
+            if (m2)
+                b = osc_sine(ph1);
             break;
         case 4:
             a = osc_pulse(ph0, inc1, pw);
-            b = osc_pulse(ph1, inc2, pw);
+            if (m2)
+                b = osc_pulse(ph1, inc2, pw);
             break;
         default:
             a = osc_saw(ph0, inc1);
-            b = osc_saw(ph1, inc2);
+            if (m2)
+                b = osc_saw(ph1, inc2);
             break;
         }
         ph0 += inc1;
         ph1 += inc2;
-        s = mulq15(a, m1) + mulq15(b, m2);
+        s = m2 ? mulq15(a, m1) + mulq15(b, m2) : a;  /* (MIX 0, the 808s and subs: one oscillator) */
         if (nz)
             s += mulq15((int32_t)(noise32(&nst) >> 17) - 16384, nz);
-        if (drv)
-            s = softclip(((s >> 2) * (drive >> 2)) >> 11);   /* pre-shifts: drive is up to 3x, no overflow */
-        {   /* filter, linear up to half scale, then a soft knee (only resonance peaks saturate); soft_knee()
-             * written out: the host compiler makes this loop 1 % slower with the call */
-            int32_t y = tsvf_lp(&flt, s >> 1, &ic1, &ic2);
-            int32_t a = y < 0 ? -y : y;
+        if (drv)                                      /* pre-shifts: drive is up to 4x, no overflow */
+            s += mulq15(softclip(((s >> 2) * (drive >> 2)) >> 11) - s, dw);
+        {   /* filter: linear up to half scale, then a soft knee (only resonance peaks saturate) */
+            int32_t y = ft ? analog_tap(&flt, fk, s >> 1, &ic1, &ic2, ft) : tsvf_lp(&flt, s >> 1, &ic1, &ic2), a = y < 0 ? -y : y;
             if (a > 16000) {
                 a = 16000 + (softclip((a - 16000) * 2) >> 1);
                 y = y < 0 ? -a : a;
             }
             s = y << 1;
         }
-        out[i] += voice_amp(s, m, i) << 1;
+        out[i] += mulq15(mulq15(s, amp_at(m, i)), VOICE_FS) << 1;
     }
     v->ph[0] = ph0;
     v->ph[1] = ph1;
@@ -164,64 +109,75 @@ static inline __attribute__((always_inline)) void analog_osc(track_t *t, voice_t
     v->s[1] = ic2;
     v->s[2] = nst;
 }
+static __attribute__((noinline)) void analog_render_f(track_t *t, voice_t *v, int32_t *out, uint32_t n,
+                                                      const vmod_t *m)
+{
+    analog_body(t, v, out, n, m, t->p[P_FTYPE] == 1 ? 1u : 2u);
+}
 static void analog_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
-    if (t->p[P_E0] >= AW_SYNC)
-        analog_render_x(t, v, out, n, m);
+    if (t->p[P_FTYPE])                                  /* BP / HP (2.6) */
+        analog_render_f(t, v, out, n, m);
     else
-        analog_osc(t, v, out, n, m);
+        analog_body(t, v, out, n, m, 0);
 }
 
 static const preset_t ANALOG_PRESETS[] = {
-    {"SAW LEAD", {0, 12, 64, 0, 90, 30, 10, 64}, {4, 70, 100, 50}, 20, 1, FX(0, 10, 45, 30), TAG(PT_LEAD)},
-    {"SOFT PAD", {0, 20, 64, 4, 60, 10, 0, 32}, {80, 90, 110, 95}, 10, 0, FX(0, 60, 20, 70), TAG(PT_PAD)},
-    {"SQR BASS", {1, 0, 0, 0, 50, 70, 40, 64}, {0, 60, 40, 30}, 30, 1, FX(5, 0, 10, 10), TAG(PT_BASS)},
-    {"PWM STR", {4, 8, 40, 0, 75, 20, 0, 48}, {60, 80, 110, 85}, 8, 0, FX(0, 50, 20, 60), TAG(PT_PAD)},
-    {"ACID", {0, 0, 0, 0, 50, 100, 25, 64}, {0, 55, 20, 30}, 48, 1, FX(20, 0, 45, 15), TAG(PT_BASS)},
-    {"SINE KEY", {3, 6, 50, 0, 127, 0, 0, 0}, {2, 80, 30, 70}, 0, 0, FX(0, 30, 25, 40), TAG(PT_KEYS)},
-    {"RAVE", {4, 30, 64, 0, 85, 20, 30, 64}, {20, 80, 110, 60}, 10, 1, FX(30, 40, 30, 30), TAG(PT_LEAD)},
-    {"SUB BASS", {3, 0, 0, 0, 40, 0, 20, 0}, {0, 60, 100, 20}, 0, 1, FX(0, 0, 0, 10), TAG(PT_BASS)},
-    {"SYNTH PLUCK", {0, 8, 50, 0, 30, 40, 0, 64}, {0, 88, 0, 60}, 55, 0, FX(0, 20, 50, 30), TAG(PT_PLUCK)},
-    {"SYNTH BRASS", {0, 10, 64, 0, 45, 20, 10, 64}, {35, 70, 90, 45}, 40, 0, FX(0, 20, 20, 40), TAG(PT_LEAD)},
-    {"WIND SWEEP", {0, 0, 0, 90, 30, 90, 0, 0}, {60, 90, 60, 80}, 50, 0, FX(0, 30, 30, 70), TAG(PT_FX)},
-    {"STRINGS", {4, 6, 64, 0, 92, 8, 0, 48}, {48, 90, 118, 72}, 6, 0, FX(0, 95, 15, 55), MORE({P_LD_SHP, 20}, {P_LRATE, 72}, {P_LD_PIT, 8}, {P_LFADE, 80}), TAG(PT_PAD)},   /* ((Skiff phase 9) as SOFT PAD to the ear: a bright string
-                                                                         * machine now, its PWM moving, a late vibrato) */
-    /* (Skiff) for the themes: CRYPT (dungeon synth), NEON (synthwave), QUARK (particles) */
-    {"BONE FLUTE", {2, 3, 30, 22, 84, 15, 0, 64}, {56, 80, 110, 64}, 6, 1, FX(0, 15, 30, 85), MORE({P_LRATE, 84}, {P_LFADE, 90}, {P_LD_PIT, 8}), TAG(PT_LEAD)},
-    {"WAR HORN", {0, 5, 64, 4, 42, 12, 20, 64}, {72, 80, 110, 80}, 30, 1, FX(0, 10, 10, 90), MORE({P_LRATE, 80}, {P_LFADE, 96}, {P_LD_PIT, 8}), TAG(PT_LEAD)},
-    {"DARK STRINGS", {1, 4, 64, 6, 40, 34, 22, 40}, {100, 90, 120, 105}, 10, 0, FX(0, 30, 0, 110), MORE({P_LRATE, 30}, {P_LD_FLT, 8}, {P_LD_PIT, 8}, {P_LFADE, 110}), TAG(PT_PAD)},   /* ((phase 9) hollow and dark, a slow swell) */
-    {"NIGHT BASS", {0, 7, 64, 0, 40, 35, 15, 64}, {0, 64, 50, 30}, 45, 1, FX(0, 5, 10, 8), TAG(PT_BASS)},
-    {"NEON LEAD", {0, 14, 64, 0, 92, 25, 12, 64}, {6, 70, 110, 55}, 14, 1, FX(0, 25, 55, 40), MORE({P_LRATE, 86}, {P_LFADE, 92}, {P_LD_PIT, 11}, {P_GLIDE, 28}), TAG(PT_LEAD)},
-    {"SUNSET PAD", {4, 9, 55, 0, 74, 15, 0, 48}, {78, 90, 115, 92}, 10, 0, FX(0, 85, 25, 70), MORE({P_LWAVE, 1}, {P_LRATE, 52}, {P_LD_SHP, 48}), TAG(PT_PAD)},
-    {"HERO BRASS", {0, 16, 64, 0, 50, 18, 8, 56}, {50, 75, 95, 55}, 44, 0, FX(0, 45, 20, 45), TAG(PT_PAD)},
-    {"SYN TOM", {3, 0, 0, 6, 127, 0, 25, 0}, {0, 76, 0, 60}, 0, 0, FX(0, 0, 10, 45), MORE({P_ED_PIT, 63}), TAG(PT_DRUM)},
-    {"QUANTA", {3, 0, 0, 0, 127, 0, 0, 0}, {0, 64, 127, 50}, 0, 1, FX(0, 0, 55, 35), MORE({P_LWAVE, 4}, {P_LRATE, 96}, {P_LD_PIT, 50}), TAG(PT_FX)},
-    /* (Skiff phase 9) more for every engine: basses, kits */
-    {"REESE", {0, 40, 64, 0, 52, 15, 30, 32}, {0, 64, 127, 30}, 10, 1, FX(10, 20, 5, 10), MORE({P_LRATE, 30}, {P_LD_FLT, 8}), TAG(PT_BASS)},
-    {"DRIVE BASS", {0, 14, 64, 0, 62, 20, 10, 64}, {0, 64, 64, 25}, 24, 1, FX(40, 0, 5, 5), MORE({P_DTYPE, 1}, {P_DTONE, -32}), TAG(PT_BASS)},
-    /* (1.3) WAVE SYNC: the envelope sweeps the synced saw (ENV DEST SHAPE); SUB: a saw on its square an octave down */
-    {"HARD SYNC", {5, 36, 96, 0, 88, 24, 12, 64}, {2, 70, 96, 40}, 16, 1, FX(0, 15, 40, 30), MORE({P_ED_SHP, 44}, {P_GLIDE, 20}), TAG(PT_LEAD)},
-    {"SUB SAW", {6, 0, 80, 0, 70, 22, 6, 64}, {0, 60, 110, 22}, 20, 1, FX(0, 0, 5, 10), TAG(PT_BASS)},
+    /* SLOOP hip-hop / drum & bass bank. {WAVE, DTN, MIX, NOIS, CUT, RES, DRV, KTR}, {A D S R}, fenv, mono */
+    /* 808s: a sine that decays (SUS 0) with a little pitch drop (ENV -> PITCH) and slides (GLIDE, legato) */
+    {"808 BOOM", {3, 0, 0, 0, 127, 0, 48, 0}, {0, 112, 0, 52}, 0, 1, FX(0, 0, 0, 0), XP(P_GLIDE + 1, 59, P_GLMODE + 1, 1, P_ED_PIT + 1, 18, P_TRANS + 1, -24)},
+    {"808 DIRTY", {3, 0, 0, 0, 96, 12, 118, 30}, {0, 108, 0, 46}, 0, 1, FX(24, 0, 0, 0), XP(P_GLIDE + 1, 56, P_GLMODE + 1, 1, P_ED_PIT + 1, 24, P_TRANS + 1, -24)},
+    {"SUB BASS", {3, 0, 0, 0, 127, 0, 10, 0}, {0, 60, 118, 24}, 0, 1, FX(0, 0, 0, 0), XP(P_GLIDE + 1, 40, P_TRANS + 1, -24)},
+    {"808 SLIDE", {3, 0, 0, 0, 127, 0, 72, 0}, {0, 118, 0, 60}, 0, 1, FX(30, 0, 0, 0), XP(P_GLIDE + 1, 82, P_GLMODE + 1, 1, P_ED_PIT + 1, 12, P_TRANS + 1, -24)},
+    /* acid: one saw, high resonance, the envelope on the filter, slides where notes overlap */
+    {"ACID 303", {0, 0, 0, 0, 36, 112, 44, 64}, {0, 56, 24, 20}, 52, 1, FX(28, 0, 22, 10), XP(P_GLIDE + 1, 34, P_GLMODE + 1, 1, P_TRANS + 1, -12)},
+    /* plugg / soft trap: a round triangle bass */
+    {"PLUGG BASS", {2, 0, 0, 0, 92, 0, 30, 0}, {0, 96, 92, 34}, 0, 1, FX(0, 0, 0, 6), XP(P_GLIDE + 1, 52, P_GLMODE + 1, 1, P_TRANS + 1, -24)},
+    /* drum & bass: two detuned saws, slowly moving filter */
+    {"REESE", {0, 22, 64, 0, 56, 22, 36, 40}, {0, 70, 118, 28}, 0, 1, FX(0, 22, 0, 6), XP(P_LRATE + 1, 22, P_LD_FLT + 1, 10, P_TRANS + 1, -24)},
+    {"WOBBLE", {0, 9, 64, 0, 38, 72, 62, 30}, {0, 64, 127, 22}, 0, 1, FX(10, 0, 0, 4), XP(P_LRATE + 1, 74, P_LD_FLT + 1, 40, P_TRANS + 1, -24)},
+    /* west coast: a square bass that slides, the high sine-ish lead with a delayed vibrato */
+    {"FUNK BASS", {1, 6, 50, 0, 50, 30, 22, 64}, {0, 55, 62, 20}, 30, 1, FX(0, 0, 0, 4), XP(P_GLIDE + 1, 50, P_GLMODE + 1, 1, P_TRANS + 1, -24)},
+    {"G-FUNK LD", {2, 0, 0, 0, 92, 0, 10, 64}, {6, 70, 112, 46}, 0, 1, FX(0, 0, 28, 30),
+     XP(P_GLIDE + 1, 74, P_LD_PIT + 1, 2, P_LRATE + 1, 89, P_LFADE + 1, 50)},
+    {"TRAP PLUCK", {0, 8, 64, 0, 52, 35, 20, 64}, {0, 80, 24, 45}, 48, 0, FX(0, 15, 34, 26)},
+    {"SYN BRASS", {0, 10, 64, 0, 45, 20, 16, 64}, {12, 70, 96, 35}, 34, 0, FX(0, 15, 12, 24)},
+    /* trance / EDM: eight detuned saw voices on one note */
+    {"SUPERSAW", {0, 14, 64, 0, 96, 12, 10, 64}, {4, 70, 112, 46}, 10, 1, FX(0, 20, 30, 36), XP(P_VOICE + 1, 3, P_DETUNE + 1, 64, P_GLIDE + 1, 30)},
+    {"WARM PAD", {4, 12, 64, 6, 52, 8, 0, 32}, {75, 90, 115, 90}, 0, 0, FX(0, 55, 20, 55), XP(P_LRATE + 1, 30, P_LD_SHP + 1, 20)},
+    {"DARK STR", {0, 18, 64, 0, 48, 6, 0, 32}, {60, 90, 118, 85}, 0, 0, FX(0, 50, 18, 60)},
+    {"ATMOS PAD", {4, 25, 64, 20, 60, 15, 0, 32}, {90, 100, 120, 100}, 0, 0, FX(0, 60, 30, 75), XP(P_LRATE + 1, 18, P_LD_PIT + 1, 1)},
+    /* SLOOP 2.5: a breathy pan flute, a fat mono lead, a classic mono bass */
+    {"PAN FLUTE", {2, 0, 0, 30, 70, 10, 0, 64}, {14, 70, 110, 40}, 0, 1, FX(0, 10, 24, 45),
+     XP(P_LD_PIT + 1, 1, P_LRATE + 1, 80, P_LFADE + 1, 70)},
+    {"FAT LEAD", {0, 8, 64, 0, 70, 30, 30, 64}, {2, 70, 110, 30}, 30, 1, FX(0, 0, 26, 20), XP(P_GLIDE + 1, 40)},
+    {"MONO BASS", {0, 4, 64, 0, 48, 36, 30, 64}, {0, 60, 70, 20}, 44, 1, FX(10, 0, 0, 4), XP(P_TRANS + 1, -24)},
+    {"PWM LEAD", {4, 0, 0, 0, 80, 20, 10, 64}, {2, 70, 110, 30}, 0, 1, FX(0, 10, 26, 22),
+     XP(P_LD_PIT + 1, 1, P_LRATE + 1, 80, P_LFADE + 1, 60, P_GLIDE + 1, 30)},
+    {"SAW BASS", {0, 6, 64, 0, 52, 30, 40, 64}, {0, 60, 60, 20}, 30, 1, FX(8, 0, 0, 4), XP(P_TRANS + 1, -24)},
+    {"SINE PAD", {3, 10, 64, 4, 90, 0, 0, 32}, {80, 90, 118, 90}, 0, 0, FX(0, 60, 20, 65)},
 };
 
+/* (after Clipper 1.2) UNISON (voice.c unison_spread): both oscillators moved by r (Q32) of a turn of the note,
+ * each by its share: as if started that much sooner (osc 2 took its phase from ph[0] before the spread: in phase) */
+static void analog_spread(track_t *t, voice_t *v, uint32_t r)
+{
+    v->ph[0] += r;
+    v->ph[1] += uni_turns(r, v->pitch16, t->p[P_E1] * 16 / 100);
+}
+
 static const engine_t ENG_ANALOG = {
-    .name = "ANALOG",
-    .page_title = {"OSC", "FLT"},
-    .edit = {
-        {"WAVE", N_ANALOG_WAVE, 0, 6, 0, F_ENUM, 0},   /* ((1.3) SYNC SUB appended) */
-        {"DETUNE", 0, 0, 127, 10, F_INT, U_CT},
-        {"MIX", 0, 0, 127, 64, F_PCT, 0},
-        {"NOISE", 0, 0, 127, 0, F_PCT, 0},
-        {"CUTOFF", 0, 0, 127, 90, F_CUTOFF, 0},
-        {"RES", 0, 0, 127, 30, F_PCT, 0},
-        {"DRIVE", 0, 0, 127, 0, F_PCT, 0},
-        {"KEYTRK", 0, 0, 127, 64, F_PCT, 0},
+    "ANALOG", {"OSC", "FLT"},
+    {
+        {"WAVE", F_ENUM, 0, 4, 0, N_ANALOG_WAVE, 0},
+        {"DTN", F_INT, 0, 127, 10, 0, "ct"},
+        {"MIX", F_PCT, 0, 127, 64, 0, 0},
+        {"NOIS", F_PCT, 0, 127, 0, 0, 0},
+        {"CUT", F_CUTOFF, 0, 127, 90, 0, 0},
+        {"RES", F_PCT, 0, 127, 30, 0, 0},
+        {"DRV", F_PCT, 0, 127, 0, 0, 0},
+        {"KTR", F_PCT, 0, 127, 64, 0, 0},
     },
-    .presets = ANALOG_PRESETS,
-    .npresets = NELEM(ANALOG_PRESETS),
-    .note_on = analog_note_on,
-    .render = analog_render,
-    .desc = analog_desc,
-    .knob = {P_E4, P_E5, P_ATK, P_REL},
-    .keep = 0x03,                /* the filter */
+    ANALOG_PRESETS, sizeof(ANALOG_PRESETS) / sizeof(ANALOG_PRESETS[0]), 1, analog_note_on, analog_render,
+    0xF986, {P_E4, P_E5, P_ATK, P_REL},
 };

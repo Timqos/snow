@@ -12,7 +12,7 @@
  * 4. OFF is transparent (the signal untouched), STUT repeats what the live step played.
  * 5. cost: instructions per sample of the mix, 4 SLICERs on against off (proc_pid_rusage).
  * Demos (WAV, 44.1 kHz) into DEMO_DIR: dry / gated / stuttered versions of a pad, the acid line, the
- * drums (track 4: DRUM), and the song. */
+ * drums, and the song. */
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
@@ -45,7 +45,7 @@ static int32_t sine_run(double secs, int turn, int32_t *in_step, int64_t *closed
     double ph = 0, dph = 2 * M_PI * 110.0 / FS;
     track_t *t = &trk[0];
     *closed_energy = 0;
-    slicer_start();
+    slicer_start(0);
     for (f = 0; f < frames; f += CTL) {
         int32_t b[CTL];
         if (turn && f % 3008u == 0u) {          /* modes, patterns, depths, rates while it runs */
@@ -68,7 +68,7 @@ static int32_t sine_run(double secs, int turn, int32_t *in_step, int64_t *closed
                 mx = d > mx ? d : mx;
             }
             prev = b[i];
-            if (!sl[0].bit && sl[0].pos > SL_RAMP + CTL)
+            if (!sl[0].bit && sl[0].pos > (SL_RAMP + CTL) * (uint32_t)song.g[G_BPM])   /* (pos: clock units) */
                 *closed_energy += (int64_t)b[i] * b[i];
         }
     }
@@ -136,7 +136,7 @@ static int test_timing(void)
     song.g[G_SWING] = 10;
     t->p[P_SSWING] = 20;
     set_slicer(t, SL_GATE, (int)pat, 1, 127);
-    slicer_start();
+    slicer_start(0);
     while (f + CTL <= sizeof out / sizeof out[0]) {
         uint32_t i;
         for (i = 0; i < CTL; i++)
@@ -144,11 +144,15 @@ static int test_timing(void)
         slicer_track(t, out + f, CTL);
         f += CTL;
     }
-    for (k = 0; k < steps; k++) {                 /* the step lengths as seq.c step_samples has them */
-        uint32_t base = (uint32_t)FS * 60u / 97u / 4u, len, idx = k & 15u, on = (SL_PAT[pat - 1u] >> idx) & 1u;
+    {
+    uint64_t cum = 0;                             /* the steps as seq.c trk_grid has them: clock units, a */
+    for (k = 0; k < steps; k++) {                 /* boundary at the first sample at or after it */
+        uint32_t base = BEAT_U / 4u, len, idx = k & 15u, on = (SL_PAT[pat - 1u] >> idx) & 1u;
         uint32_t non = (SL_PAT[pat - 1u] >> ((idx + 1u) & 15u)) & 1u;
-        int32_t sw = (20 + 10) * (int32_t)base / 250;
-        len = base + (uint32_t)((idx & 1u) ? -sw : sw);
+        uint32_t sw = (20u + 10u) * base / 200u, lu = (idx & 1u) ? base - sw : base + sw;
+        b0 = (uint32_t)((cum + 96u) / 97u);
+        cum += lu;
+        len = (uint32_t)((cum + 96u) / 97u) - b0;
         if (b0 + len >= f)
             break;
         n++;
@@ -158,7 +162,7 @@ static int test_timing(void)
             bad_edge++;                           /* closed by the boundary, not earlier */
         if (!on && non && (abs(out[b0 + len]) > 300 || out[b0 + len + SL_RAMP] != 16384))
             bad_edge++;                           /* opens from the boundary */
-        b0 += len;
+    }
     }
     snprintf(what, sizeof what, "timing: GATE at 97 BPM, swing 20 + 10 %%: %u steps open / closed as the pattern says",
              n);
@@ -174,7 +178,7 @@ static void song_setup(void)
     static const uint8_t ACIDF[16] = {1, 0, 2, 0, 0, 0, 1, 2, 0, 0, 1, 0, 0, 2, 0, 1};
     static const uint8_t AM[4] = {57, 60, 64, 67}, FMI[4] = {53, 57, 60, 64};
     static const uint8_t LEAD[12] = {76, 0, 0, 79, 0, 0, 81, 0, 79, 0, 76, 0};
-    track_t *t1 = &trk[0], *t2 = &trk[1], *t3 = &trk[2], *td = &trk[3];
+    track_t *t1 = &trk[0], *t2 = &trk[1], *t3 = &trk[2], *td = TDRUM;
     uint32_t i;
     host_tracks_init();
     memset(sl, 0, sizeof sl);
@@ -182,7 +186,6 @@ static void song_setup(void)
     host_preset(t1, 0, 4);
     host_preset(t2, 1, 5);
     host_preset(t3, 3, 0);
-    host_drums(td);                                /* DRUM KIT (SAMPLE PERC until 1.0.2) */
     for (i = 0; i < 16u; i++) {
         uint8_t n = ACID[i];
         put_step(t1, i, n ? 1u : 0u, &n, n ? ST_NOTE : ST_REST, ACIDF[i]);
@@ -228,7 +231,7 @@ static int test_sync(void)
         mix_block(o, CTL);
         blocks++;
         for (k = 0; k < NTRK; k++) {              /* the SLICER step that holds the block's first sample */
-            uint32_t idx = sl[k].pos >= CTL ? sl[k].idx : (sl[k].idx + 15u) & 15u;
+            uint32_t idx = sl[k].pos >= CTL * (uint32_t)song.g[G_BPM] ? sl[k].idx : (sl[k].idx + 15u) & 15u;
             miss += idx != trk[k].seq_idx % 16u;
         }
     }
@@ -245,7 +248,7 @@ static int test_off_stut(void)
     int bad = 0;
     host_tracks_init();
     memset(sl, 0, sizeof sl);
-    slicer_start();
+    slicer_start(0);
     for (f = 0; f < FS; f += CTL) {               /* OFF: untouched */
         int32_t b[CTL], c[CTL];
         for (i = 0; i < CTL; i++)
@@ -255,8 +258,9 @@ static int test_off_stut(void)
     }
     bad += check("OFF: the signal is not touched", same);
     /* STUT, pattern 7 (x...), 1/16 at 120 BPM, 100 %: the repeat steps play the live step again */
+    song.g[G_BPM] = 120;
     set_slicer(t, SL_STUT, 7, 1, 127);
-    slicer_start();
+    slicer_start(0);
     {
         static int32_t in[4u * 44100u], out[4u * 44100u];
         uint32_t len = (uint32_t)FS * 60u / 120u / 4u;
@@ -333,8 +337,12 @@ static void demo_song(const char *dir, const char *name, const int16_t (*s)[4], 
     song_setup();
     for (k = 0; k < NTRK; k++) {
         set_slicer(&trk[k], s[k][0], s[k][1], s[k][2], s[k][3]);
-        if (solo && k + 1u != solo)
-            trk[k].p[P_LEVEL] = 0;
+        if (solo && k + 1u != solo) {
+            if (k == TRK_DRUM)
+                song.g[G_DRLVL] = 0;
+            else
+                trk[k].p[P_LEVEL] = 0;
+        }
     }
     transport_req = 1;
     wav_hdr(w, frames);

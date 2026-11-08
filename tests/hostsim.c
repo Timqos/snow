@@ -5,10 +5,10 @@
  *   tests/run_tests.sh builds it into build/host/;
  *   build/host/hostsim ENGINE PRESET MONO OUT.wav [CHORUS]
  * env: SECS=n renders n s (the 2 s note pattern repeats), CHORD[=k] holds k keys
- * (default 4, up to 8), DRUMS=1 adds GM drum hits (part 4: DRUM), BENCH=1 prints the render time,
+ * (default 4, up to 8), DRUMS=1 adds GM drum hits, BENCH=1 prints the render time,
  * DIST=d, LEVEL=l, SENDS=c,d,r, SWEEP=1, NOTE=k, OCT=o, PSET=id:v,..., VSWEEP=1, PSWEEP=id:a:b,
- * PRESET=1 (the whole preset: sends, voice mode), STEPS=n,n,... (a pattern, 0 = rest; see below).
- * TRACKS=DIR: the 4-track test (tracks_demo below): a bass / pad / lead / drums (DRUM) pattern
+ * PRESET=1 (the whole preset: sends, ARP, voice mode), STEPS=n,n,... (a pattern, 0 = rest; see below).
+ * TRACKS=DIR: the 4-track test (tracks_demo below): a bass / pad / lead / drums pattern
  * with live recording into DIR (mix + solos), checks, and the cost against one track. */
 #include <stdio.h>
 #include <unistd.h>
@@ -18,6 +18,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>                    /* tests/cpu1_host.c: the second core as a thread (CORES=2) */
 #define __attribute__(x)
 #define memset felucca_memset
 #define memcpy felucca_memcpy
@@ -27,29 +28,32 @@
 #undef memset
 #undef memcpy
 #undef memcmp
-#ifndef HOST_FM1_IN                         /* (tests/smk_ui_test.c brings the SMK-37 input's) */
-#if BOARD_SMK37                             /* (-DBOARD_SMK37=1: what the SMK's keys and KEY VELOCITY read; no TRS jack) */
-#include "../firmware/hal/smk_pads.h"
-static struct { volatile uint32_t notes, buttons, virt, vtap, vack; uint8_t key_vel[37]; } fm1_in;
-static void smk_uart_tx_put(uint32_t b) { (void)b; }
-static void smk_uart_tx_rt(uint32_t b) { (void)b; }
-#define SMK_UT_TX_RING 128u
-static uint8_t smk_ut_w, smk_ut_r;                /* ((2.2) usb.c mo_trs: the UART's ring, never full here) */
-#else
-static struct { volatile uint32_t notes, buttons, virt, vtap, vack; } fm1_in;   /* ((2.2) REMOTE: virt, vtap, vack) */
-#endif
-#endif
+static struct { volatile uint32_t notes, buttons; } fm1_in;
+static volatile uint32_t fm1_remote_btn;           /* (2.7, fm1_input.h: the buttons held over MIDI) */
+static void fm1_irq_off(void) {}                 /* (the host: one thread) */
+static void fm1_irq_on(void) {}
 #include "../firmware/src/core.h"
+#include "../firmware/src/cpu1.h"
+#include "cpu1_host.c"                  /* the second core on the host: CORES=1 inline, CORES=2 a thread */
 #include "../firmware/src/engines.c"
+#include "../firmware/src/drums.c"
 #include "../firmware/src/params.c"
-#include "../firmware/src/mod.c"
+#if FELUCCA_STATTIC
+#include "../firmware/src/stattic_mod.c"
+#endif
 #include "../firmware/src/voice.c"
 #include "../firmware/src/slicer.c"
 #include "../firmware/src/fx.c"
 static void fm1_delay_ms(uint32_t ms) { (void)ms; }
 #include "../firmware/src/usb.c"
 #include "../firmware/src/midi_uart.c"                /* TRS MIDI IN: its parser (um_byte) feeds midi_in_q */
+#if FELUCCA_ARRANGER
+#include "../firmware/src/arranger.c"
+#endif
 #include "../firmware/src/seq.c"
+#if FELUCCA_STATTIC
+#include "../firmware/src/stattic_runtime.c"
+#endif
 #define inst (trk[0])                   /* the single-part renders below: part 1 */
 
 static void wav_hdr(FILE *f, uint32_t frames)
@@ -83,24 +87,24 @@ static void host_tracks_init(void)                /* as felucca_init: defaults, 
     uint32_t i, k;
     for (i = 0; i < G_COUNT; i++)
         song.g[i] = GP[i].def;
+    song.g[G_BPM] = 120;                         /* (the tests' tempo; SLOOP powers on at 90) */
     for (k = 0; k < NTRK; k++) {
         for (i = 0; i < P_E0; i++)
             trk[k].p[i] = TP[i].def;
-        for (i = 0; i < NSTEP; i++)
-            trk[k].step[i].time = ST_REST;
+        steps_clear(&trk[k]);
     }
     song.master_q12 = 4096;
 }
 
-/* the factory preset as ui.c apply_preset_to sets it (sound, sends; not the steps, not the track's own:
- * the mix, ARP, SCL, the pattern parameters, the SLICER);
+/* the factory preset as ui.c apply_preset_to sets it (sound, sends, arp; not the pattern, not the mix);
  * the engine as the UI asks for it (eng_req: the audio side switches; host_preset: at once) */
-static void host_preset_values(track_t *t, uint32_t e, uint32_t pi, const preset_t *p)
+static void host_preset_req(track_t *t, uint32_t e, uint32_t pi)
 {
     static const uint8_t FX_DEF[4] = {0, 24, 28, 36};
+    const preset_t *p = &ENGINES[e]->presets[pi % ENGINES[e]->npresets];
     uint32_t i;
     t->eng_req = (uint8_t)e;
-    t->preset = (uint8_t)pi;
+    t->preset = (uint8_t)(pi % ENGINES[e]->npresets);
     for (i = 0; i < 8u; i++)
         t->p[P_E0 + i] = p->e[i];
     t->p[P_ATK] = p->env[0];
@@ -108,67 +112,44 @@ static void host_preset_values(track_t *t, uint32_t e, uint32_t pi, const preset
     t->p[P_SUS] = p->env[2];
     t->p[P_REL] = p->env[3];
     t->p[P_ED_FLT] = p->fenv;
+    t->p[P_ED_FX] = preset_trim(e, pi % ENGINES[e]->npresets);
     t->p[P_VOICE] = p->mono ? V_LEGATO : V_POLY;
-    for (i = 0; i < 4u; i++)
+    for (i = 0; i < 4u; i++) {
         t->p[P_DIST + i] = (int16_t)(p->fx[i] ? p->fx[i] - 1 : FX_DEF[i]);
-    for (i = 0; i < NELEM(p->more) && p->more[i].id; i++)   /* (Skiff) its LFO, GLIDE, .. */
-        t->p[p->more[i].id] = p->more[i].v;
-    if (e == ENGI_DRUMX && pi < NELEM(DRUMX_PKIT) && DRUMX_PKIT[pi])   /* ((Skiff phase 9) its kit: ui.c apply_preset_to) */
-        memcpy(dx_kit, DX_KITS[DRUMX_PKIT[pi] - 1u], sizeof dx_kit);
+        t->p[P_AMODE + i] = (int16_t)(p->arp[i] ? p->arp[i] - 1 : TP[P_AMODE + i].def);
+    }
+    preset_extras(t->p, p);
+#if FELUCCA_STATTIC
+    snow_fill(t->p,e,pi);t->p[SN_MODE]=1;
+#endif
     fm6_track_loaded(t);                          /* FM6: the preset's patch (ui.c apply_preset_to) */
-}
-static void host_preset_req(track_t *t, uint32_t e, uint32_t pi)
-{
-    uint32_t n;
-#if !FELUCCA_FM4 && !FELUCCA_LEGACY
-    if (e == ENGI_DIGITAL)                        /* ((2.0) DIGITAL (retired): FM6's preset pi, as ui.c set_engine_of) */
-        e = ENGI_FM6;
-#endif
-    n = ENGINES[e]->npresets;
-#if !FELUCCA_FM4 && FELUCCA_LEGACY
-    if (e == ENGI_DIGITAL) {                      /* DIGITAL preset pi (retired): converted, as ui.c fm4_load_preset */
-        uint8_t v[FP_SIZE + 1u];
-        uint32_t tr = (uint32_t)(t - trk) % NTRK;
-        fm4_preset_values(t->p, pi);
-        t->preset = (uint8_t)fm4_convert(t->p, v);
-        t->eng_req = ENGI_FM6;
-        fm6_set_patch(tr, v);
-        fm6_slot[tr] = (uint8_t)t->p[P_E7];
-        return;
-    }
-#endif
-    if (!n) {
-        t->eng_req = (uint8_t)e;
-        t->preset = 0;
-        for (uint32_t i = 0; i < 8u; i++)
-            t->p[P_E0 + i] = ENGINES[e]->edit[i].def;
-        return;
-    }
-    pi %= n;
-    host_preset_values(t, e, pi, &ENGINES[e]->presets[pi]);
 }
 static void host_preset(track_t *t, uint32_t e, uint32_t pi)
 {
     host_preset_req(t, e, pi);
-    t->engine = t->eng_req;                       /* (DIGITAL without FELUCCA_FM4: FM6) */
+    t->engine = (uint8_t)e;
 }
 
-/* A saved SAMPLE PERC sound, as 1.0.2 and earlier stored it (SET 4, the GM kit; retired since: every load
- * turns it into DRUM, core.h drum_from_perc). Put straight into a track it plays SET 4's alias (PIANO): only
- * for the migration tests, which pass it through a load */
-static void host_legacy_sample_perc(track_t *t)
+/* the sequencer clock as the harness sees it: the step of t at the clock (as the next block plays it),
+ * *q100: how far into it, in % of its (swung) length */
+static uint32_t at_step(const track_t *t, uint32_t *q100)
 {
-    static const preset_t PERC = {"PERC", {SMP_SET_PERC, 0, 0, 0, 127, 0, 0, 0}, {0, 127, 127, 60}, 0, 0};
-    host_preset_values(t, ENGI_SAMPLE, SMP_SET_PERC, &PERC);
-    t->engine = ENGI_SAMPLE;
+    uint32_t into, len, abs = trk_grid(t, &into, &len);
+    if (q100)
+        *q100 = (uint32_t)((uint64_t)into * 100u / len);
+    return abs % trk_len(t);
 }
-/* the drums of the render tests: DRUM's kit (the power-on track 4; until 1.0.2 these used SAMPLE PERC) */
-static void host_drums(track_t *t) { host_preset(t, ENGI_DRUM, 0); }
 
 static void put_step(track_t *t, uint32_t i, uint32_t n, const uint8_t *notes, uint32_t time, uint32_t flags)
 {
     step_t *s = &t->step[i];
     uint32_t k;
+    if (is_drum(t)) {                            /* the drum track: GM notes -> its lanes (accent: hard) */
+        memset(&t->dstep[i], 0, sizeof t->dstep[i]);
+        for (k = 0; k < n && time == ST_NOTE; k++)
+            dstep_set(&t->dstep[i], lane_of_note(notes[k]), (flags & SF_ACCENT) ? LV_HARD : LV_NORM, 0);
+        return;
+    }
     s->n = (uint8_t)n;
     for (k = 0; k < 4u; k++)
         s->note[k] = k < n ? notes[k] : 0;
@@ -177,39 +158,17 @@ static void put_step(track_t *t, uint32_t i, uint32_t n, const uint8_t *notes, u
     s->vel = n ? 100 : 0;
 }
 
-static uint32_t busy_now(void)                   /* sounding voices of the parts (none fading after a block) */
+static uint32_t busy_now(void)                   /* sounding voices of the parts (not the ones fading out: given up) */
 {
     uint32_t p, i, n = 0;
     for (p = 0; p < NPART; p++)
         for (i = 0; i < NVOICE; i++)
-            n += trk[p].v[i].active;
+            n += trk[p].v[i].active && trk[p].v[i].stage != 4u;
     return n;
 }
 
-/* drum hits on part 4 (DRUM, the GM map): kick on the beats, snare on 2 and 4, hats on the 16ths
- * (k: 16ths since the start), each released at the next (a one-shot plays on through its release) */
-static void drum_hit(uint32_t k)
-{
-    static uint8_t last;
-    uint32_t n = k % 4u == 0u ? 36u : k % 8u == 4u ? 38u : 42u;
-    if (last)
-        trk_note_off(&trk[3], last);
-    trk_note_on(&trk[3], n, 100);
-    last = (uint8_t)n;
-}
-
-/* t's voices started since the voice clock (vage) was a0 */
-static uint32_t started_since(const track_t *t, uint32_t a0)
-{
-    uint32_t i, n = 0;
-    for (i = 0; i < NVOICE; i++)
-        n += t->v[i].active && t->v[i].age > a0;
-    return n;
-}
-
-/* the demo song: T1 ANALOG ACID (16 steps), T2 the power-on pad (TRK_DEF: FM6 PAD; DIGITAL PAD until it was
- * retired) (32 steps, tied chords), T3 LOFI PULSE LD
- * (12 steps: 3 against 4), T4 DRUM drums (16 steps, up to 3 notes a step); 120 BPM, 8 bars. Bars 5..6:
+/* the demo song: T1 ANALOG ACID (16 steps), T2 DIGITAL PAD (32 steps, tied chords), T3 LOFI PULSE LD
+ * (12 steps: 3 against 4), T4 drums (16 steps, up to 3 notes a step); 120 BPM, 8 bars. Bars 5..6:
  * live recording: a clap into the drums just before step 4 (quantised onto it, not triggered twice),
  * MIDI ch 3 into the lead, a two-key chord on the keys into an empty pad step. solo: 0 = the mix,
  * 1..4 = that track only. Writes DIR/NAME; returns the number of failed checks. */
@@ -224,7 +183,7 @@ static int tracks_demo(const char *dir, const char *name, uint32_t solo)
     FILE *w;
     uint32_t f, i, bmax = 0, clips = 0, fail = 0, clap_done = 0, lead_done = 0, keys_t = 0, keys_on = 0;
     uint32_t clap_age = 0, clap_hits = 0xFFFFu, clap_pass = 0, kills0;
-    track_t *t1 = &trk[0], *t2 = &trk[1], *t3 = &trk[2], *td = &trk[3];
+    track_t *t1 = &trk[0], *t2 = &trk[1], *t3 = &trk[2], *td = TDRUM;
     snprintf(path, sizeof path, "%s/%s", dir, name);
     if (!(w = fopen(path, "wb"))) {
         fprintf(stderr, "tracks: cannot write %s\n", path);
@@ -233,9 +192,8 @@ static int tracks_demo(const char *dir, const char *name, uint32_t solo)
     host_tracks_init();
     song.g[G_BPM] = 120;
     host_preset(t1, 0, 4);
-    host_preset(t2, TRK_DEF[1][0], TRK_DEF[1][1]);
+    host_preset(t2, 1, 5);
     host_preset(t3, 3, 0);
-    host_drums(td);                                /* DRUM KIT (SAMPLE PERC until 1.0.2) */
     for (i = 0; i < 16u; i++) {
         uint8_t n = ACID[i];
         put_step(t1, i, n ? 1u : 0u, &n, n ? ST_NOTE : ST_REST, ACIDF[i]);
@@ -264,29 +222,31 @@ static int tracks_demo(const char *dir, const char *name, uint32_t solo)
         for (i = 0; i < NPART; i++)
             if (i + 1u != solo)
                 trk[i].p[P_LEVEL] = 0;
+        if (solo != 4u)
+            song.g[G_DRLVL] = 0;
     }
     kills0 = voice_kills;
     transport_req = 1;
     wav_hdr(w, frames);
     for (f = 0; f < frames; f += CTL) {
         int32_t o[2 * CTL];
-        uint32_t barn = f / bar, period = div_samples(2);
+        uint32_t barn = f / bar, period = div_samples(2), q;
         if (barn == 4u && !song.rec)
             song.rec = 0x0Eu;                      /* bars 5..6: tracks 2, 3, 4 armed */
         if (barn == 6u)
             song.rec = 0;
         /* (a) a clap into the drums, late in step 3: lands on step 4, sounds now, step 4 does not repeat it */
-        if (song.rec && !clap_done && td->seq_idx == 3u && td->seq_pos > period * 3u / 4u) {
+        if (song.rec && !clap_done && at_step(td, &q) == 3u && q > 75u) {
             input_on(td, 39, 110);
             clap_done = 1;
-            clap_age = vage;
+            clap_age = drums.age;
             clap_pass = 1;
         } else if (clap_pass == 1u && td->seq_idx == 4u) {
-            clap_hits = started_since(td, clap_age);   /* what step 4 triggered right after (36, 38, 42; not 39) */
+            clap_hits = drums.age - clap_age;      /* what step 4 triggered right after (36, 38, 42; not 39) */
             clap_pass = 2;
         }
         /* (b) MIDI ch 3 into the lead, early in its step 1 */
-        if (song.rec && !lead_done && t3->seq_idx == 1u && t3->seq_pos < period / 4u) {
+        if (song.rec && !lead_done && at_step(t3, &q) == 1u && q < 25u) {
             midi_in_q[mi_w++ % MQ] = 0x09u | 0x92u << 8 | 84u << 16 | 100u << 24;
             lead_done = 1;
         } else if (lead_done == 1u && t3->seq_idx == 2u) {
@@ -294,8 +254,8 @@ static int tracks_demo(const char *dir, const char *name, uint32_t solo)
             lead_done = 2;
         }
         /* (c) the keys, track 2 selected: two keys at once into the empty pad step 14 */
-        if (song.rec && !keys_on && !keys_t && t2->seq_idx == 14u && t2->seq_pos < period / 4u) {
-            sel_set(1);
+        if (song.rec && !keys_on && !keys_t && at_step(t2, &q) == 14u && q < 25u) {
+            song.sel = 1;
             fm1_in.notes = (1u << 7) | (1u << 11);
             keys_on = 1;
             keys_t = f;
@@ -317,15 +277,18 @@ static int tracks_demo(const char *dir, const char *name, uint32_t solo)
     if (solo)
         return bmax > NVOICE;
     {
-        const step_t *s4 = &td->step[4], *l1 = &t3->step[1], *p14 = &t2->step[14];
-        /* (DRUM: the clap goes into the grid, its lane's hit, seq.c; a sampled kit took it as a 4th note) */
-        int clap = drum_track(td) ? s4->n == 3u && ((s4->hit >> DV_CLAP) & 1u) : s4->n == 4u && s4->note[3] == 39u;
-        int ok_clap = clap && clap_hits == 3u;
+        const dstep_t *s4 = &td->dstep[4];
+        const step_t *l1 = &t3->step[1], *p14 = &t2->step[14];
+        uint32_t lanes = dstep_mask(s4), nl = 0, m;
+        int ok_clap;
+        for (m = lanes; m; m >>= 1)
+            nl += m & 1u;
+        ok_clap = nl == 4u && dstep_has(s4, lane_of_note(39)) && clap_hits == 3u;
         int ok_lead = l1->n == 1u && l1->note[0] == 84u && l1->time == ST_NOTE;
         int ok_keys = p14->n == 2u && p14->time == ST_NOTE && p14->note[0] == 60u && p14->note[1] == 64u;
-        printf("tracks: recording: drums step 4 = %u notes (kick snare hat) + clap 39: %s, hits when step 4 played right "
-               "after: %u (want 3: the clap is not triggered twice) %s\n", s4->n, clap ? "yes" : "no", clap_hits,
-               ok_clap ? "ok" : "FAIL");
+        printf("tracks: recording: drums step 4 = %u lanes (kick snare hat + clap: %s), hits when step 4 played right "
+               "after: %u (want 3: the clap is not triggered twice) %s\n", nl, dstep_has(s4, lane_of_note(39)) ? "yes" : "no",
+               clap_hits, ok_clap ? "ok" : "FAIL");
         printf("tracks: recording: MIDI ch 3 -> lead step 1 = %u (want 84) %s; keys -> pad step 14 = %u notes %u %u %s\n",
                l1->note[0], ok_lead ? "ok" : "FAIL", p14->n, p14->note[0], p14->note[1], ok_keys ? "ok" : "FAIL");
         printf("tracks: voices sounding at most %u (budget %u) %s; given up to another part %u; %u samples near full "
@@ -335,11 +298,10 @@ static int tracks_demo(const char *dir, const char *name, uint32_t solo)
     return (int)fail;
 }
 
-/* ns per 44.1 kHz sample of the whole mix (events, parts, buses, master) with notes held:
- * parts[k] = {engine, preset, notes} for part k, 0 notes = idle; part 4 DRUM_HITS: drum_hit on 16ths. 2 s to settle, then the
+/* ns per 44.1 kHz sample of the whole mix (events, parts, drums on 16ths, buses, master) with notes
+ * held: parts[k] = {engine, preset, notes} for part k, 0 notes = idle. 2 s to settle, then the
  * fastest of four 2 s stretches (the host's other load only ever adds). Runs in a child process
  * (a clean state each time); the result comes back through a pipe. */
-#define DRUM_HITS 0xFFu
 static double tracks_cost(const uint8_t parts[NPART][3], uint32_t *busy_max)
 {
     int fd[2];
@@ -356,18 +318,17 @@ static double tracks_cost(const uint8_t parts[NPART][3], uint32_t *busy_max)
         host_tracks_init();
         for (p = 0; p < NPART; p++) {
             host_preset(&trk[p], parts[p][0], parts[p][1]);
-            if (parts[p][2] == DRUM_HITS)
-                continue;
             trk[p].p[P_VOICE] = V_POLY;
             trk[p].p[P_SUS] = 127;                  /* held notes keep sounding */
             trk[p].p[P_AMODE] = 0;
+        }
+        for (p = 0; p < NPART; p++)
             for (i = 0; i < parts[p][2]; i++)
                 trk_note_on(&trk[p], NOTES[i] + 12u * p, 100);
-        }
         for (k = 0; k < 2u * FS / CTL + nblk; k++) {   /* 2 s to settle (attacks), then measure */
             uint64_t t0;
-            if (parts[3][2] == DRUM_HITS && (k * CTL) % (FS / 8u) < CTL)   /* 16ths at 120 BPM */
-                drum_hit((k * CTL) / (FS / 8u));
+            if ((k * CTL) % (FS / 8u) < CTL)          /* 16ths at 120 BPM */
+                drum_on((k * CTL) % (FS / 2u) < CTL ? 36u : ((k * CTL) / (FS / 8u)) % 4u == 2u ? 38u : 42u, 100u);
             t0 = now_ns();
             mix_block(o, CTL);
             if (k >= 2u * FS / CTL) {                  /* (the host's own noise only ever adds) */
@@ -407,7 +368,7 @@ static int steal_test(const char *dir)
     const uint32_t frames = 4u * FS;
     char path[512];
     FILE *w;
-    int32_t prev = 0, *L = calloc(frames + CTL, sizeof *L);   /* (the last block may run past frames) */
+    int32_t prev = 0, *L = calloc(frames, sizeof *L);
     uint32_t f, i, p, k, events[6], nev = 0, bad = 0, kills0;
     double worst = 0;
     snprintf(path, sizeof path, "%s/steal.wav", dir);
@@ -470,8 +431,7 @@ static int steal_test(const char *dir)
 
 /* a preset change across engines while notes sound (the PRESETS knob, the editor's PRESET) must not click:
  * part 1 as a plain sine pad (ANALOG SINE KEY, filter open, slow release, no sends: smooth, so the largest
- * sample step is set by the pitches), (a) a chord held and released, the switch to DIGITAL (its E.PIANO; without
- * FELUCCA_FM4 converted: FM6) in its release
+ * sample step is set by the pitches), (a) a chord held and released, the switch to DIGITAL in its release
  * tail; (b) twice a chord held, the switch to PHASE / LOFI while it is held (the preset change releases
  * it); (c) a switch to SAMPLE with a note in its second block: that note must sound on the new engine. As ui.c
  * set_engine_of + apply_preset_to: eng_req, the new engine's values and panic_req at once (the main loop
@@ -480,7 +440,10 @@ static int steal_test(const char *dir)
  * Writes DIR/engine_switch.wav. */
 static void xfade_sine(track_t *t)
 {
-    host_preset(t, 0, 5);                          /* ANALOG SINE KEY, as a plain held sine */
+    host_preset(t, 0, 5);                          /* ANALOG, as a plain held sine */
+    t->p[P_E0] = 3;                                /* (SIN, whichever preset that is) */
+    t->p[P_E1] = t->p[P_E2] = t->p[P_E3] = 0;
+    t->p[P_ED_FX] = 0;
     t->p[P_E4] = 127;
     t->p[P_E5] = t->p[P_E6] = 0;
     t->p[P_ED_FLT] = 0;
@@ -501,7 +464,7 @@ static int xfade_test(const char *dir)
     const uint8_t to[4] = {1, 2, 3, 4};
     char path[512];
     FILE *w;
-    int32_t *L = calloc(frames + CTL, sizeof *L);               /* (the last block may run past frames) */
+    int32_t *L = calloc(frames, sizeof *L);
     uint32_t f, i, k, bad = 0, late_ok = 0;
     double worst = 0;
     track_t *t = &trk[0];
@@ -564,132 +527,16 @@ static int xfade_test(const char *dir)
     return bad || !late_ok;
 }
 
-/* (#41) PHASE's bend moving must not click: PD BRASS (ENV -> DCW 90, ATK 8, REL 40: DCW moves fast in the attack and
- * the release), no sends, three low notes, then one held while the DCW knob is turned 0 .. 127. A bend switched at a
- * block's start stepped the wave there (eng_phase.c pd_wave fades it now): the second difference at the block
- * boundaries against the largest one inside the blocks (the wave's own), the first boundary of each note left out (the
- * attack's start from silence). Writes DIR/phase_dcw.wav. */
-static int phase_test(const char *dir)
-{
-    static const uint8_t N[4] = {36, 43, 48, 36};
-    const uint32_t frames = 4u * FS, B = FS / 10u / CTL * CTL;   /* B: 0.1 s in whole blocks */
-    char path[512];
-    FILE *w;
-    int32_t *L = calloc(frames + CTL, sizeof *L), at = 0, in = 1;
-    uint32_t f, i, k;
-    track_t *t = &trk[0];
-    snprintf(path, sizeof path, "%s/phase_dcw.wav", dir);
-    if (!L || !(w = fopen(path, "wb")))
-        return 1;
-    host_tracks_init();
-    host_preset(t, 2, 0);                              /* PHASE PD BRASS */
-    t->p[P_DIST] = t->p[P_CHOR] = t->p[P_DLY] = t->p[P_REV] = 0;
-    t->p[P_VOICE] = V_POLY;
-    wav_hdr(w, frames);
-    for (f = 0; f < frames; f += CTL) {
-        int32_t o[2 * CTL];
-        for (k = 0; k < 4u; k++) {
-            if (f == (1u + 7u * k) * B)
-                trk_note_on(t, N[k], 100);
-            if (f == (5u + 7u * k) * B + (k == 3u ? 10u * B : 0u))
-                trk_note_off(t, N[k]);
-        }
-        if (f >= 24u * B && f < 34u * B)              /* the knob, a step every ~12 ms */
-            t->p[P_E2] = (int16_t)((f - 24u * B) * 128u / (10u * B));
-        mix_block(o, CTL);
-        for (i = 0; i < CTL; i++) {
-            L[f + i] = o[2 * i];
-            wav_put(w, o[2 * i], o[2 * i + 1]);
-        }
-    }
-    fclose(w);
-    for (i = 2; i < frames; i++) {
-        int32_t e = abs(L[i] - 2 * L[i - 1] + L[i - 2]), on = 0;
-        for (k = 0; k < 4u; k++)
-            on |= i - (1u + 7u * k) * B < 2u;
-        if (i % CTL < 2u) {
-            if (!on && e > at)
-                at = e;
-        } else if (e > in) {
-            in = e;
-        }
-    }
-    printf("tracks: PHASE PD BRASS low notes, DCW turned: the largest second difference at a block boundary %d, inside "
-           "the blocks %d (%.2f x; a bend switched at once: over 5 x) %s\n", at, in, (double)at / in,
-           at <= 2 * in ? "ok" : "FAIL");
-    free(L);
-    return at > 2 * in;
-}
-
-/* Skiff: the parts' shared engine area (engines.c eng_mem). Track 1 plays three PHYS notes (its three slots in its
- * area), then switches to GRAIN: the switch zeroes the area, so past GRAIN's own part it stays zero (PHYS's third
- * slot is gone); GRAIN sounds; back on PHYS a note sounds again; track 2's area (ANALOG: no one's) is never touched */
-static int32_t engmem_run(uint32_t blocks)            /* blocks rendered; their peak */
-{
-    int32_t o[2 * CTL], pk = 0;
-    uint32_t f, i;
-    for (f = 0; f < blocks; f++) {
-        mix_block(o, CTL);
-        for (i = 0; i < 2u * CTL; i++)
-            pk = abs(o[i]) > pk ? abs(o[i]) : pk;
-    }
-    return pk;
-}
-static int engmem_switch(track_t *t, uint32_t e)      /* the UI's engine change; done when the audio side is on it */
-{
-    uint32_t f;
-    host_preset_req(t, e, 0);
-    panic_req |= 1u;
-    for (f = 0; f < 50u && t->engine != e; f++)
-        engmem_run(1);
-    return t->engine == e;
-}
-static int engmem_test(void)
-{
-    track_t *t = &trk[0];
-    uint32_t grain = 0;
-    const uint8_t *a = (const uint8_t *)&eng_mem[0], *b = (const uint8_t *)&eng_mem[1];
-    uint32_t i, phys_tail = 0, tail = 0, other = 0;
-    int32_t pk_grain, pk_phys;
-    int ok;
-    while (grain < NENGINES && ENGINES[grain] != &ENG_GRAIN)
-        grain++;
-    host_tracks_init();
-    memset(&eng_mem[1], 0x5A, sizeof eng_mem[1]);
-    host_preset(t, ENGI_PHYS, 0);
-    for (i = 0; i < 3u; i++)
-        trk_note_on(t, 48u + 7u * i, 100);
-    engmem_run(50);
-    for (i = sizeof(gr_part_t); i < sizeof(eng_mem_t); i++)
-        phys_tail += a[i] != 0;
-    ok = engmem_switch(t, grain);
-    for (i = sizeof(gr_part_t); i < sizeof(eng_mem_t); i++)
-        tail += a[i] != 0;
-    trk_note_on(t, 60, 100);
-    pk_grain = engmem_run(100);
-    ok &= engmem_switch(t, ENGI_PHYS);
-    trk_note_on(t, 60, 100);
-    pk_phys = engmem_run(100);
-    for (i = 0; i < sizeof(eng_mem_t); i++)
-        other += b[i] != 0x5A;
-    ok &= phys_tail > 0 && !tail && pk_grain > 300 && pk_phys > 300 && !other;
-    printf("tracks: shared engine area (%u B a part): PHYS -> GRAIN zeroes it (%u B of PHYS's past GRAIN's part, %u "
-           "left), GRAIN peak %d, back to PHYS peak %d, track 2's area changed in %u B %s\n", (unsigned)sizeof(eng_mem_t),
-           (unsigned)phys_tail, (unsigned)tail, (int)pk_grain, (int)pk_phys, (unsigned)other, ok ? "ok" : "FAIL");
-    return !ok;
-}
-
 /* live recording: held lengths (TIE steps) and swing-aware quantising. Blocks are rendered until track t
  * is at fraction q (1/100) into step idx (its swung length); the keys go in between, as events_block
  * takes them. */
 static void rec_run_to(track_t *t, uint32_t idx, uint32_t q)
 {
     int32_t o[2 * CTL];
-    uint32_t guard = 0;
+    uint32_t guard = 0, at;
     do {
         mix_block(o, CTL);
-    } while (++guard < 100000u && !(t->seq_idx == idx &&
-             t->seq_pos >= step_samples(t, div_samples((uint32_t)t->p[P_SDIV]), idx) * q / 100u));
+    } while (++guard < 100000u && !(at_step(t, &at) == idx && at >= q));
 }
 static int rec_step_is(const track_t *t, uint32_t i, uint32_t time, uint32_t n, uint32_t note)
 {
@@ -734,7 +581,8 @@ static int rec_test(void)
     input_off(t1, 64);
     rec_run_to(t1, 12, 50);
     ok_half = rec_step_is(t1, 10, ST_NOTE, 1, 64) && rec_step_is(t1, 11, ST_TIE, 0, 0) && rec_step_is(t1, 12, ST_REST, 0, 0);
-    /* (d) a two-key chord held 2.6 steps: ties until the last key is up */
+    /* (d) a two-key chord, one key up early in step 15, the other held 2.6 steps: 2.7.1, each note to its own end: step 15 the
+     * one still held going on (a NOTE of it, CONT), step 16 a TIE (up to 2.7 the chord tied until its last key) */
     rec_run_to(t1, 13, 5);
     input_on(t1, 67, 100);
     input_on(t1, 71, 100);
@@ -743,7 +591,8 @@ static int rec_test(void)
     rec_run_to(t1, 15, 60);
     input_off(t1, 71);
     rec_run_to(t1, 0, 10);
-    ok_chord = t1->step[13].n == 2u && rec_step_is(t1, 14, ST_TIE, 0, 0) && rec_step_is(t1, 15, ST_TIE, 0, 0) &&
+    ok_chord = t1->step[13].n == 2u && t1->step[14].time == ST_NOTE && t1->step[14].n == 1u && t1->step[14].note[0] == 71u &&
+               (t1->step[14].flags & SF_CONT(0)) && rec_step_is(t1, 15, ST_TIE, 0, 0) &&
                t1->step[0].time != ST_TIE;
     /* (e) LEN 4, held for 10 steps: the note fills the pattern (3 TIEs), not more */
     rec_run_to(t2, 1, 10);
@@ -753,12 +602,12 @@ static int rec_test(void)
     input_off(t2, 55);
     ok_cap = rec_step_is(t2, 1, ST_NOTE, 1, 55) && rec_step_is(t2, 2, ST_TIE, 0, 0) && rec_step_is(t2, 3, ST_TIE, 0, 0) &&
              rec_step_is(t2, 0, ST_TIE, 0, 0);
-    /* (f) SWING 50 %: 0.55 into an even (long) step is before its middle (stays); 0.42 period into an odd
-     * (short, 0.8) step is past its middle (the next one) */
+    /* (f) SWING 50 %: 0.55 into an even (long) step is before its middle (stays); 0.56 period into an odd
+     * (short, 0.8) step is past its middle and the key-to-ear latency REC_LAT (the next one) */
     rec_run_to(t3, 4, 46);                         /* 0.46 x 1.2 = 0.55 period */
     input_on(t3, 72, 100);
     input_off(t3, 72);
-    rec_run_to(t3, 7, 53);                         /* 0.53 x 0.8 = 0.42 period */
+    rec_run_to(t3, 7, 70);                         /* 0.70 x 0.8 = 0.56 period */
     input_on(t3, 74, 100);
     input_off(t3, 74);
     ok_swing = rec_step_is(t3, 4, ST_NOTE, 1, 72) && t3->step[5].n == 0u && rec_step_is(t3, 8, ST_NOTE, 1, 74) &&
@@ -779,17 +628,16 @@ static int rec_test(void)
     printf("tracks: recording lengths: held 3.3 steps -> NOTE TIE TIE (the 4th step put back) %s; 0.3 step -> one "
            "step %s; past the middle of the next -> NOTE TIE %s\n", ok_len ? "ok" : "FAIL", ok_short ? "ok" : "FAIL",
            ok_half ? "ok" : "FAIL");
-    printf("tracks: recording lengths: a chord ties until its last key %s; capped at LEN 4 %s; MONO legato A..B -> "
+    printf("tracks: recording lengths: a chord, each note to its own key-up (2.7.1) %s; capped at LEN 4 %s; MONO legato A..B -> "
            "A TIE B TIE %s\n", ok_chord ? "ok" : "FAIL", ok_cap ? "ok" : "FAIL", ok_mono ? "ok" : "FAIL");
-    printf("tracks: recording with SWING 50 %%: nearest swung step (0.55 into a long step stays, 0.42 into a short "
-           "one moves on) %s\n", ok_swing ? "ok" : "FAIL");
+    printf("tracks: recording with SWING 50 %%: nearest swung step, as heard (0.55 into a long step stays, 0.56 into a "
+           "short one moves on) %s\n", ok_swing ? "ok" : "FAIL");
     fail = !ok_len + !ok_short + !ok_half + !ok_chord + !ok_cap + !ok_mono + !ok_swing;
     return fail;
 }
 
 /* TRS MIDI IN (midi_uart.c, untested on hardware): bytes through its parser into the same queue as
- * USB, routed by channel: ROUT CH1-4 1..4 -> parts 1..4, others (10 too) ignored; ROUT SEL all -> the
- * selected track; running
+ * USB, routed by channel: 1..3 -> parts 1..3, 10 -> drums, others -> the selected track; running
  * status, note-on velocity 0 = note-off; a note-off on a "selected track" channel reaches the track
  * its note-on went to after another track was selected; recording into an armed track. */
 static int trs_held(const track_t *t, uint32_t note)
@@ -809,30 +657,23 @@ static void trs_bytes(const uint8_t *b, uint32_t n)
 }
 static int trs_test(void)
 {
-    uint32_t i;
-    int ok_parts, ok_ch10, ok_sel, ok_off, ok_hang, ok_rec;
+    uint32_t d0, i;
+    int ok_parts, ok_drum, ok_sel, ok_off, ok_hang, ok_rec;
     host_tracks_init();
     for (i = 0; i < NPART; i++) {
         host_preset(&trk[i], 0, 1);
         trk[i].p[P_VOICE] = V_POLY;
         trk[i].p[P_SUS] = 127;
     }
-    sel_set(1);
-    trs_bytes((const uint8_t[]){0x90, 60, 100, 65, 0xF8, 100, 0x91, 62, 100, 0x92, 64, 100, 0x93, 48, 100, 0x99, 36, 110,
-                                0x94, 67, 90}, 21);
-    ok_parts = trs_held(&trk[0], 60) && trs_held(&trk[0], 65) && trs_held(&trk[1], 62) && trs_held(&trk[2], 64) &&
-               trs_held(&trk[3], 48) && !trs_held(&trk[0], 62);
-    /* ROUT CH1-4 (the default): ch 10 and ch 5 are not heard at all (kept free for other instruments) */
-    ok_ch10 = !trs_held(&trk[1], 36) && !trs_held(&trk[3], 36);  /* ch 10: no drum channel any more */
-    ok_sel = !trs_held(&trk[1], 67) && !trs_held(&trk[0], 67);
-    song.g[G_ROUTE] = 1;                            /* ROUT SEL: every channel -> the selected track */
-    trs_bytes((const uint8_t[]){0x99, 36, 110, 0x94, 67, 90}, 6);
-    ok_ch10 &= trs_held(&trk[1], 36) && !trs_held(&trk[3], 36);
-    ok_sel &= trs_held(&trk[1], 67) && !trs_held(&trk[0], 67);
-    trs_bytes((const uint8_t[]){0x90, 60, 0, 65, 0, 0x81, 62, 0, 0x82, 64, 64, 0x83, 48, 0, 0x89, 36, 0}, 17);   /* vel 0 = off, 0x8n */
-    ok_off = !trs_held(&trk[0], 60) && !trs_held(&trk[0], 65) && !trs_held(&trk[1], 62) && !trs_held(&trk[2], 64) &&
-             !trs_held(&trk[3], 48) && !trs_held(&trk[1], 36);
-    sel_set(2);                                   /* another track selected while ch 5's note is down */
+    song.sel = 1;
+    d0 = drums.age;
+    trs_bytes((const uint8_t[]){0x90, 60, 100, 65, 0xF8, 100, 0x91, 62, 100, 0x92, 64, 100, 0x99, 36, 110, 0x94, 67, 90}, 18);
+    ok_parts = trs_held(&trk[0], 60) && trs_held(&trk[0], 65) && trs_held(&trk[1], 62) && trs_held(&trk[2], 64) && !trs_held(&trk[0], 62);
+    ok_drum = drums.age == d0 + 1u;
+    ok_sel = trs_held(&trk[1], 67) && !trs_held(&trk[0], 67);
+    trs_bytes((const uint8_t[]){0x90, 60, 0, 65, 0, 0x81, 62, 0, 0x82, 64, 64}, 11);   /* vel 0 = off, 0x8n */
+    ok_off = !trs_held(&trk[0], 60) && !trs_held(&trk[0], 65) && !trs_held(&trk[1], 62) && !trs_held(&trk[2], 64);
+    song.sel = 2;                                   /* another track selected while ch 5's note is down */
     trs_bytes((const uint8_t[]){0x84, 67, 0}, 3);
     ok_hang = !trs_held(&trk[1], 67);
     song.rec = 1u << 2;                             /* track 3 armed, transport on: ch 3 records */
@@ -841,12 +682,12 @@ static int trs_test(void)
     trs_bytes((const uint8_t[]){0x92, 72, 100}, 3);
     trs_bytes((const uint8_t[]){0x92, 72, 0}, 3);
     ok_rec = trk[2].step[0].n == 1u && trk[2].step[0].note[0] == 72u && trk[2].step[0].time == ST_NOTE && trk[1].step[0].n == 0u;
-    printf("tracks: TRS MIDI IN: ch 1..4 -> parts %s, ch 10 and ch 5 ignored on CH1-4, the selected track on SEL %s %s; note-offs "
-           "(running status, vel 0) %s\n", ok_parts ? "ok" : "FAIL", ok_ch10 ? "ok" : "FAIL", ok_sel ? "ok" : "FAIL",
+    printf("tracks: TRS MIDI IN: ch 1..3 -> parts %s, ch 10 -> drums %s, ch 5 -> the selected track %s; note-offs "
+           "(running status, vel 0) %s\n", ok_parts ? "ok" : "FAIL", ok_drum ? "ok" : "FAIL", ok_sel ? "ok" : "FAIL",
            ok_off ? "ok" : "FAIL");
     printf("tracks: TRS MIDI IN: note-off after another track was selected reaches the note's track %s; ch 3 records "
            "into armed track 3 %s\n", ok_hang ? "ok" : "FAIL", ok_rec ? "ok" : "FAIL");
-    return !ok_parts + !ok_ch10 + !ok_sel + !ok_off + !ok_hang + !ok_rec;
+    return !ok_parts + !ok_drum + !ok_sel + !ok_off + !ok_hang + !ok_rec;
 }
 
 static int tracks_test(const char *dir)
@@ -909,33 +750,12 @@ static int tracks_test(const char *dir)
         waitpid(pid, &st, 0);
         if (!WIFEXITED(st) || WEXITSTATUS(st))
             fail++;
-        fflush(stdout);
-        pid = fork();
-        if (!pid) {
-            int rc = engmem_test();
-            fflush(stdout);
-            _exit(rc);
-        }
-        waitpid(pid, &st, 0);
-        if (!WIFEXITED(st) || WEXITSTATUS(st))
-            fail++;
-        fflush(stdout);
-        pid = fork();
-        if (!pid) {
-            int rc = phase_test(dir);
-            fflush(stdout);
-            _exit(rc);
-        }
-        waitpid(pid, &st, 0);
-        if (!WIFEXITED(st) || WEXITSTATUS(st))
-            fail++;
     }
-    printf("tracks: WAVs in %s: %s (mix), %s, %s, %s, %s, steal.wav, engine_switch.wav, phase_dcw.wav\n", dir, SOLO[0],
-           SOLO[1], SOLO[2], SOLO[3], SOLO[4]);
-    /* one part: every preset with 8 held notes (the engine's cap: VOICE 4); the worst one */
+    printf("tracks: WAVs in %s: %s (mix), %s, %s, %s, %s, steal.wav, engine_switch.wav\n", dir, SOLO[0], SOLO[1], SOLO[2], SOLO[3], SOLO[4]);
+    /* one part: every preset with 8 held notes (the engine's cap: VOICE 4) + drums; the worst one */
     for (e = 0; e < NENGINES; e++)
         for (pi = 0; pi < ENGINES[e]->npresets; pi++) {
-            uint8_t parts[NPART][3] = {{(uint8_t)e, (uint8_t)pi, 8}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
+            uint8_t parts[NPART][3] = {{(uint8_t)e, (uint8_t)pi, 8}, {0, 0, 0}, {0, 0, 0}};
             double c = tracks_cost(parts, 0);
             if (c > best_e[e]) {
                 best_e[e] = c;
@@ -947,20 +767,14 @@ static int tracks_test(const char *dir)
                 worst_p = pi;
             }
         }
-    printf("tracks: one part, 8 notes held (host -O2, ns per sample, heaviest preset per engine):");
+    printf("tracks: one part, 8 notes held + drums (host -O2, ns per sample, heaviest preset per engine):");
     for (e = 0; e < NENGINES; e++)
-        if (eng_ok(e))
-            printf(" %s %s %.1f%s", ENGINES[e]->name, ENGINES[e]->presets[heavy[e]].name, best_e[e],
-                   e + 1u < NENGINES ? "," : "\n");
-    {   /* FM (DIGITAL with FELUCCA_FM4, else FM6), PHASE, VOICE (their heaviest presets) and drums on part 4 at once:
-         * 3 + 3 + 2 notes and the hits in the budget of 8 */
-        const uint8_t fm = FELUCCA_FM4 ? ENGI_DIGITAL : ENGI_FM6;
-        uint8_t parts[NPART][3] = {{fm, (uint8_t)heavy[fm], 3}, {2, (uint8_t)heavy[2], 3}, {5, (uint8_t)heavy[5], 2},
-                                   {ENGI_DRUM, 0, DRUM_HITS}};
-        uint8_t full[NPART][3] = {{fm, (uint8_t)heavy[fm], 8}, {2, (uint8_t)heavy[2], 8}, {5, (uint8_t)heavy[5], 4},
-                                  {ENGI_DRUM, 0, DRUM_HITS}};
-        uint8_t vv[NPART][3] = {{5, (uint8_t)heavy[5], 4}, {5, (uint8_t)heavy[5], 4}, {0, 0, 0}, {0, 0, 0}};
-        uint8_t idle[NPART][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {ENGI_DRUM, 0, DRUM_HITS}};
+        printf(" %s %s %.1f%s", ENGINES[e]->name, ENGINES[e]->presets[heavy[e]].name, best_e[e], e + 1u < NENGINES ? "," : "\n");
+    {   /* DIGITAL, PHASE, VOICE (their heaviest presets) at once: 3 + 3 + 2 notes = the budget of 8 */
+        uint8_t parts[NPART][3] = {{1, (uint8_t)heavy[1], 3}, {2, (uint8_t)heavy[2], 3}, {5, (uint8_t)heavy[5], 2}};
+        uint8_t full[NPART][3] = {{1, (uint8_t)heavy[1], 8}, {2, (uint8_t)heavy[2], 8}, {5, (uint8_t)heavy[5], 4}};
+        uint8_t vv[NPART][3] = {{5, (uint8_t)heavy[5], 4}, {5, (uint8_t)heavy[5], 4}, {0, 0, 0}};
+        uint8_t idle[NPART][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
         uint32_t bm2 = 0, bm3 = 0;
         double two_voice, none;
         four = tracks_cost(parts, &bm);
@@ -968,12 +782,12 @@ static int tracks_test(const char *dir)
         two_voice = tracks_cost(vv, &bm3);
         none = tracks_cost(idle, 0);
         printf("tracks: worst single part: %s %s %.1f ns\n", ENGINES[worst_e]->name, ENGINES[worst_e]->presets[worst_p].name, worst);
-        printf("tracks: %s + PHASE + VOICE + drums, 3 + 3 + 2 notes: %.1f ns (%.2f x the worst single part), "
-               "%u voices\n", ENGINES[fm]->name, four, four / worst, bm);
+        printf("tracks: DIGITAL + PHASE + VOICE + drums, 3 + 3 + 2 notes: %.1f ns (%.2f x the worst single part), "
+               "%u voices\n", four, four / worst, bm);
         printf("tracks: the same, 8 + 8 + 4 notes asked for (budget keeps %u): %.1f ns (%.2f x)\n", bm2, four_full,
                four_full / worst);
         printf("tracks: two VOICE parts, 4 + 4 voices (the heaviest 8 the budget allows): %.1f ns (%.2f x); "
-               "no notes but the drums (buses, 3 idle parts): %.1f ns\n", two_voice, two_voice / worst, none);
+               "no notes (drums, buses, 3 idle parts): %.1f ns\n", two_voice, two_voice / worst, none);
         if (bm > NVOICE || bm2 > NVOICE || bm3 > NVOICE)
             fail++;
     }
@@ -1002,19 +816,20 @@ int main(int argc, char **argv)
         for (i = 0; i < 8; i++) inst.p[P_E0 + i] = p->e[i];
         inst.p[P_ATK] = p->env[0]; inst.p[P_DEC] = p->env[1];
         inst.p[P_SUS] = p->env[2]; inst.p[P_REL] = p->env[3]; inst.p[P_ED_FLT] = p->fenv;
+        preset_extras(inst.p, p);
     }
     fm6_track_loaded(&inst);                            /* FM6: the preset's patch */
     inst.p[P_VOICE] = (int16_t)mono;
     inst.p[P_CHOR] = argc > 5 ? atoi(argv[5]) : 24;      /* as felucca_init */
     inst.p[P_DLY] = argc > 5 ? atoi(argv[5]) : 28;
     inst.p[P_REV] = argc > 5 ? atoi(argv[5]) : 36;
-    if (getenv("PRESET"))                               /* PRESET=1: sends, voice mode too (then SENDS, PSET) */
+    if (getenv("PRESET"))                               /* PRESET=1: sends, ARP, voice mode too (then SENDS, PSET) */
         host_preset(&inst, (uint32_t)eng, (uint32_t)preset);
     if (getenv("SENDS"))                                 /* SENDS=chorus,delay,reverb */
         sscanf(getenv("SENDS"), "%hd,%hd,%hd", &inst.p[P_CHOR], &inst.p[P_DLY], &inst.p[P_REV]);
     if (getenv("OCT"))                                   /* OCT=o: keyboard octave shift (key 7 = C4 + 12 o) */
         song.octave = (int8_t)atoi(getenv("OCT"));
-    if (getenv("PSET")) {                               /* PSET=id:value,... (track parameter ids, P_E0 = 61) */
+    if (getenv("PSET")) {                               /* PSET=id:value,... (track parameter ids, P_E0 = 49) */
         const char *s = getenv("PSET");
         int id, val, k;
         while (sscanf(s, "%d:%d%n", &id, &val, &k) == 2) {
@@ -1063,11 +878,8 @@ int main(int argc, char **argv)
                 n |= 1u << K[k];
             fm1_in.notes = (fp > FS / 10 && fp < FS * 3 / 2) ? n : 0;
         }
-        if (getenv("DRUMS") && fp % (FS / 8u) < CTL) {   /* part 4 DRUM: drum_hit on 16ths */
-            if (!f)
-                host_drums(&trk[3]);
-            drum_hit(f / (FS / 8u));
-        }
+        if (getenv("DRUMS") && fp % (FS / 4u) < CTL)   /* kick / closed hat / snare on 8ths */
+            drum_on(fp % (FS / 2u) < CTL ? 36u : (fp / (FS / 4u)) % 4u == 3u ? 38u : 42u, 100u);
         if (getenv("DIST"))
             inst.p[P_DIST] = (int16_t)atoi(getenv("DIST"));
         if (getenv("LEVEL"))

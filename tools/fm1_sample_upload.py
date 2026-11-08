@@ -1,21 +1,17 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
-"""Load WAV files into a Felucca user sample slot (USR1..USR3) over USB-MIDI.
+"""Load WAV files into a Felucca user sample slot (USR1..USR4) over USB-MIDI.
 
   fm1_sample_upload.py info
-  fm1_sample_upload.py load SLOT NAME file.wav[:ROOT[:LO-HI]] ...   (SLOT 1..3)
+  fm1_sample_upload.py load SLOT NAME file.wav[:ROOT[:LO-HI]] ...   (SLOT 1..4)
   fm1_sample_upload.py erase SLOT
-  fm1_sample_upload.py mix SLOT [SOUND LEVEL [REV [DLY]]]          (Skiff: a sound's level and sends)
   fm1_sample_upload.py build NAME OUT_PREFIX file.wav[...] ...      (no device: writes OUT_PREFIX.hdr / .bin)
 
 Each file becomes one zone: mono, 22050 Hz, IMA ADPCM (sampleio.py, the same encoder
 as the built-in sets and the web editor). ROOT is a MIDI note (default: from the file
 name, C4 = 60, else 60); without LO-HI the zones split the keyboard between their roots.
 A slot holds 80 KiB (about 7 s at 22050 Hz). Protocol: web/EDITOR_PROTOCOL.md, cmds 11..15.
-mix lists the slot's sounds (zones, lowest keys first) with their LEVEL, REV and DLY, or sets
-those of sound SOUND (1..16), in % as the unit shows them: LEVEL 100 plays it as loaded, REV and
-DLY are added to the track's REVERB and DELAY sends (cmd 81: Skiff after 1.3.3).
 Needs mido (and a backend such as python-rtmidi) for the device commands.
 """
 import sys
@@ -27,45 +23,6 @@ import sampleio as sio  # noqa: E402
 
 HDR = [0x7D, 0x46, 0x4C]
 RC = {1: "size", 2: "header", 3: "data CRC", 4: "flash", 5: "zones"}
-
-
-def printable(b):
-    """bytes from the device as text for the terminal: printable ASCII only (no escape sequences)"""
-    return "".join(chr(c) if 32 <= c < 127 else "?" for c in b)
-
-
-def slot_info(r):
-    """the SMP_INFO reply -> one line per slot; ValueError when it is malformed"""
-    try:
-        n, i, out = r[0], 2, []
-        for k in range(n):
-            nz = r[i]
-            j = r.index(0, i + 1)
-            out.append(f"USR{k + 1}: {'empty' if not nz else f'{nz} zones, {printable(r[i + 1:j])}, {r[j + 1]} KiB'}")
-            i = j + 2
-        return out
-    except (IndexError, ValueError):
-        raise ValueError("malformed SMP_INFO reply from the device") from None
-
-
-NOTES = "C C# D D# E F F# G G# A A# B".split()
-pct = lambda v: (v * 100 + 63) // 127                       # noqa: E731  a 0..127 value as the unit shows it (%)
-raw = lambda p: (p * 127 + 50) // 100                       # noqa: E731  .. and back (every % 0..100 round trips)
-
-
-def mix_rows(r):
-    """the SMP_MIX reply (slot, rc, nz, nz x (lo, hi), LEVEL x 16, REV x 16, DLY x 16) -> (rc, [(lo, hi, LEVEL, REV,
-    DLY)] per sound, the 48 values); ValueError when it is malformed"""
-    if len(r) < 3 or r[2] > 16 or len(r) != 3 + 2 * r[2] + 48:
-        raise ValueError("malformed SMP_MIX reply from the device")
-    v = r[3 + 2 * r[2]:]
-    return r[1], [(r[3 + 2 * i], r[4 + 2 * i], v[i], v[16 + i], v[32 + i]) for i in range(r[2])], v
-
-
-def mix_lines(slot, rows):
-    name = lambda n: f"{NOTES[n % 12]}{n // 12 - 1}"        # noqa: E731  (C4 = 60)
-    return [f"USR{slot + 1} sound {i + 1:2}  {name(lo)}-{name(hi)}  LEVEL {pct(lv)} %  REV +{pct(rv)} %  DLY +{pct(dl)} %"
-            for i, (lo, hi, lv, rv, dl) in enumerate(rows)] or [f"USR{slot + 1}: empty"]
 
 
 def pack7(b):
@@ -116,6 +73,9 @@ def build(name, specs):
     zones = []
     for spec in specs:
         parts = spec.split(":")
+        # Keep a Windows drive prefix separate from the optional :ROOT:LO-HI suffix.
+        if len(parts) > 1 and len(parts[0]) == 1 and parts[0].isalpha() and parts[1].startswith(("/", "\\")):
+            parts = [parts[0] + ":" + parts[1], *parts[2:]]
         path = Path(parts[0])
         root = int(parts[1]) if len(parts) > 1 and parts[1] else sio.note_from_name(path.stem)
         lo, hi = (int(v) for v in parts[2].split("-")) if len(parts) > 2 else (None, None)
@@ -128,7 +88,7 @@ def build(name, specs):
 
 
 def main():
-    if len(sys.argv) < 2 or sys.argv[1] not in ("info", "load", "erase", "mix", "build"):
+    if len(sys.argv) < 2 or sys.argv[1] not in ("info", "load", "erase", "build"):
         sys.exit(__doc__)
     cmd = sys.argv[1]
     if cmd in ("load", "build"):
@@ -144,43 +104,21 @@ def main():
             print(f"{sys.argv[2]}: {len(data)} B ADPCM, {hdr[6]} zones")
             return
     if cmd != "info":
-        if len(sys.argv) < 3 or sys.argv[2] not in ("1", "2", "3"):
-            sys.exit("SLOT is 1, 2 or 3")
+        if len(sys.argv) < 3 or sys.argv[2] not in ("1", "2", "3", "4"):
+            sys.exit("SLOT is 1, 2, 3 or 4 (USR4: SLOOP 2.4 and later)")
         slot = int(sys.argv[2]) - 1
     link = Link()
     if cmd == "info":
-        try:
-            print("\n".join(slot_info(link.req(15, []))))
-        except ValueError as e:
-            sys.exit(str(e))
+        r = link.req(15, [])
+        n, i = r[0], 2
+        for k in range(n):
+            nz = r[i]
+            j = r.index(0, i + 1)
+            print(f"USR{k + 1}: {'empty' if not nz else f'{nz} zones, {bytes(r[i + 1:j]).decode()}, {r[j + 1]} KiB'}")
+            i = j + 2
         return
     if cmd == "erase":
         print("erase:", "ok" if link.req(14, [slot], 10)[1] == 0 else "FAILED")
-        return
-    if cmd == "mix":
-        try:
-            want = [int(v) for v in sys.argv[3:7]]
-            if want and (len(want) < 2 or not 1 <= want[0] <= 16 or not all(0 <= v <= 100 for v in want[1:])):
-                raise ValueError
-        except ValueError:
-            sys.exit("mix SLOT [SOUND LEVEL [REV [DLY]]]: SOUND 1..16, the rest 0..100 (%)")
-        try:
-            rc, rows, v = mix_rows(link.req(81, [slot]))
-            if want:
-                if want[0] > len(rows):
-                    sys.exit(f"USR{slot + 1} has {len(rows)} sounds")
-                for w, p in enumerate(want[1:]):
-                    v[16 * w + want[0] - 1] = raw(p)
-                rc, rows, v = mix_rows(link.req(81, [slot] + v))
-        except ValueError as e:
-            sys.exit(str(e))
-        except TimeoutError:
-            sys.exit("no reply to mix: this firmware has no per-sound levels (Skiff after 1.3.3 has them)")
-        if rc == 1:
-            sys.exit("mix: refused")
-        print("\n".join(mix_lines(slot, rows)))
-        if rc == 2:
-            print("  (the sample fills the slot: these values stay until the power goes)")
         return
     print(f"USR{slot + 1} {sys.argv[3]}: {len(data)} B ADPCM, {hdr[6]} zones")
     if link.req(11, [slot])[1]:

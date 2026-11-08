@@ -65,14 +65,7 @@ static void vowel_at(int32_t pos, int32_t *f, int32_t *b)
 }
 
 typedef struct { int32_t a, b, c; } fres_t;
-#if FELUCCA_CPU2
-/* breath noise: an xorshift for all a track's voices ((Skiff 1.3) one per track, as the two cores render tracks at once) */
-static int32_t formant_nz[NTRK] = {[0 ... NTRK - 1] = 0x2545F491};
-#define FORMANT_NZ(t) formant_nz[C1_PI(t)]
-#else
-static int32_t formant_nz = 0x2545F491;                 /* breath noise, one xorshift for all voices (one core) */
-#define FORMANT_NZ(t) formant_nz
-#endif
+static int32_t formant_nz = 0x2545F491;                 /* breath noise, one xorshift for all voices */
 
 /* Klatt resonator coefficients (Q30) for F, BW in Hz * 16 */
 static void fres_coef(fres_t *r, uint32_t f16, uint32_t bw16)
@@ -92,7 +85,10 @@ static void fres_coef(fres_t *r, uint32_t f16, uint32_t bw16)
 static void formant_note_on(track_t *t, voice_t *v)
 {
     (void)t;
-    v->s[7] = (int32_t)((noise32(&FORMANT_NZ(t)) >> 25) << 25);   /* TALK starts over; a random vowel (RAND) */
+    formant_nz ^= formant_nz << 13;                     /* a random vowel for this note (RAND) */
+    formant_nz ^= (int32_t)((uint32_t)formant_nz >> 17);
+    formant_nz ^= formant_nz << 5;
+    v->s[7] = (int32_t)(((uint32_t)formant_nz >> 25) << 25);   /* TALK starts over, random vowel kept */
     if (!v->env && !v->env_out) {                       /* a fresh voice (not a retrigger): from rest */
         uint32_t i;
         v->ph[0] = 0;                                   /* the opening starts at zero: no click */
@@ -110,7 +106,7 @@ static void formant_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, con
     uint32_t inc = m->inc, i, te, tp, rp, rn, ratio, bws, f0;
     uint32_t ph = v->ph[0];
     int32_t y1 = v->s[0], y2 = v->s[1], y3 = v->s[2], y4 = v->s[3], y5 = v->s[4], y6 = v->s[5];
-    int32_t y7 = (int32_t)v->ph[1], y8 = (int32_t)v->ph[2], lp = v->s[6], nst = FORMANT_NZ(t);
+    int32_t y7 = (int32_t)v->ph[1], y8 = (int32_t)v->ph[2], lp = v->s[6], nst = formant_nz;
 
     /* vowel: VOWEL -> VOWL2 over TALK after note-on; ENV / LFO -> FLT move both */
     k = 0;
@@ -192,14 +188,19 @@ static void formant_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, con
         a = (int32_t)(((int64_t)r4.a * a + (int64_t)r4.b * y7 + (int64_t)r4.c * y8 + (1 << 29)) >> 30);
         y8 = y7;
         y7 = clamp(a, -(1 << 28), 1 << 28);             /* int32 state stays far from overflow */
-        s = soft_knee(clamp((int32_t)(((int64_t)y7 * og + (int64_t)(y7 - y8) * ogk) >> 21), -200000, 200000), 24000);
+        s = clamp((int32_t)(((int64_t)y7 * og + (int64_t)(y7 - y8) * ogk) >> 21), -200000, 200000);
+        a = s < 0 ? -s : s;
+        if (a > 24000) {                                /* soft knee: only peaks saturate */
+            a = 24000 + (softclip((a - 24000) * 2) >> 1);
+            s = s < 0 ? -a : a;
+        }
         ph += inc;
-        out[i] += voice_amp(s, m, i) << 1;
+        out[i] += mulq15(mulq15(s, amp_at(m, i)), VOICE_FS) << 1;
     }
     v->ph[0] = ph;
     v->ph[1] = (uint32_t)y7;
     v->ph[2] = (uint32_t)y8;
-    FORMANT_NZ(t) = nst;
+    formant_nz = nst;
     v->s[0] = y1;
     v->s[1] = y2;
     v->s[2] = y3;
@@ -210,36 +211,31 @@ static void formant_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, con
 }
 
 static const preset_t FORMANT_PRESETS[] = {
-    /* VOWEL VOWL2 TALK SHIFT | BUZZ BREATH Q RAND */
-    {"CHOIR AAH", {0, 0, 0, 0, 40, 22, 60, 0}, {85, 90, 115, 95}, 0, 0, FX(0, 70, 15, 90), TAG(PT_PAD)},
-    {"VOX LEAD", {32, 0, 0, 2, 90, 8, 72, 0}, {6, 70, 105, 55}, 0, 1, FX(0, 20, 45, 40), TAG(PT_LEAD)},
-    {"WOW BASS", {95, 0, 68, 0, 100, 0, 80, 0}, {0, 70, 70, 30}, 0, 1, FX(10, 0, 10, 10), TAG(PT_BASS)},
-    {"WHISPER", {0, 95, 88, 3, 50, 120, 50, 0}, {50, 90, 110, 90}, 0, 0, FX(0, 40, 30, 70), TAG(PT_FX)},
-    /* (Skiff) for the themes: CRYPT (dungeon synth), NEON (synthwave), QUARK (particles) */
-    {"CRYPT CHOIR", {112, 0, 0, -3, 34, 30, 64, 14}, {90, 90, 118, 100}, 0, 0, FX(0, 75, 10, 110), MORE({P_LRATE, 70}, {P_LD_PIT, 8}), TAG(PT_PAD)},
-    {"MONK CHANT", {95, 0, 96, -5, 80, 12, 80, 0}, {50, 80, 115, 85}, 0, 1, FX(0, 20, 10, 110), MORE({P_LRATE, 82}, {P_LFADE, 96}, {P_LD_PIT, 8}), TAG(PT_PAD)},
-    {"DREAM CHOIR", {0, 20, 0, 3, 55, 45, 55, 8}, {80, 90, 118, 95}, 0, 0, FX(0, 90, 30, 80), TAG(PT_PAD)},
-    /* (Skiff phase 9) more for every engine: basses, kits */
-    {"ROBOT TALK", {20, 100, 40, -12, 110, 4, 90, 30}, {0, 70, 100, 30}, 0, 1, FX(10, 0, 40, 30), TAG(PT_LEAD)},
+    /* VOWEL VOWL2 TALK SHIFT | BUZZ BREATH Q RAND ; vowels A E I O U over 0..127 */
+    {"CHOIR AAH", {0, 0, 0, 0, 40, 22, 60, 0}, {85, 90, 115, 95}, 0, 0, FX(0, 60, 10, 70)},
+    {"SOUL OOH", {110, 0, 0, 0, 30, 30, 55, 0}, {70, 90, 115, 90}, 0, 0, FX(0, 60, 10, 70)},
+    {"TALKBOX", {32, 95, 60, 0, 100, 4, 75, 0}, {4, 70, 110, 40}, 0, 1, FX(10, 15, 20, 25),
+     XP(P_GLIDE + 1, 60, P_LD_PIT + 1, 2, P_LRATE + 1, 89)},
+    {"WOW BASS", {95, 0, 68, 0, 100, 0, 80, 0}, {0, 70, 70, 30}, 0, 1, FX(10, 0, 0, 6), XP(P_TRANS + 1, -12)},
+    /* SLOOP 2.5: a reedy harmonica, a hand tremolo that comes in on long notes */
+    {"HARMONICA", {64, 0, 0, 0, 127, 20, 70, 0}, {4, 70, 115, 25}, 0, 1, FX(10, 10, 10, 22),
+     XP(P_LD_AMP + 1, 18, P_LRATE + 1, 80, P_LFADE + 1, 60)},
+    {"ROBOT", {40, 40, 0, 0, 127, 0, 110, 0}, {0, 60, 110, 20}, 0, 1, FX(10, 0, 20, 15), XP(P_GLIDE + 1, 20)},
+    {"VOX PAD", {20, 100, 110, 0, 50, 30, 60, 10}, {80, 90, 118, 90}, 0, 0, FX(0, 60, 15, 70)},
 };
 
 static const engine_t ENG_FORMANT = {
-    .name = "VOICE",
-    .page_title = {"VOWEL", "TONE"},
-    .edit = {
-        {"VOWEL", 0, 0, 127, 0, F_INT, 0},
-        {"VOWEL2", 0, 0, 127, 64, F_INT, 0},
-        {"TALK", 0, 0, 127, 0, F_TIME, 0},
-        {"PITCH", 0, -12, 12, 0, F_SEMI, 0},
-        {"BUZZ", 0, 0, 127, 64, F_PCT, 0},
-        {"BREATH", 0, 0, 127, 10, F_PCT, 0},
-        {"Q", 0, 0, 127, 64, F_PCT, 0},
-        {"RANDOM", 0, 0, 127, 0, F_PCT, 0},
+    "VOICE", {"VOWL", "TONE"},
+    {
+        {"VOWL", F_INT, 0, 127, 0, 0, 0},
+        {"VOWL2", F_INT, 0, 127, 64, 0, 0},
+        {"TALK", F_TIME, 0, 127, 0, 0, 0},
+        {"SHIFT", F_SEMI, -12, 12, 0, 0, 0},
+        {"BUZZ", F_PCT, 0, 127, 64, 0, 0},
+        {"BRTH", F_PCT, 0, 127, 10, 0, 0},
+        {"Q", F_PCT, 0, 127, 64, 0, 0},
+        {"RAND", F_PCT, 0, 127, 0, 0, 0},
     },
-    .presets = FORMANT_PRESETS,
-    .npresets = NELEM(FORMANT_PRESETS),
-    .note_on = formant_note_on,
-    .render = formant_render,
-    .knob = {P_E0, P_E4, P_E5, P_E2},
-    .poly = 4,
+    FORMANT_PRESETS, sizeof(FORMANT_PRESETS) / sizeof(FORMANT_PRESETS[0]), 0, formant_note_on, formant_render,
+    0xF81F, {P_E0, P_E4, P_E5, P_E2}, 4,
 };

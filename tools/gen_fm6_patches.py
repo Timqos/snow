@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
-"""FM6 factory patches (src/eng_fm6.c) -> a C header of packed 128-byte voices.
+"""FM6 factory patches (firmware/src/eng_fm6.c) -> a C header of packed 128-byte voices.
 
   tools/gen_fm6_patches.py OUT.h
 
-Felucca's own patches, made for it (no factory ROM data of any instrument): written here as readable
+Felucca 1.0's own patches (ported into SLOOP 2.4 with the FM6 engine) (no factory ROM data of any instrument): written here as readable
 operator settings, packed in the generic 128-byte 6-operator voice layout (the 32-voice bank's record).
 Operators are listed as OP1..OP6; the packed record starts with OP6, as the format does.
 """

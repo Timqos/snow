@@ -246,7 +246,9 @@ static void trio_sync(uint32_t w, uint32_t *php, uint32_t inc, int32_t g, const 
  * TUNE) that m->inc carries */
 static uint32_t trio_inc(int32_t pitch16, int32_t semi, int32_t ct, int32_t fine)
 {
-    return cents_inc(pitch16 + semi * 16, ct, fine);
+    int32_t d16 = ct * 16 / 100, rem = ct * 16 - d16 * 100;      /* rem: 1/1600 semitone */
+    uint32_t inc = pitch_inc(clamp(pitch16 + semi * 16 + d16, 0, 2047));
+    return inc + (uint32_t)((int32_t)(inc >> 12) * (rem * 2367 / 16000 + fine));
 }
 
 static void trio_note_on(track_t *t, voice_t *v)
@@ -281,8 +283,7 @@ static void trio_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     uint32_t mode = (uint32_t)p[P_E4] & 3u;
     int32_t reso = p[P_E6], k = 8192 - reso * 7168 / 127; /* damping 2.0 .. 0.25 (Q12): no self-oscillation */
     int32_t ma = TRIO_MIX[mode][0], mb = TRIO_MIX[mode][1], mc = TRIO_MIX[mode][2];
-    int32_t a1, a2, a3, cut, cur;
-    tsvf_t flt;
+    int32_t a1, a2, a3, g, cut, cur;
     int32_t mix[CTL], cr[CTL + 1];                      /* blocks are CTL long (dsp.c amp_at) */
     int16_t wx[CTL];
     uint32_t ph0 = v->ph[0], ph1 = v->ph[1], ph2 = v->ph[2], ph3s = ph2;   /* state in locals: out[] may alias v->s[] */
@@ -297,10 +298,12 @@ static void trio_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     /* the cutoff wanders a little, once per block (the slightly unstable filter of the chips) */
     drift += (((int32_t)(noise32(&nst) >> 22) - 512) - drift) >> 3;
     cut = clamp((p[P_E5] << 8) + m->cutoff + drift, 0, 127 << 8);
-    tsvf_coef_k(&flt, cut, k);
-    a1 = flt.a1;
-    a2 = flt.a2;
-    a3 = flt.a3;
+    g = SVF_G[cut >> 8];
+    if ((cut >> 8) < 127)
+        g += ((SVF_G[(cut >> 8) + 1] - g) * (cut & 255)) >> 8;
+    a1 = (int32_t)((4096u << 13) / (uint32_t)(4096 + ((g * (g + k)) >> 12)));
+    a2 = (a1 * g) >> 12;
+    a3 = (a2 * g) >> 12;
     for (i = 0; i < n; i++) {
         mix[i] = cr[i] = 0;
         wx[i] = -1;
@@ -319,7 +322,12 @@ static void trio_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     for (i = 0; i < n; i++) {
         int32_t x = cur + cr[i], y, v1, v2, v3, a;     /* one sample late: its corrections are complete */
         cur = mix[i];
-        x = soft_knee(x, 16000) >> 1;                   /* the input saturates above 16000 */
+        a = x < 0 ? -x : x;                             /* the input saturates above 16000 (soft knee) */
+        if (a > 16000) {
+            a = 16000 + (softclip((a - 16000) * 2) >> 1);
+            x = x < 0 ? -a : a;
+        }
+        x >>= 1;
         /* SVF (dsp.c tsvf_lp, with the band-pass out); the band-pass state is compressed */
         v3 = x - ic2;
         v1 = (a1 * ic1 + a2 * v3) >> 13;
@@ -328,8 +336,13 @@ static void trio_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
         ic2 = clamp(2 * v2 - ic2, -150000, 150000);
         a = clamp(ic1, -49152, 49152);                  /* beyond +-49152 a quarter of the excess */
         ic1 = a + ((ic1 - a) >> 2);
-        y = soft_knee((x * ma + v1 * mb + v2 * mc) >> 10, 16000);   /* linear up to half scale */
-        out[i] += voice_amp(y << 1, m, i) << 1;
+        y = (x * ma + v1 * mb + v2 * mc) >> 10;
+        a = y < 0 ? -y : y;                             /* linear up to half scale, then a soft knee */
+        if (a > 16000) {
+            a = 16000 + (softclip((a - 16000) * 2) >> 1);
+            y = y < 0 ? -a : a;
+        }
+        out[i] += mulq15(mulq15(y << 1, amp_at(m, i)), VOICE_FS) << 1;
     }
     prev = cur + cr[n];
     v->ph[0] = ph0;
@@ -344,36 +357,48 @@ static void trio_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
 }
 
 static const preset_t TRIO_PRESETS[] = {
-    /* name, {WAVE, INT2, INT3, DTN, MODE, CUT, RES, PW}, {A D S R}, fenv, mono */
-    {"FAT BASS", {0, 0, -12, 9, 0, 62, 45, 64}, {0, 62, 60, 25}, 40, 1, FX(10, 0, 10, 10), TAG(PT_BASS)},
-    {"ARP LEAD", {2, 12, 0, 4, 0, 88, 25, 32}, {0, 60, 90, 30}, 8, 0, FX(0, 0, 35, 20), TAG(PT_LEAD)},
-    {"SYNC LEAD", {9, 9, 0, 0, 0, 82, 30, 64}, {2, 70, 100, 40}, 18, 1, FX(0, 10, 40, 25), TAG(PT_LEAD)},
-    {"RING BELL", {13, 0, 18, 6, 1, 96, 30, 64}, {0, 92, 0, 80}, 0, 0, FX(0, 20, 35, 55), TAG(PT_KEYS)},
-    {"CHIP CHOIR", {1, 0, 12, 7, 1, 62, 95, 40}, {70, 90, 110, 85}, 30, 0, FX(0, 50, 20, 65), TAG(PT_PAD)},
-    /* (Skiff) for the themes: CRYPT (dungeon synth), NEON (synthwave), QUARK (particles) */
-    {"TURBO SYNC", {9, 7, 0, 3, 0, 92, 28, 64}, {2, 72, 105, 45}, 20, 1, FX(6, 15, 55, 30), MORE({P_GLIDE, 24}, {P_LRATE, 86}, {P_LFADE, 90}, {P_LD_PIT, 8}), TAG(PT_LEAD)},
-    {"NEON ARP", {1, 12, 0, 5, 0, 70, 35, 40}, {0, 66, 0, 45}, 36, 0, FX(0, 25, 70, 25), TAG(PT_PLUCK)},
-    {"COLLIDER", {13, 0, 23, 9, 2, 60, 50, 64}, {0, 70, 0, 55}, 0, 0, FX(8, 10, 50, 50), MORE({P_ED_PIT, 36}), TAG(PT_FX)},
-    /* (Skiff phase 9) more for every engine: basses, kits */
-    {"DIRTY BASS", {1, -12, 0, 8, 1, 62, 85, 30}, {0, 50, 50, 20}, 35, 1, FX(72, 0, 5, 5), MORE({P_DTYPE, 1}, {P_DTONE, -10}), TAG(PT_BASS)},
+    /* name, {WAVE, INT2, INT3, DTN, MODE, CUT, RES, PW}, {A D S R}, fenv, mono. INT2 / INT3: one-finger chords */
+    {"FAT BASS", {0, 0, -12, 9, 0, 72, 45, 64}, {0, 64, 80, 25}, 40, 1, FX(22, 0, 0, 6), XP(P_TRANS + 1, -24)},
+    {"MIN STAB", {0, 3, 7, 6, 0, 82, 20, 64}, {0, 66, 26, 36}, 30, 0, FX(0, 20, 20, 30)},
+    {"MIN7 STAB", {3, 3, 10, 5, 0, 75, 15, 64}, {0, 66, 28, 40}, 20, 0, FX(0, 25, 18, 30)},
+    /* rave: a bright minor stab, the filter snapping shut */
+    {"RAVE STAB", {0, 3, 7, 14, 0, 98, 30, 64}, {0, 66, 30, 34}, 40, 0, FX(16, 20, 24, 30)},
+    /* dub techno: a dark minor 7th chord into the delay */
+    {"DUB CHORD", {3, 3, 10, 6, 0, 68, 40, 64}, {0, 66, 22, 46}, 28, 0, FX(0, 10, 72, 40)},
+    {"SAW PAD", {0, 0, 12, 30, 0, 72, 10, 64}, {52, 90, 115, 86}, 6, 0, FX(0, 40, 20, 60)},
+    {"SYNC LEAD", {9, 9, 0, 0, 0, 82, 30, 64}, {2, 70, 100, 40}, 18, 1, FX(0, 10, 30, 22), XP(P_GLIDE + 1, 56)},
+    {"HOOVER", {0, 0, -12, 40, 0, 70, 20, 64}, {10, 70, 110, 40}, 10, 1, FX(10, 40, 10, 24), XP(P_GLIDE + 1, 70)},
+    /* SLOOP 2.5: a musette accordion, a 70s string machine, an 80s poly synth */
+    {"ACCORDION", {1, 0, 12, 14, 0, 92, 10, 40}, {6, 70, 118, 24}, 0, 0, FX(0, 20, 0, 22)},
+    {"ENSEMBLE", {0, 12, 0, 10, 0, 85, 0, 64}, {50, 90, 118, 80}, 0, 0, FX(0, 90, 10, 55)},
+    {"80S POLY", {0, 0, 12, 12, 0, 70, 30, 64}, {2, 72, 70, 50}, 34, 0, FX(0, 50, 22, 34)},
+    {"SQR LEAD", {1, 0, 12, 4, 0, 90, 20, 50}, {2, 70, 110, 30}, 10, 1, FX(0, 10, 28, 22), XP(P_GLIDE + 1, 40)},
+    {"POWER STAB", {0, 7, 12, 8, 0, 85, 25, 64}, {0, 70, 50, 36}, 30, 0, FX(16, 10, 20, 25)},
+    {"PULSE PAD", {1, 0, 12, 20, 0, 70, 10, 30}, {60, 90, 115, 85}, 0, 0, FX(0, 50, 20, 60), XP(P_LD_SHP + 1, 25, P_LRATE + 1, 30)},
 };
 
+/* (after Clipper 1.2) UNISON (voice.c unison_spread): the three oscillators moved by r (Q32) of a turn of the
+ * note, each by its share (its interval, DTN): as if started that much sooner (2 and 3 from fixed phases at each note) */
+static void trio_spread(track_t *t, voice_t *v, uint32_t r)
+{
+    const int16_t *p = t->p;
+    v->ph[0] += r;
+    v->ph[1] += uni_turns(r, v->pitch16, p[P_E1] * 16 + p[P_E3] * 16 / 100);
+    v->ph[2] += uni_turns(r, v->pitch16, p[P_E2] * 16 - p[P_E3] * 16 / 100);
+}
+
 static const engine_t ENG_TRIO = {
-    .name = "TRIO",
-    .page_title = {"OSC", "TONE"},
-    .edit = {
-        {"WAVE", N_TRIO_WAVE, 0, 15, 0, F_ENUM, 0},
-        {"PITCH2", 0, -24, 24, 0, F_SEMI, 0},
-        {"PITCH3", 0, -24, 24, -12, F_SEMI, 0},
-        {"DETUNE", 0, 0, 50, 6, F_INT, U_CT},
-        {"MODE", N_TRIO_MODE, 0, 3, 0, F_ENUM, 0},
-        {"CUTOFF", 0, 0, 127, 80, F_CUTOFF, 0},
-        {"RES", 0, 0, 127, 40, F_PCT, 0},
-        {"PW", 0, 0, 127, 64, F_PCT, 0},
+    "TRIO", {"OSC", "TONE"},
+    {
+        {"WAVE", F_ENUM, 0, 15, 0, N_TRIO_WAVE, 0},
+        {"INT2", F_SEMI, -24, 24, 0, 0, 0},
+        {"INT3", F_SEMI, -24, 24, -12, 0, 0},
+        {"DTN", F_INT, 0, 50, 6, 0, "ct"},
+        {"MODE", F_ENUM, 0, 3, 0, N_TRIO_MODE, 0},
+        {"CUT", F_CUTOFF, 0, 127, 80, 0, 0},
+        {"RES", F_PCT, 0, 127, 40, 0, 0},
+        {"PW", F_PCT, 0, 127, 64, 0, 0},
     },
-    .presets = TRIO_PRESETS,
-    .npresets = NELEM(TRIO_PRESETS),
-    .note_on = trio_note_on,
-    .render = trio_render,
-    .knob = {P_E5, P_E6, P_E7, P_E1},
+    TRIO_PRESETS, sizeof(TRIO_PRESETS) / sizeof(TRIO_PRESETS[0]), 1, trio_note_on, trio_render,
+    0xFFE0, {P_E5, P_E6, P_E7, P_E1},
 };

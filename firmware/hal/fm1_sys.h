@@ -1,8 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
-/* FM-1 system HAL: P33 access, watchdog, reset reason, reboot / UBOOT entry
- * No vendor code; call with interrupts off
- * (no IRQs are enabled yet, so nothing else touches P33).
+/* FM-1 system HAL: P33 access, watchdog, reset reason, reboot / UBOOT entry.
+ * Call with interrupts off so nothing else touches P33.
  *
  *   fm1_reset_reason()   snapshot P3_RST_SRC / RST_SRC (call first thing)
  *   fm1_wdt_arm(t)       reset-mode watchdog, t = 0xA 1 s .. 0xF 32 s
@@ -12,8 +11,6 @@
  *   fm1_enter_update(p)  112-byte UPDATA_PARM record at 0x01C7FD88 + core reset
  *                        (the SPL then runs the staged update loader)
  *   fm1_core_reset()     PWR_CON core reset
- *   (FM1_CPU1_USED, FELUCCA_CPU2 built in: each of these holds the second core first, fm1_cpu1_halt; registers only,
- *   harmless when it never ran: MENU > CPU 1 CORE)
  *   fm1_updata_parm_clear()  zero the record (CRC 0: ignored on a warm reset)
  *   fm1_mailbox_clear()  zero 0x01C7FD80..0x01C7FDFF (boot info, mailbox) at cold start
  *   fm1_mem_readable(a, n) / fm1_peek8(a)   debug reads of RAM / XIP only
@@ -29,55 +26,8 @@
 #define FM1_PWR_CON (*(volatile uint32_t *)0x10000u)
 #define FM1_UPDATA_PARM ((volatile uint8_t *)0x01C7FD88u)
 #define FM1_UPDATA_PARM_LEN 112u
-#define FM1_LDR_CRUMB_ADDR 0x01C7FD20u    /* (SMK update loader) its start record, 48 B: app.ld keeps it out of NOINIT */
 
 static uint32_t fm1_p33_timeouts;
-
-/* ------------------------------------------------------- second core --- */
-/* (Skiff 1.3, from Felucca 1.6.1, after X0X and Jangada) FM1_CPU1_USED (src/felucca.c: FELUCCA_CPU2; fm1_cpu1.h): the
- * second core may be running. Every reset below holds it first: its waiting loop sits in RAM that the ROM, the SPL and
- * the update loader use at boot, and a core left running there would execute whatever they put in it. Hold: C1_CON
- * bit 1 set, then bit 3 (enable) cleared; registers only, safe when it never ran.
- *
- * The bus-invalid traps are off around the hold. Holding core 1 cuts the read it has on the bus (its waiting loop
- * reads the mailbox all the time), and the chip flags that a few instructions later as an AXI read invalid
- * (DBG_MSG bit 4): with the traps on (fm1_guard.h FM1_GUARD_BUS) core 0 took the exception (Felucca 1.6.1: 1 in 6
- * updates ended in a crash report). So: traps off, hold, wait for the flag, clear it, traps back as they were */
-#ifndef FM1_CPU1_USED
-#define FM1_CPU1_USED 0
-#endif
-#if FM1_CPU1_USED
-#define FM1_C1_CON (*(volatile uint32_t *)0x1EEE004u)
-#define FM1__DBG_WR_EN (*(volatile uint32_t *)0x1EEE240u)  /* (fm1_irq.h FM1_DBG_*: this header comes first) */
-#define FM1__DBG_MSG_CLR (*(volatile uint32_t *)0x1EEE248u)
-#define FM1__DBG_EN (*(volatile uint32_t *)0x1EEE340u)
-#define FM1__DBG_BUS 0x003F0030u                 /* bus-invalid traps: AXI rd/wr (4, 5), C0/C1 fetch/rd/wr (16..21) */
-FM1_INLINE void fm1_cpu1_halt(void)
-{
-    uint32_t locked = !(FM1__DBG_WR_EN & 1u), en, bus = FM1__DBG_BUS;
-    volatile uint32_t n;
-    __asm__("" : "+r"(bus));                     /* (~bus as a constant is 0xFFC0FFCF: build.py's stock-helper check) */
-    if (locked)
-        FM1__DBG_WR_EN = 0xE7u;                  /* unlock (as fm1_guard.h) */
-    en = FM1__DBG_EN;
-    FM1__DBG_EN = en & ~bus;
-    __asm__ volatile("csync" ::: "memory");
-    FM1_C1_CON |= 0x2u;
-    FM1_C1_CON &= ~0x8u;
-    __asm__ volatile("csync" ::: "memory");
-    for (n = 0; n < 256u; n++)                   /* the flag comes some instructions after the hold */
-        ;
-    FM1__DBG_MSG_CLR = FM1__DBG_BUS;
-    __asm__ volatile("csync" ::: "memory");
-    FM1__DBG_EN = en;
-    if (locked && (FM1__DBG_WR_EN & 1u))
-        FM1__DBG_WR_EN = 0xE7u;                  /* lock again */
-    __asm__ volatile("csync" ::: "memory");
-}
-#define FM1_RESET_PREP() fm1_cpu1_halt()
-#else
-#define FM1_RESET_PREP() ((void)0)
-#endif
 
 static uint8_t fm1__p33_xfer(uint8_t b)
 {
@@ -96,7 +46,7 @@ static uint8_t fm1__p33_xfer(uint8_t b)
 static void fm1__p33_cs(uint32_t a)
 {
     if (a & 0x8000u) {
-        FM1_P33_CON |= (1u << 0) | (1u << 8);    /* RTC domain */
+        FM1_P33_CON |= (1u << 0) | (1u << 8);    /* R3 (RTC) domain */
     } else {
         FM1_P33_CON &= ~(1u << 8);
         FM1_P33_CON |= 1u << 0;
@@ -125,6 +75,31 @@ static uint8_t fm1_p33_read(uint32_t a)
 static void fm1_p33_write(uint32_t a, uint8_t d) { fm1__p33_op(0, a, d); }
 static void fm1_p33_or(uint32_t a, uint8_t d) { fm1__p33_op(1, a, d); }
 static void fm1_p33_and(uint32_t a, uint8_t d) { fm1__p33_op(2, a, d); }
+
+/* ------------------------------------------------------- VDC14, SYSVDD --- */
+/* SLOOP 2.7, from X0X 1.0.9 by Charles Vestal (GPL-3.0, fm1-x0x#21): VDC14 (P3_ANA_CON6 [2:0]) is 1.25 V + 50 mV a
+ * level; SYSVDD (P3_ANA_CON9 [3:0], the cores and the SRAM) 0.93 V + 30 mV a level. The boot loader leaves 3 (1.40 V)
+ * and 11 (1.26 V); M-VAVE's own firmware (V15) raises them to 7 (1.60 V) and 15 (1.38 V) as it starts, at the same
+ * 360 MHz. At the boot loader's, with both cores running, some units read the flash and the SRAM wrong. Up only, a
+ * level every 100 us, VDC14 first: SYSVDD is regulated from it (main.c fm1_cstart, before anything else) */
+#define FM1_P3_ANA_CON6 0x06u
+#define FM1_P3_ANA_CON9 0x09u
+static uint32_t fm1_vdc14(void) { return fm1_p33_read(FM1_P3_ANA_CON6) & 7u; }
+static uint32_t fm1_sysvdd(void) { return fm1_p33_read(FM1_P3_ANA_CON9) & 15u; }
+static void fm1_supply_raise(uint32_t reg, uint32_t mask, uint32_t level)
+{
+    uint32_t v = fm1_p33_read(reg) & mask;
+    while (v < level && v < mask) {
+        v++;
+        fm1_p33_write(reg, (uint8_t)((fm1_p33_read(reg) & ~mask) | v));
+        fm1_delay_us(100);
+    }
+}
+static void fm1_supplies_stock(void)              /* M-VAVE's own: 1.60 V, then 1.38 V */
+{
+    fm1_supply_raise(FM1_P3_ANA_CON6, 7u, 7u);
+    fm1_supply_raise(FM1_P3_ANA_CON9, 15u, 15u);
+}
 
 /* ------------------------------------------------------------ watchdog --- */
 #define FM1_P3_WDT_CON 0x80u
@@ -156,10 +131,44 @@ static void fm1_reset_reason(void)
     fm1_boot.wdt_con = fm1_p33_read(FM1_P3_WDT_CON);
 }
 
+/* SLOOP 2.7.1, after Felucca 1.6.1 (Leo Kuroshita, GPL-3.0, fm1_sys.h fm1_cpu1_halt): hold the second core with the
+ * bus-invalid traps off. Holding core 1 cuts the access it has on the bus, and the chip flags that a few instructions
+ * later as a bus-invalid access (DBG_MSG bits 4, 5, 16..21): with the traps on (fm1_guard.h FM1_GUARD_BUS) core 0 took
+ * the exception. On a FM-1 whose core 1 once ran late (fm1_cpu1_wait: 8 ms, then one core), that was a FELUCCA CRASH
+ * screen in mix_block (vec 1, DBG_MSG bit 21) and a reboot instead of a glitch. So: traps off, hold, let the flag
+ * come, clear it, traps back as they were. Registers only: safe when core 1 never ran */
+#define FM1__C1_CON (*(volatile uint32_t *)0x1EEE004u)
+#define FM1__DBG_WR_EN (*(volatile uint32_t *)0x1EEE240u)
+#define FM1__DBG_MSG_CLR (*(volatile uint32_t *)0x1EEE248u)
+#define FM1__DBG_EN (*(volatile uint32_t *)0x1EEE340u)
+#define FM1__DBG_BUS 0x003F0030u                 /* bus-invalid traps: AXI rd/wr (4, 5), C0/C1 fetch/rd/wr (16..21) */
+FM1_INLINE void fm1_cpu1_halt(void)
+{
+    uint32_t locked = !(FM1__DBG_WR_EN & 1u), en, bus = FM1__DBG_BUS;
+    volatile uint32_t n;
+    __asm__("" : "+r"(bus));                     /* (as Felucca: ~bus not folded into a constant) */
+    if (locked)
+        FM1__DBG_WR_EN = 0xE7u;                  /* unlock (as fm1_guard.h) */
+    en = FM1__DBG_EN;
+    FM1__DBG_EN = en & ~bus;
+    __asm__ volatile("csync" ::: "memory");
+    FM1__C1_CON |= 0x2u;                         /* hold: bit 1 set, then bit 3 (enable) cleared */
+    FM1__C1_CON &= ~0x8u;
+    __asm__ volatile("csync" ::: "memory");
+    for (n = 0; n < 256u; n++)                   /* the flag comes some instructions after the hold */
+        ;
+    FM1__DBG_MSG_CLR = bus;
+    __asm__ volatile("csync" ::: "memory");
+    FM1__DBG_EN = en;
+    if (locked && (FM1__DBG_WR_EN & 1u))
+        FM1__DBG_WR_EN = 0xE7u;                  /* lock again */
+    __asm__ volatile("csync" ::: "memory");
+}
+
 static void fm1_reboot(void)
 {
     __asm__ volatile("cli");
-    FM1_RESET_PREP();
+    fm1_cpu1_halt();                                   /* the second core held (2.7.1: no bus flag to trap on) */
     fm1_p33_or(FM1_P3_PR_PWR, 0x10);
     for (;;)
         ;
@@ -170,7 +179,6 @@ static void fm1_enter_uboot(void)
     static const char k[16] = "usb_update_mode";
     uint32_t i;
     __asm__ volatile("cli");
-    FM1_RESET_PREP();
     /* CPU0 write limits (fm1_guard.h) may cover the mailbox: drop them all */
     if (!(*(volatile uint32_t *)0x1EEE240u & 1u))
         *(volatile uint32_t *)0x1EEE240u = 0xE7u;
@@ -184,7 +192,8 @@ static void fm1_enter_uboot(void)
 
 FM1_INLINE void fm1_core_reset(void)
 {
-    FM1_RESET_PREP();
+    *(volatile uint32_t *)0x1EEE004u |= 0x2u;          /* the second core held first (fm1_cpu1.h): it */
+    *(volatile uint32_t *)0x1EEE004u &= ~0x8u;         /* must not run old code while the loader writes */
     FM1_PWR_CON |= 0x10u;
     for (;;)
         ;
@@ -194,18 +203,14 @@ FM1_INLINE void fm1_enter_update(const uint8_t *parm)
 {
     uint32_t i;
     __asm__ volatile("cli");
-    FM1_RESET_PREP();                                   /* (again in fm1_core_reset: before the record is written) */
     if (!(*(volatile uint32_t *)0x1EEE240u & 1u))       /* drop CPU0 write limits, as fm1_enter_uboot */
         *(volatile uint32_t *)0x1EEE240u = 0xE7u;
     *(volatile uint32_t *)0x1EEE348u = 0;
+    fm1_cpu1_halt();                                    /* (2.7.1) held with the traps off, before the record */
     for (i = 0; i < FM1_UPDATA_PARM_LEN; i++)
         FM1_UPDATA_PARM[i] = parm[i];
     fm1_core_reset();
 }
-
-/* 1: the RAM record carries the update type (+6 0x5441, "AT"): an app wrote it before its reset (a power-on leaves
- * none, and the loader zeroes it at its start) */
-FM1_INLINE int fm1_updata_parm_set(void) { return FM1_UPDATA_PARM[6] == 0x41u && FM1_UPDATA_PARM[7] == 0x54u; }
 
 FM1_INLINE void fm1_updata_parm_clear(void)
 {

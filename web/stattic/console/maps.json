@@ -1,0 +1,88 @@
+{
+  "schema": 1,
+  "maps": [
+    {
+      "version": "v0.8.0-rc9-stattic",
+      "package_sha256": "6c65c5167fc5b9a3ed7eda0151e81ff0fe42ea7ef915eb9ca11831ed6dba17a8",
+      "source_commit": "676c7090c30831133eddaedf1e8f5e5afa66bf03",
+      "elf_sha256": "e4973bcd9a51f245b1cfa825ab6c525805f0ad64291e2166c6256a5116c6a638",
+      "ticks_per_us": 24,
+      "half_frames": 256,
+      "sample_rate": 44100,
+      "regions": {
+        "late_base": {
+          "address": 29473856,
+          "size": 4
+        },
+        "peak": {
+          "address": 29473800,
+          "size": 4
+        },
+        "had_late": {
+          "address": 29473804,
+          "size": 1
+        },
+        "event": {
+          "address": 29474464,
+          "size": 20
+        },
+        "rendered_voices": {
+          "address": 29474223,
+          "size": 6
+        },
+        "part_cost": {
+          "address": 29474342,
+          "size": 12
+        },
+        "late_counter": {
+          "address": 29868120,
+          "size": 4
+        }
+      }
+    },
+    {
+      "version": "v0.8.0-rc10-stattic",
+      "package_sha256": "19143e04d33405079e03dbc97ac15450d9dd124ba9c8e3aec10d7787adf27f47",
+      "source_commit": "967530f069a38db0b5d4c01d4c7ec69d0ea77d15",
+      "elf_sha256": "bdaf59b323e888cf5668deaf762ed0e92174e0074fa89d7edaa152bd7eea77ce",
+      "ticks_per_us": 24,
+      "half_frames": 256,
+      "sample_rate": 44100,
+      "regions": {
+        "late_base": {
+          "address": 29473864,
+          "size": 4
+        },
+        "peak": {
+          "address": 29473808,
+          "size": 4
+        },
+        "had_late": {
+          "address": 29473812,
+          "size": 1
+        },
+        "event": {
+          "address": 29474484,
+          "size": 20
+        },
+        "rendered_voices": {
+          "address": 29474247,
+          "size": 6
+        },
+        "part_cost": {
+          "address": 29474366,
+          "size": 12
+        },
+        "late_counter": {
+          "address": 29868120,
+          "size": 4
+        },
+        "detail": {
+          "address": 29475292,
+          "size": 48
+        }
+      },
+      "detail_schema": 1
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
-/* FM6 engine test (src/eng_fm6.c, src/fm6_core.c) on the Mac, through hostsim.c as regress.c.
+/* FM6 engine test (firmware/src/eng_fm6.c, fm6_core.c, fm6_bank.c) on the host, through hostsim.c as regress.c
+ * (from Felucca 1.0.1, adapted to SLOOP: no project round trip of the patch, the bank on a simulated NOR).
  *   build/host/fm6_test [DEMODIR]          (run_tests.sh: build/fm6_demo)
  * 1. algorithms: every one of the 32 has its classic carrier count; with every operator at full level and
  *    a ratio of 1, each sounds, and its level grows with its carriers.
@@ -15,14 +16,36 @@
  *    more; DTUN spreads the carriers (beats); ALG puts another algorithm in; PTCH loads its patch (main loop).
  * 6. formats: pack(unpack(x)) == x for the factory patches (the Python generator and the C packer agree), any
  *    128 bytes unpack into range, a 32-voice SysEx bank and a single-voice SysEx made here parse back
- *    (checksums) into the same patches; the patch survives a project (FUN8) round trip with the same sound.
+ *    (checksums) into the same patches.
  * 7. cost: host instructions per sample and voice with six voices held (the heaviest: six carriers), and the
- *    device estimate (1.7 % per 100: the PHYS measurements' ratio, as drum_test); fails above FM6_COST_MAX.
- * 8. demos into DEMODIR: every factory preset playing the PAD phrase (tests/phrases.h). */
+ *    device estimate (1.7 % per 100); fails above FM6_COST_MAX (macOS: an instruction counter; elsewhere the
+ *    regress suite counts FM6 under callgrind).
+ * 8. the bank (fm6_bank.c on a simulated NOR through storage.c): store, read back, erase, a power cycle (the
+ *    bank found again in flash), a bad slot, a part on a bank slot hears a store (fm6_poll), the tail of the
+ *    sector stays erased, an empty slot plays the init voice.
+ * 5b. AMS (2.4.1): an operator with amplitude modulation sensitivity sounds as it should, not as noise.
+ * 9. demos into DEMODIR: every factory preset playing a short phrase. */
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
-#include "phrases.h"
+/* the bank: storage.c on a RAM image of the NOR, the bank read where the device reads it (XIP) */
+static uint8_t nor[0x100000];
+static uint32_t nor_erases;
+static int st_read(uint32_t off, void *dst, uint32_t n) { memcpy(dst, nor + off, n); return 0; }
+static int st_erase(uint32_t off) { memset(nor + off, 0xFF, 4096); nor_erases++; return 0; }
+static int st_prog(uint32_t off, const void *src, uint32_t n)
+{
+    const uint8_t *q = src;
+    uint32_t i;
+    for (i = 0; i < n; i++)
+        nor[off + i] &= q[i];
+    return 0;
+}
+#include "../firmware/src/storage.c"
+static uint8_t flash_ok = 1;
+static union { uint8_t b[3840]; } proj_tmp;             /* (project.c's staging buffer: the bank is built there) */
+#define FM6_BANK_XIP(copy) (nor + st_sector(OBJ_FM6BANK, copy) + ST_PAYLOAD_OFF)
+#include "../firmware/src/fm6_bank.c"
 #ifdef __APPLE__
 #include <libproc.h>
 #include <sys/resource.h>
@@ -64,7 +87,8 @@ static void setup(const uint8_t *v, const int16_t *e)
 {
     uint32_t i;
     memset(trk, 0, sizeof trk);
-    memset(eng_mem, 0, sizeof eng_mem);   /* (the parts' shared engine area: engines.c) */
+    memset(eng_arena, 0, sizeof eng_arena);       /* (2.5: the voices' state is in the parts' arena) */
+    memset(eng_arena_own, 0, sizeof eng_arena_own);
     memset(fm6_eff, 0, sizeof fm6_eff);
     memset(fm6_lfo, 0, sizeof fm6_lfo);
     host_tracks_init();
@@ -193,7 +217,7 @@ static void envelopes(void)
         op_set(base, i, Z, LZ, 0, 1);
     setup(base, 0);
     trk_note_on(&trk[0], 60, 100);
-    n = fm6_note_of(&trk[0], &trk[0].v[0]);
+    n = (fm6_note_t *)eng_arena_of(&trk[0], ENGI_FM6);
     e = &n->env[5];
     for (i = 0; i < FS * 2u / CTL; i++) {
         static int32_t b[CTL];
@@ -225,7 +249,7 @@ static void envelopes(void)
             op_set(base, 1, RR, L, 99, 1);
             setup(base, 0);
             trk_note_on(&trk[0], 60, 100);
-            for (tl[r] = 0; tl[r] < 2000u && fm6_note_of(&trk[0], &trk[0].v[0])->env[5].ix == 0u; tl[r]++) {
+            for (tl[r] = 0; tl[r] < 2000u && ((fm6_note_t *)eng_arena_of(&trk[0], ENGI_FM6))[0].env[5].ix == 0u; tl[r]++) {
                 static int32_t b[CTL];
                 track_render(&trk[0], b, CTL);
             }
@@ -421,42 +445,15 @@ static void macros(void)
         printf("fm6: DTUN 0 / 127 (3 carriers): level swing over 50 ms windows %.3f / %.3f\n", v0, v1);
         check("DTUN: the carriers apart: they beat", v1 > v0 * 1.05);
     }
-    {   /* SLOT: the main loop loads a factory patch; OWN keeps (and brings back) the track's own */
-        uint8_t own[FP_SIZE + 1u];
+    {   /* PTCH: the main loop loads the slot's patch; FUN8 keeps the track's own */
         setup(base, 0);
-        memcpy(own, fm6_patch[0], sizeof own);
-        trk[0].p[P_E7] = FM6_OWN;
-        fm6_poll();
-        check("SLOT OWN: the track's patch stays (nothing reloads)", fm6_slot[0] == FM6_OWN &&
-              !memcmp(fm6_patch[0], own, FP_SIZE));
         trk[0].p[P_E7] = 4;
         fm6_poll();
-        check("SLOT F5 loads the fifth factory patch (main loop)", fm6_slot[0] == 4u &&
+        check("PTCH F5 loads the fifth factory patch (main loop)", fm6_slot[0] == 4u &&
               !memcmp(fm6_patch[0] + FP_NAME, "SOFT PAD  ", 10));
-        trk[0].p[P_E7] = FM6_OWN;
+        trk[0].p[P_E7] = FM6_NFACTORY + 3;
         fm6_poll();
-        check("SLOT back to OWN: the own patch again", fm6_slot[0] == FM6_OWN && !memcmp(fm6_patch[0], own, FP_SIZE));
-        check("SLOT: F1..F8 and OWN, nothing past it", ENG_FM6.edit[7].max == FM6_OWN && FM6_OWN == FM6_NFACTORY &&
-              !strcmp(ENG_FM6.edit[7].names[FM6_OWN], "OWN") && !ENG_FM6.edit[7].names[FM6_OWN + 1]);
-        trk[0].p[P_E7] = FM6_OWN;
-        fm6_set_patch(0, own);
-        trk[0].p[P_E7] = 2;                          /* a load that says F3 with F3 unchanged: F3; edited: OWN */
-        {
-            uint8_t v[FP_SIZE + 1u];
-            fm6_unpack(FM6_FACTORY[2], v);
-            fm6_set_patch(0, v);
-            fm6_adopt(0);
-            check("fm6_adopt: a factory patch unchanged shows its slot", trk[0].p[P_E7] == 2 && fm6_slot[0] == 2u);
-            v[FP_ALG] ^= 1;
-            fm6_set_patch(0, v);
-            fm6_adopt(0);
-            check("fm6_adopt: edited, it is the track's own (OWN)", trk[0].p[P_E7] == FM6_OWN && fm6_slot[0] == FM6_OWN);
-            trk[0].p[P_E7] = FM6_NFACTORY + 3;       /* (a stored B4 of 1.0.2) */
-            fm6_unpack(FM6_FACTORY[6], v);
-            fm6_set_patch(0, v);
-            fm6_adopt(0);
-            check("fm6_adopt: an old B slot holding factory F7 shows F7", trk[0].p[P_E7] == 6);
-        }
+        check("PTCH B4 of an empty bank: the init voice", !memcmp(fm6_patch[0] + FP_NAME, "INIT VOICE", 10));
     }
 }
 
@@ -605,7 +602,9 @@ static void demo(const char *dir, uint32_t pi)
 {
     static int32_t o[2 * CTL];
     const preset_t *pr = &ENG_FM6.presets[pi];
-    uint32_t pat = 4u, step = FS / 8u, s, i, held = 0, frames = 0;
+    static const uint8_t NOTE[16] = {48, 0, 55, 0, 60, 0, 64, 0, 67, 0, 64, 0, 60, 0, 55, 0};   /* a C arpeggio, 8ths */
+    static const uint8_t FLAG[16] = {1, 4, 0, 4, 0, 4, 1, 4, 0, 4, 0, 4, 0, 4, 0, 0};             /* 1 accent, 4 tie */
+    uint32_t step = FS / 8u, s, i, held = 0, frames = 0;
     char path[512], nm[32];
     FILE *w;
     for (i = 0; pr->name[i] && i < 31u; i++)
@@ -616,11 +615,12 @@ static void demo(const char *dir, uint32_t pi)
         return;
     wav_hdr(w, 0);
     memset(trk, 0, sizeof trk);
-    memset(eng_mem, 0, sizeof eng_mem);   /* (the parts' shared engine area: engines.c) */
+    memset(eng_arena, 0, sizeof eng_arena);       /* (2.5: the voices' state is in the parts' arena) */
+    memset(eng_arena_own, 0, sizeof eng_arena_own);
     host_tracks_init();
     host_preset(&trk[0], ENGI_FM6, pi);
     for (s = 0; s < 48u; s++) {                       /* three times through the pattern's 16 steps, 120 BPM 1/16 */
-        uint32_t k = s % 16u, note = PATTERNS[pat].note[k], fl = PATTERNS[pat].flags[k];
+        uint32_t k = s % 16u, note = NOTE[k], fl = FLAG[k];
         if (!(fl & 4u) && held) {
             trk_note_off(&trk[0], held);
             held = 0;
@@ -651,9 +651,65 @@ static void demo(const char *dir, uint32_t pi)
     fclose(w);
 }
 
-/* AMS noise regression adapted from Sloop 2.4.1 (isod89), GPL-3.0-only:
- * https://github.com/isod89/sloop-fm1/commit/a1c5d68767ae10fafb6821dc63b9b1fc490342d2
- * Q30 mantissas must be scaled right, not shifted left past their width. */
+/* ------------------------------------------------------------------ bank --- */
+static void bank(void)
+{
+    uint8_t pk[FM6_PACKED], got[FM6_PACKED], v[FP_SIZE + 1u];
+    uint32_t i, tail_ok = 1, sec, r;
+    memset(nor, 0xFF, sizeof nor);
+    fm6_bank_boot();
+    check("bank: an erased flash: no bank, every slot empty, B-slots play the init voice",
+          fm6_bank_cur < 0 && !fm6_bank_has(0) && fm6_bank_get(3, got) == 1 && fm6_bank_read == fm6_bank_get);
+    fm6_unpack(FM6_FACTORY[1], v);                        /* GLASS BELL -> B4 */
+    fm6_pack(v, pk);
+    check("bank: store into B4 (slot 3): ok, found, the record back as sent", fm6_bank_put(3, pk) == 0 &&
+          fm6_bank_cur >= 0 && fm6_bank_has(3) && !fm6_bank_has(2) && fm6_bank_get(3, got) == 0 && !memcmp(got, pk, FM6_PACKED));
+    r = (uint32_t)fm6_bank_put(FM6_BANK_N, pk);
+    check("bank: slot 27 is bad (rc 1), nothing written", r == 1u && fm6_bank_has(3));
+    {   /* a part on B4 hears the store: fm6_slot forgotten, fm6_poll reloads the slot */
+        setup(v, 0);
+        trk[0].p[P_E7] = FM6_NFACTORY + 3;
+        fm6_poll();
+        check("bank: PTCH B4 loads the stored patch (main loop)", fm6_slot[0] == FM6_NFACTORY + 3u &&
+              !memcmp(fm6_patch[0] + FP_NAME, "GLASS BELL", 10));
+        fm6_unpack(FM6_FACTORY[5], v);                    /* WOOD BARS over it */
+        fm6_pack(v, pk);
+        fm6_bank_put(3, pk);
+        fm6_poll();
+        check("bank: a store into the slot a part plays: the part hears the new patch",
+              !memcmp(fm6_patch[0] + FP_NAME, "WOOD BARS ", 10));
+    }
+    {   /* a power cycle: the scan finds the bank again */
+        int8_t cur = fm6_bank_cur;
+        uint32_t used = fm6_bank_used;
+        fm6_bank_cur = -1;
+        fm6_bank_used = 0;
+        fm6_bank_boot();
+        check("bank: found again after a power cycle (the same copy, the same slots)",
+              fm6_bank_cur == cur && fm6_bank_used == used && fm6_bank_get(3, got) == 0 && !memcmp(got, pk, FM6_PACKED));
+    }
+    sec = st_sector(OBJ_FM6BANK, (uint32_t)fm6_bank_cur);
+    for (i = ST_PAYLOAD_OFF + sizeof(fm6_bank_t); i < ST_SECTOR; i++)
+        tail_ok &= nor[sec + i] == 0xFFu;
+    check("bank: the sector's tail after the payload stays erased (0xE5000 / 0xE6000)", tail_ok && sec >= 0xE5000u && sec < 0xE7000u);
+    check("bank: erase B4: empty again, the init voice (fm6_poll)", fm6_bank_put(3, 0) == 0 && !fm6_bank_has(3) &&
+          (fm6_poll(), !memcmp(fm6_patch[0] + FP_NAME, "INIT VOICE", 10)));
+    {   /* both copies rotten: no bank, no crash */
+        nor[st_sector(OBJ_FM6BANK, 0) + 8] ^= 1u;
+        nor[st_sector(OBJ_FM6BANK, 1) + 8] ^= 1u;
+        fm6_bank_boot();
+        check("bank: both headers broken -> no bank, every slot empty", fm6_bank_cur < 0 && fm6_bank_get(3, got) == 1);
+        check("bank: a store then starts a fresh bank", fm6_bank_put(0, pk) == 0 && fm6_bank_has(0) && !fm6_bank_has(3));
+    }
+    printf("fm6: bank: %u sector erases for 4 writes\n", nor_erases);
+}
+
+/* ------------------------------------------------- amplitude modulation --- */
+/* 2.4.1: an operator with AMS > 0 (a quarter of the DX7 patches in circulation) played noise, whatever the LFO's
+ * AMD: the level offset came from a mantissa shifted left past 32 bits. Two operators (OP2 -> OP1), OP2 with AMS
+ * 1..3: tonal, with AMD 0 as with AMD 99 (the spectral centroid near the AMS 0 one; with the bug it was above
+ * 6 kHz, noise); with AMD 0 the voice close to the AMS 0 one (msfa takes about 1 dB off the operator); every voice
+ * below 2 x VOICE_FS */
 static void ams(void)
 {
     static const int RC[4] = {99, 30, 30, 50}, LC[4] = {99, 95, 90, 0}, RM[4] = {99, 40, 30, 50}, LM[4] = {99, 90, 80, 0};
@@ -705,10 +761,11 @@ int main(int argc, char **argv)
     voices();
     if (!getenv("NOCOST"))
         cost();
+    bank();
     if (argc > 1) {
         for (pi = 0; pi < FM6_NFACTORY; pi++)
             demo(argv[1], pi);
-        printf("fm6: demos in %s: the %u presets, each playing its suggested pattern\n", argv[1], (uint32_t)FM6_NFACTORY);
+        printf("fm6: demos in %s: the %u presets, each playing a short phrase\n", argv[1], (uint32_t)FM6_NFACTORY);
     }
     printf("fm6_test: %s\n", bad ? "FAILED" : "all checks ok");
     return bad != 0;

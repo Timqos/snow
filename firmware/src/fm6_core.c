@@ -127,9 +127,7 @@ static void fm6_env_init(fm6_env_t *e, const uint8_t *op, int32_t outlevel, int3
     fm6_env_advance(e, op, 0);
 }
 
-/* (FM6 LAB) the envelopes' steps (and the pitch envelope's) always inline: the editor runs them too (ui_fm6.c), and a
- * second caller would leave them out of the audio loop as calls */
-static inline __attribute__((always_inline)) int32_t fm6_env_get(fm6_env_t *e, const uint8_t *op)
+static int32_t fm6_env_get(fm6_env_t *e, const uint8_t *op)
 {
     if (e->statc) {
         e->statc -= FM6_N;
@@ -160,7 +158,7 @@ static inline __attribute__((always_inline)) int32_t fm6_env_get(fm6_env_t *e, c
     return e->level;
 }
 
-static inline __attribute__((always_inline)) void fm6_env_key(fm6_env_t *e, const uint8_t *op, int down)
+static void fm6_env_key(fm6_env_t *e, const uint8_t *op, int down)
 {
     if (e->down != (uint8_t)down) {
         e->down = (uint8_t)down;
@@ -200,7 +198,7 @@ static void fm6_penv_init(fm6_penv_t *e, const uint8_t *p)
     e->down = 1;
     fm6_penv_advance(e, p, 0);
 }
-static inline __attribute__((always_inline)) int32_t fm6_penv_get(fm6_penv_t *e, const uint8_t *p)
+static int32_t fm6_penv_get(fm6_penv_t *e, const uint8_t *p)
 {
     if (e->ix < 3u || (e->ix < 4u && !e->down)) {
         if (e->rising) {
@@ -219,7 +217,7 @@ static inline __attribute__((always_inline)) int32_t fm6_penv_get(fm6_penv_t *e,
     }
     return e->level;
 }
-static inline __attribute__((always_inline)) void fm6_penv_key(fm6_penv_t *e, const uint8_t *p, int down)
+static void fm6_penv_key(fm6_penv_t *e, const uint8_t *p, int down)
 {
     if (e->down != (uint8_t)down) {
         e->down = (uint8_t)down;
@@ -367,25 +365,18 @@ static __attribute__((noinline)) void fm6_op_fb(int32_t *out, int32_t phase, int
     fb[1] = y;
 }
 
-/* msfa FmCore::render: the six operators of algorithm alg into out (Q24). Unlike msfa, out starts empty:
- * the first carrier sounding writes it, the next ones add. Returns 0 when none sounded (out untouched). (Skiff 1.3, as
- * Felucca 1.6.1) The two buses are this call's (a bus is read only after this call wrote it: has[]): with two cores on
- * the stack (each core its own), with one in .bss as up to 1.2 */
-#if !FELUCCA_CPU2
-static int32_t fm6_bus[2][FM6_N];
-#endif
-static int fm6_core_render(int32_t *out, fm6_op_t *op, uint32_t alg, int32_t *fb, int32_t fb_shift)
+/* msfa FmCore::render: the six operators of algorithm alg into out (Q24), through the two modulator buses
+ * bus (scratch: the part's, eng_fm6.c fm6_part_t, so that parts render on both cores). Unlike msfa, out
+ * starts empty: the first carrier sounding writes it, the next ones add. Returns 0 when none sounded (out untouched) */
+static int fm6_core_render(int32_t *out, int32_t (*bus)[FM6_N], fm6_op_t *op, uint32_t alg, int32_t *fb, int32_t fb_shift)
 {
-#if FELUCCA_CPU2
-    int32_t fm6_bus[2][FM6_N];
-#endif
     const uint8_t *a = FM6_ALG[alg & 31u];
     uint8_t has[3] = {0, 0, 0};
     uint32_t k;
     for (k = 0; k < 6u; k++) {
         uint32_t f = a[k], inbus = (f >> 4) & 3u, outbus = f & 3u;
         int add = (f & FM6_OADD) != 0;
-        int32_t *o = outbus ? fm6_bus[outbus - 1u] : out;
+        int32_t *o = outbus ? bus[outbus - 1u] : out;
         int32_t g1 = op[k].gain_out, g2 = fm6_exp2(op[k].level_in - (14 << 24));
         op[k].gain_out = g2;
         if (g1 >= FM6_THRESH || g2 >= FM6_THRESH) {
@@ -397,7 +388,7 @@ static int fm6_core_render(int32_t *out, fm6_op_t *op, uint32_t alg, int32_t *fb
                 else
                     fm6_op_run(o, 0, op[k].phase, op[k].freq, g1, g2, add);
             } else {
-                fm6_op_run(o, fm6_bus[inbus - 1u], op[k].phase, op[k].freq, g1, g2, add);
+                fm6_op_run(o, bus[inbus - 1u], op[k].phase, op[k].freq, g1, g2, add);
             }
             has[outbus] = 1;
         } else if (!add) {
@@ -472,16 +463,6 @@ static int32_t fm6_osc_base(const uint8_t *op, int32_t note, int32_t extra)
     return ((4458616 * ((op[FP_FC] & 3) * 100 + op[FP_FF] % 100u)) >> 3) + (det > 7 ? 13457 * (det - 7) : 0);
 }
 
-/* operator op's envelope at a note-on of MIDI note `note`, velocity vel: its output level with the key's level scaling
- * and the velocity, its rate scaling. The note's, and (FM6 LAB) the editor's: ui_fm6.c draws what plays */
-static void fm6_op_env_init(fm6_env_t *e, const uint8_t *op, int32_t note, int32_t vel)
-{
-    int32_t ol = fm6_scaleout(op[FP_OL]) + fm6_scale_level(note, op);
-    ol = (ol > 127 ? 127 : ol) << 5;
-    ol += fm6_scale_vel(vel, op[FP_KVS]);
-    fm6_env_init(e, op, ol < 0 ? 0 : ol, fm6_scale_rate(note, op[FP_RS]));
-}
-
 /* a note-on (msfa note init) of patch p, MIDI note `note` (transposed), velocity vel. fresh: from silence
  * (phases, gains, feedback 0); else a retrigger keeps them, as msfa does */
 static void fm6_note_init(fm6_note_t *n, const uint8_t *p, int32_t note, int32_t vel, int fresh)
@@ -497,7 +478,10 @@ static void fm6_note_init(fm6_note_t *n, const uint8_t *p, int32_t note, int32_t
     n->fixed = 0;
     for (k = 0; k < 6u; k++) {
         const uint8_t *op = p + k * FP_OP;
-        fm6_op_env_init(&n->env[k], op, note, vel);
+        int32_t ol = fm6_scaleout(op[FP_OL]) + fm6_scale_level(note, op);
+        ol = (ol > 127 ? 127 : ol) << 5;
+        ol += fm6_scale_vel(vel, op[FP_KVS]);
+        fm6_env_init(&n->env[k], op, ol < 0 ? 0 : ol, fm6_scale_rate(note, op[FP_RS]));
         n->base[k] = fm6_osc_base(op, note, 0);
         n->fixed |= (uint8_t)((op[FP_MODE] & 1u) << k);
     }
@@ -525,8 +509,8 @@ static int32_t fm6_note_logfreq(int32_t pitch16, int32_t fine)
  * algorithm and feedback (already through the macros), dt[k]: a pitch offset per operator (Q24),
  * modlvl: a level offset of the operators that are not carriers (Q24 log2). Writes out (Q24); 0 = silent
  * (out untouched) */
-static int fm6_note_compute(fm6_note_t *n, const uint8_t *p, int32_t *out, int32_t lfo_val, int32_t lfo_delay,
-                             int32_t logfreq, uint32_t alg, int32_t fb, const int32_t *dt, int32_t modlvl)
+static int fm6_note_compute(fm6_note_t *n, const uint8_t *p, int32_t *out, int32_t (*bus)[FM6_N], int32_t lfo_val,
+                             int32_t lfo_delay, int32_t logfreq, uint32_t alg, int32_t fb, const int32_t *dt, int32_t modlvl)
 {
     uint32_t pmd = (uint32_t)((p[FP_LPMD] % 100u) * 165u >> 6) * (uint32_t)lfo_delay;   /* Q32 */
     int32_t senslfo = FM6_PMS[p[FP_LPMS] & 7u] * (lfo_val - (1 << 23));
@@ -544,15 +528,15 @@ static int fm6_note_compute(fm6_note_t *n, const uint8_t *p, int32_t *out, int32
         if (ams) {                                 /* msfa: pt = exp(sensamp / 262144 * 0.07 + 12.2) */
             uint32_t sensamp = (uint32_t)(((uint64_t)amod * ams) >> 24);
             int32_t lg = FM6_AMS_C0 + (int32_t)(((uint64_t)sensamp * FM6_AMS_K) >> 10);
-            uint32_t pt = fm6_mant(lg) >> (30 - (lg >> 24));   /* Q30 mantissa -> 2^17.6 .. 2^24.1: right shift 13..6.
-                                                                * Left shifting overflowed for imported DX7 AMS voices. */
+            uint32_t pt = fm6_mant(lg) >> (30 - (lg >> 24));   /* 2^17.6 .. 2^24.1: the Q30 mantissa >> 13..6 (2.4.1: it
+                                                                * was shifted left, past 32 bits: a random level, noise) */
             level -= (int32_t)(((uint64_t)(uint32_t)level * ((uint64_t)pt << 4)) >> 28);
         }
         if (!((car >> k) & 1u))
             level += modlvl;
         n->op[k].level_in = level < 0 ? 0 : level > (17 << 24) ? 17 << 24 : level;
     }
-    return fm6_core_render(out, n->op, alg, n->fb, fb ? 8 - fb : 16);
+    return fm6_core_render(out, bus, n->op, alg, n->fb, fb ? 8 - fb : 16);
 }
 
 /* the note can be dropped: every carrier silent for good (released and done, or held at a silent

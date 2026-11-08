@@ -26,16 +26,9 @@
  * ACC is the accent at full velocity (brighter, longer, louder strike; velocity scales it), EXC
  * mixes the exciter itself into the output (the mallet / pick). The track's ENV / LFO -> FLT move BRIT.
  *
- * MODEL 4 was DRUM before 1.0: the kit is its own engine now (eng_drum.c); projects and user presets
- * that saved it load as that engine (core.h drum_from_phys).
- *
- * DUST (resonant particles, value 2 before 1.0) was dropped: MODEL 2 is MEMB now. Projects and
- * user presets saved before say so (project.c, upreset.c) and load DUST as MODAL bowed, its nearest
- * kin (random hits into resonators): phys_legacy.
- *
- * Polyphony 3 per part (engine_t.poly): each part's voices 0..2 own a state slot in the part's shared engine
- * area (engines.c eng_mem; its size: SYMP's, the largest: the string's 512 + 128 sample lines, Q20, and three
- * 256-sample sympathetic lines, 16-bit), 12 slots in all. Voice amplitude: the track's ADSR as for every
+ * Polyphony 3 per part (engine_t.poly): each part's voices 0..2 own a state slot (SYMP's, the largest:
+ * the string's 512 + 128 sample lines, Q20, and three 256-sample sympathetic lines, 16-bit). SLOOP 2.5:
+ * the slots live in the part's engine arena (engines.c eng_arena_of), shared with GRAIN and FM6. Voice amplitude: the track's ADSR as for every
  * engine; the presets hold SUS at 127 so the model's own decay is heard and REL damps it after the key.
  * Cost (host, 8 notes asked = 3 voices): see the README and cpu_baseline.txt. */
 #include "phys_dsp.c"
@@ -45,7 +38,8 @@ enum { PM_MODAL, PM_STRING, PM_MEMB, PM_SYMP, PM_COUNT };
 #define PHYS_POLY 3
 /* output: model 1.0 -> this (VOICE_FS scale), then a soft knee; per model (a strike of all the modes in
  * phase peaks high but is short) */
-static const int32_t PHYS_GAIN[PM_COUNT] = {28000, 12000, 90000, 12000};
+static const int32_t PHYS_GAIN[PM_COUNT] = {56000, 48000, 135000, 36000};   /* (SLOOP 2.5: x2, x4, x1.5, x3: the
+                                                                               * level of SLOOP's other engines) */
 
 typedef struct {
     uint8_t model;               /* PM_* the state belongs to */
@@ -60,11 +54,11 @@ typedef struct {
 static const char *const N_PHYS_MODEL[] = {"MODAL", "STRNG", "MEMB", "SYMP"};
 static const char *const N_PHYS_CHORD[] = {"OCT", "5TH", "4TH", "MAJ", "MIN", "SUS", "7TH", "ROOT", 0};
 /* per model: STRC .. EXC under their own names (phys_desc; range and default as edit[], 0 = edit[]) */
-static const param_desc_t PHYS_D_HARM = {"HARM", 0, 0, 127, 64, F_PCT, 0};
-static const param_desc_t PHYS_D_BEND = {"BEND", 0, 0, 127, 0, F_PCT, 0};
-static const param_desc_t PHYS_D_CHRD = {"CHRD", N_PHYS_CHORD, 0, 127, 64, F_INT, 0};
-static const param_desc_t PHYS_D_SYMP = {"SYMP", 0, 0, 127, 20, F_PCT, 0};
-static const param_desc_t PHYS_D_BUZZ = {"BUZZ", 0, 0, 127, 0, F_PCT, 0};
+static const param_desc_t PHYS_D_HARM = {"HARM", F_PCT, 0, 127, 64, 0, 0};
+static const param_desc_t PHYS_D_BEND = {"BEND", F_PCT, 0, 127, 0, 0, 0};
+static const param_desc_t PHYS_D_CHRD = {"CHRD", F_INT, 0, 127, 64, N_PHYS_CHORD, 0};
+static const param_desc_t PHYS_D_SYMP = {"SYMP", F_PCT, 0, 127, 20, 0, 0};
+static const param_desc_t PHYS_D_BUZZ = {"BUZZ", F_PCT, 0, 127, 0, 0, 0};
 static const param_desc_t *const PHYS_DESC[PM_COUNT][8] = {
     [PM_MEMB] = {0, &PHYS_D_HARM, 0, 0, 0, 0, &PHYS_D_BEND, 0},
     [PM_SYMP] = {0, &PHYS_D_CHRD, 0, 0, &PHYS_D_SYMP, 0, &PHYS_D_BUZZ, 0},
@@ -82,29 +76,46 @@ static const int16_t PHYS_CHORDS[7][PX_NSYMP] = {
 };
 static const int8_t PHYS_DETUNE[PX_NSYMP] = {1, -1, 0};   /* 1/16 semitone (6 cents): the strings beat a little */
 
-/* a project or user preset saved before 1.0 (MODEL 2 was DUST): its E values as today's */
-static void phys_legacy(int16_t *e)
+/* SLOOP 2.5: the slots live in the part's engine arena (engines.c), in one of two layouts over the same
+ * bytes: SYMP (the largest: a string and three sympathetic lines) two slots, the other models three
+ * smaller ones (a string or a modal bank). A switch of layout starts the part's notes over, as a MODEL
+ * change under a note always did. SYMP plays two voices (phys_poly), the others three. */
+#define PHYS_SLOT_BIG ((sizeof(phys_slot_t) + 7u) & ~7u)
+#define PHYS_SLOT_SMALL ((__builtin_offsetof(phys_slot_t, u) + sizeof(px_string_t) + 7u) & ~7u)
+#define PHYS_ARENA (2u * PHYS_SLOT_BIG > 3u * PHYS_SLOT_SMALL ? 2u * PHYS_SLOT_BIG : 3u * PHYS_SLOT_SMALL)
+_Static_assert(sizeof(px_modal_t) <= sizeof(px_string_t), "a small PHYS slot holds MODAL and MEMB too");
+static uint8_t phys_lay[NPART];          /* 1 + the layout the slots are in (0 small, 1 SYMP), 0 = none yet */
+static uint32_t phys_poly(const track_t *t)
 {
-    if (e[0] == 2) {                                     /* DUST -> MODAL bowed (random hits into resonators) */
-        e[0] = PM_MODAL;
-        e[6] = 64;
-    }
+    return (uint32_t)t->p[P_E0] % PM_COUNT == PM_SYMP ? 2u : 3u;
 }
-
 static phys_slot_t *phys_slot_of(track_t *t, voice_t *v)
 {
-    uint32_t i;
-    if (t < &trk[0] || t >= &trk[NHEAVY])               /* ((Skiff phase 6) a light track: no PHYS state, silent) */
+    uint32_t i, p, big, k, sz;
+    uint8_t *a;
+    if (t < &trk[0] || t >= &trk[NPART])
         return 0;
+    p = (uint32_t)(t - trk);
     i = (uint32_t)(v - t->v);
-    return i < PHYS_POLY ? &((phys_slot_t *)eng_part(t))[i] : 0;   /* (Skiff: the part's shared area, engines.c) */
+    big = (uint32_t)t->p[P_E0] % PM_COUNT == PM_SYMP;
+    if (i >= phys_poly(t))
+        return 0;
+    a = (uint8_t *)eng_arena_of(t, ENGI_PHYS);
+    sz = big ? PHYS_SLOT_BIG : PHYS_SLOT_SMALL;
+    if (phys_lay[p] != big + 1u) {                       /* the other layout: every slot starts over */
+        for (k = 0; k < phys_poly(t); k++)
+            ((phys_slot_t *)(a + k * sz))->model = 0xFF;
+        phys_lay[p] = (uint8_t)(big + 1u);
+    }
+    return (phys_slot_t *)(a + i * sz);
 }
 
-/* a clean state for model md */
+/* a clean state for model md (only its own part of the union: a small slot holds no more) */
 static void phys_reset(phys_slot_t *S, uint32_t md, uint32_t seed)
 {
     uint32_t i, *w = (uint32_t *)&S->u;
-    for (i = 0; i < sizeof S->u / 4u; i++)
+    uint32_t n = md == PM_SYMP ? sizeof(px_symp_t) : md == PM_STRING ? sizeof(px_string_t) : sizeof(px_modal_t);
+    for (i = 0; i < n / 4u; i++)
         w[i] = 0;
     S->model = (uint8_t)md;
     seed |= 1u;
@@ -120,14 +131,6 @@ static void phys_reset(phys_slot_t *S, uint32_t md, uint32_t seed)
     }
 }
 
-/* the seed of a reset during the render (MODEL changed under a sounding note): (Skiff 1.3, as Felucca 1.6.1) with two
- * cores the track's own generator, not rng() (shared: the tracks render at once); one core: rng(), as up to 1.2 */
-#if FELUCCA_CPU2
-static int32_t phys_nz[NTRK] = {[0 ... NTRK - 1] = 0x6A09E667};
-#define PHYS_RSEED(t) ((uint32_t)noise32(&phys_nz[C1_PI(t)]))
-#else
-#define PHYS_RSEED(t) rng()
-#endif
 static void phys_note_on(track_t *t, voice_t *v)
 {
     phys_slot_t *S = phys_slot_of(t, v);
@@ -175,7 +178,7 @@ static void phys_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     if (n > CTL)
         n = CTL;
     if (S->model != md)                                  /* MODEL changed under a sounding note */
-        phys_reset(S, md, PHYS_RSEED(t));
+        phys_reset(S, md, rng());
     switch (md) {
     case PM_MODAL: {
         px_modal_blk_t B;
@@ -222,41 +225,61 @@ static void phys_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
  * 98 1 : 3.57 : 7.65, 116 1 : 4.0 : 9.0 (a tuned bar: 1 : 4 : 10) */
 static const preset_t PHYS_PRESETS[] = {
     /* name, {MODEL, STRC, BRIT, DAMP, POS, ACC, BOW, EXC}, {A D S R}, fenv, mono */
-    {"BELL TREE", {PM_MODAL, 70, 100, 106, 12, 100, 0, 6}, {0, 100, 127, 96}, 0, 0, FX(0, 20, 30, 60), TAG(PT_KEYS)},
-    {"MARIMBA", {PM_MODAL, 116, 38, 40, 24, 90, 0, 30}, {0, 90, 127, 52}, 0, 0, FX(0, 0, 15, 30), TAG(PT_KEYS)},
-    {"PLUCK", {PM_STRING, 56, 72, 84, 40, 96, 0, 0}, {0, 100, 127, 58}, 0, 0, FX(0, 10, 30, 30), TAG(PT_PLUCK)},
-    {"BOWED METAL", {PM_MODAL, 98, 70, 112, 10, 80, 90, 0}, {60, 90, 127, 90}, 0, 0, FX(0, 40, 20, 70), TAG(PT_PAD)},
-    {"KALIMBA", {PM_MODAL, 34, 16, 56, 100, 90, 0, 48}, {0, 100, 127, 60}, 0, 0, FX(0, 10, 20, 40), TAG(PT_PLUCK)},
+    {"BELL TREE", {PM_MODAL, 70, 100, 106, 12, 100, 0, 6}, {0, 100, 127, 96}, 0, 0, FX(0, 20, 30, 60)},
+    {"MODAL BAR", {PM_MODAL, 116, 38, 40, 24, 90, 0, 30}, {0, 90, 127, 52}, 0, 0, FX(0, 0, 15, 30)},
+    {"STR PLUCK", {PM_STRING, 56, 72, 84, 40, 96, 0, 0}, {0, 100, 127, 58}, 0, 0, FX(0, 10, 30, 30)},
+    {"BOWED MTL", {PM_MODAL, 98, 70, 112, 10, 80, 90, 0}, {60, 90, 127, 90}, 0, 0, FX(0, 40, 20, 70)},
+    {"THUMB PNO", {PM_MODAL, 34, 16, 56, 100, 90, 0, 48}, {0, 100, 127, 60}, 0, 0, FX(0, 10, 20, 40)},
     /* MEMB: {MODEL, HARM, BRIT, DAMP, POS, ACC, BEND, EXC} */
-    {"HAND DRUM", {PM_MEMB, 112, 76, 56, 44, 100, 14, 24}, {0, 100, 127, 64}, 0, 0, FX(0, 0, 10, 30), TAG(PT_DRUM)},
-    {"TOMS", {PM_MEMB, 0, 52, 40, 30, 100, 40, 30}, {0, 100, 127, 70}, 0, 0, FX(0, 0, 0, 40), TAG(PT_DRUM)},
+    {"HAND DRUM", {PM_MEMB, 112, 76, 56, 44, 100, 14, 24}, {0, 100, 127, 64}, 0, 0, FX(0, 0, 10, 30)},
+    {"MEMB TOMS", {PM_MEMB, 0, 52, 40, 30, 100, 40, 30}, {0, 100, 127, 70}, 0, 0, FX(0, 0, 0, 40)},
     /* SYMP: {MODEL, CHRD, BRIT, DAMP, SYMP, ACC, BUZZ, EXC} */
-    {"DRONE STRING", {PM_SYMP, 127, 80, 88, 64, 100, 92, 0}, {0, 100, 127, 90}, 0, 0, FX(0, 10, 20, 50), TAG(PT_PAD)},
-    {"HARP", {PM_SYMP, 8, 62, 74, 60, 90, 0, 0}, {0, 100, 127, 80}, 0, 0, FX(0, 20, 20, 60), TAG(PT_PLUCK)},
-    /* (Skiff) for the themes: CRYPT (dungeon synth), NEON (synthwave), QUARK (particles) */
-    {"HARPSICHORD", {PM_STRING, 44, 112, 76, 10, 127, 0, 24}, {0, 100, 127, 50}, 0, 0, FX(0, 10, 10, 60), TAG(PT_KEYS)},
-    /* (Skiff phase 9) more for every engine: basses, kits */
-    {"UPRIGHT", {PM_STRING, 60, 60, 90, 20, 127, 0, 60}, {0, 100, 127, 40}, 0, 1, FX(20, 0, 5, 20), TAG(PT_BASS)},
+    {"SITAR", {PM_SYMP, 127, 80, 88, 64, 100, 92, 0}, {0, 100, 127, 90}, 0, 0, FX(0, 10, 20, 50)},
+    {"PHYS HARP", {PM_SYMP, 8, 62, 74, 60, 90, 0, 0}, {0, 100, 127, 80}, 0, 0, FX(0, 20, 20, 60)},
+    /* SLOOP 2.5: more models. STRNG: {MODEL, STRC, BRIT, DAMP, POS, ACC, BOW, EXC} */
+    {"NYLON GTR", {PM_STRING, 40, 50, 80, 30, 80, 0, 10}, {0, 100, 127, 50}, 0, 0, FX(0, 10, 15, 35)},
+    {"STEEL GTR", {PM_STRING, 56, 85, 88, 22, 96, 0, 6}, {0, 100, 127, 56}, 0, 0, FX(0, 15, 18, 35)},
+    {"MUTED GTR", {PM_STRING, 50, 40, 55, 30, 90, 0, 20}, {0, 100, 127, 20}, 0, 0, FX(0, 0, 20, 20)},
+    {"PLUCK BASS", {PM_STRING, 60, 45, 74, 35, 100, 0, 8}, {0, 100, 127, 30}, 0, 1, FX(0, 0, 0, 6), XP(P_TRANS + 1, -12)},
+    {"KOTO", {PM_STRING, 20, 70, 82, 15, 96, 0, 4}, {0, 100, 127, 60}, 0, 0, FX(0, 10, 25, 45)},
+    {"BANJO", {PM_STRING, 70, 100, 60, 12, 110, 0, 12}, {0, 100, 127, 40}, 0, 0, FX(0, 0, 15, 25)},
+    {"CELLO BOW", {PM_MODAL, 34, 60, 110, 12, 70, 90, 0}, {60, 90, 127, 70}, 0, 0, FX(0, 20, 10, 55)},
+    /* SYMP: {MODEL, CHRD, BRIT, DAMP, SYMP, ACC, BUZZ, EXC} */
+    {"TANPURA", {PM_SYMP, 0, 70, 120, 90, 80, 110, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 10, 10, 60)},
+    /* MODAL: chimes, bells, bars, a glass bowl, a pan, a block */
+    {"CHIMES", {PM_MODAL, 70, 110, 118, 8, 110, 0, 4}, {0, 100, 127, 100}, 0, 0, FX(0, 15, 25, 65)},
+    {"BIG BELL", {PM_MODAL, 80, 90, 124, 16, 120, 0, 8}, {0, 100, 127, 110}, 0, 0, FX(0, 10, 20, 70), XP(P_TRANS + 1, -12)},
+    {"VIBRA BAR", {PM_MODAL, 116, 60, 100, 20, 80, 0, 10}, {0, 100, 127, 70}, 0, 0, FX(0, 20, 15, 40),
+     XP(P_LD_AMP + 1, 20, P_LRATE + 1, 70)},
+    {"GLASS BOWL", {PM_MODAL, 98, 90, 120, 6, 60, 70, 0}, {70, 90, 127, 100}, 0, 0, FX(0, 30, 20, 75)},
+    {"STEEL PAN", {PM_MODAL, 36, 80, 90, 30, 100, 0, 20}, {0, 100, 127, 60}, 0, 0, FX(0, 10, 20, 35)},
+    {"WOOD BLOCK", {PM_MODAL, 116, 30, 35, 40, 110, 0, 60}, {0, 100, 127, 20}, 0, 0, FX(0, 0, 10, 20)},
+    /* MEMB: {MODEL, HARM, BRIT, DAMP, POS, ACC, BEND, EXC} */
+    {"TABLA", {PM_MEMB, 120, 70, 70, 50, 110, 20, 30}, {0, 100, 127, 50}, 0, 0, FX(0, 0, 10, 25)},
+    {"CONGA", {PM_MEMB, 90, 60, 50, 40, 100, 8, 40}, {0, 100, 127, 40}, 0, 0, FX(0, 0, 10, 25)},
+    {"TIMPANI", {PM_MEMB, 10, 50, 100, 20, 110, 6, 10}, {0, 100, 127, 90}, 0, 0, FX(0, 0, 0, 50), XP(P_TRANS + 1, -12)},
 };
 
 static const engine_t ENG_PHYS = {
     .name = "PHYS",
-    .page_title = {"BODY", "EXCITE"},
+    .page_title = {"BODY", "EXCT"},
     .edit = {
-        {"MODEL", N_PHYS_MODEL, 0, PM_COUNT - 1, 0, F_ENUM, 0},
-        {"STRUCT", 0, 0, 127, 64, F_PCT, 0},
-        {"BRIGHT", 0, 0, 127, 80, F_PCT, 0},
-        {"DAMP", 0, 0, 127, 80, F_PCT, 0},
-        {"POS", 0, 0, 127, 20, F_PCT, 0},
-        {"ACCENT", 0, 0, 127, 90, F_PCT, 0},
-        {"BOW", 0, 0, 127, 0, F_PCT, 0},
-        {"EXCITE", 0, 0, 127, 0, F_PCT, 0},
+        {"MODEL", F_ENUM, 0, PM_COUNT - 1, 0, N_PHYS_MODEL, 0},
+        {"STRC", F_PCT, 0, 127, 64, 0, 0},
+        {"BRIT", F_PCT, 0, 127, 80, 0, 0},
+        {"DAMP", F_PCT, 0, 127, 80, 0, 0},
+        {"POS", F_PCT, 0, 127, 20, 0, 0},
+        {"ACC", F_PCT, 0, 127, 90, 0, 0},
+        {"BOW", F_PCT, 0, 127, 0, 0, 0},
+        {"EXC", F_PCT, 0, 127, 0, 0, 0},
     },
     .presets = PHYS_PRESETS,
     .npresets = NELEM(PHYS_PRESETS),
     .note_on = phys_note_on,
     .render = phys_render,
-    .knob = {P_E1, P_E2, P_E3, P_E4},
+    .fil_page = -1,
+    .color = 0xFD8F,
+    .macro = {P_E1, P_E2, P_E3, P_E4},
     .poly = PHYS_POLY,
     .desc = phys_desc,
 };

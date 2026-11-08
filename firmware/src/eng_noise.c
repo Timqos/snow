@@ -5,8 +5,7 @@
  * MODE picks the source:
  *   ANLG  xorshift white noise, plus random impulses (DENS: their density, 0 = none)
  *   DUST  the impulses only: crackle, drops (through a resonant filter)
- *   LFSR  a long shift register (LEN: 23 down to 7 bits) clocked CLK semitones above the key ((2.0.2) past the sample
- *         rate too, several steps a sample, at most 32: ARCADE's clock, 7 octaves up, met it at F4 and stopped there)
+ *   LFSR  a long shift register (LEN: 23 down to 7 bits) clocked CLK semitones above the key
  *   META  one cycle of a short register sequence per period of the key (LEN: which one): a metallic tone
  * COLR tilts the source from white (0) through pink (64, -3 dB/oct) to brown (127, -6 dB/oct).
  * FREQ / RES: a trapezoidal SVF that morphs from low-pass (RES 0) to a narrow band-pass (RES 127);
@@ -22,9 +21,9 @@ static const char *const N_NOISE_MODE[] = {"ANLG", "DUST", "LFSR", "META"};
 enum { NZ_ANLG, NZ_DUST, NZ_LFSR, NZ_META };
 static const char *const N_NOISE_LONG[] = {"L23", "L20", "L17", "L15", "L13", "L11", "L9", "L7", 0};
 static const char *const N_NOISE_META[] = {"127", "127B", "93", "63", "63B", "31", "15", "7", 0};
-static const param_desc_t NOISE_LONG = {"LEN", N_NOISE_LONG, 0, 127, 0, F_INT, 0};   /* = edit[5] but the names */
-static const param_desc_t NOISE_META = {"LEN", N_NOISE_META, 0, 127, 0, F_INT, 0};
-static const param_desc_t NOISE_CLK = {"CLK", 0, 0, 127, 0, F_INT, U_ST};           /* = edit[7]: above the key */
+static const param_desc_t NOISE_LONG = {"LEN", F_INT, 0, 127, 0, N_NOISE_LONG, 0};   /* = edit[5] but the names */
+static const param_desc_t NOISE_META = {"LEN", F_INT, 0, 127, 0, N_NOISE_META, 0};
+static const param_desc_t NOISE_CLK = {"CLK", F_INT, 0, 127, 0, 0, "st"};           /* = edit[7]: above the key */
 
 /* Galois taps of the long registers (maximal length: 2^n - 1 clocks) */
 static const uint32_t NOISE_TAPS[8] = {0x420000u, 0x90000u, 1u << 16 | 1u << 13, 0x6000u, 0x100Du, 0x500u, 0x110u, 0x60u};
@@ -64,21 +63,20 @@ static uint32_t noise_inc(int32_t p)
     inc = pitch_inc((uint32_t)clamp(p, 0, 2047));
     return sh && inc >= 0x80000000u >> (sh - 1u) ? 0xFFFFFFFFu : inc << sh;
 }
-/* (2.0.2) LFSR: the register steps a sample of pitch p, whole ones back and the fraction in *frac (Q32), at most 32 */
-static uint32_t noise_steps(int32_t p, uint32_t *frac)
+/* (after 2.8.3) the same, unbounded (Q32: 2^32 = one clock a sample). LFSR: a clock past the sample rate steps the
+ * register more than once a sample (the sequence read further on, as the register would be at that time): its pitch
+ * goes on rising with the keys. It used to stop at one step a sample, so every note above it played the same pitch
+ * (NZ ARCADE: TONE +84 semitones, the whole upper half of the keyboard; clipper-fm1 #10) */
+static uint64_t noise_inc64(int32_t p)
 {
     uint32_t sh = 0;
-    uint64_t inc;
     while (p > 2047) {
         p -= 192;
         sh++;
     }
-    inc = (uint64_t)pitch_inc((uint32_t)clamp(p, 0, 2047)) << sh;
-    if (inc >> 32 >= 32u)
-        inc = (uint64_t)32u << 32;
-    *frac = (uint32_t)inc;
-    return (uint32_t)(inc >> 32);
+    return (uint64_t)pitch_inc((uint32_t)clamp(p, 0, 2047)) << (sh < 20u ? sh : 20u);
 }
+#define NZ_STEPS_MAX 64u                              /* register steps a sample at most (64 x 44.1 kHz) */
 
 static uint32_t isqrt32(uint32_t x)
 {
@@ -118,7 +116,8 @@ static void noise_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
     int32_t ic1 = v->s[0], ic2 = v->s[1], rng = v->s[2], b0 = v->s[4], b1 = v->s[5], b2 = v->s[6], br = v->s[7];
     uint32_t ph = v->ph[0], reg = v->ph[1];         /* state in locals: out[] may alias v->s[] */
     int32_t drift = (int32_t)v->ph[2], d16 = 0, gain = 32767, gq, colr, cut, k, a1, a2, a3, g, bpg, mix, cf, thr = 0;
-    uint32_t inc = 0, whole = 0, taps = NOISE_TAPS[sel];
+    uint32_t inc = 0, taps = NOISE_TAPS[sel];
+    uint64_t inc64 = 0;                               /* (after 2.8.3) LFSR: its clock, Q32, past the sample rate too */
     /* drift: a new random target every 0.7..3 s, followed with a 0.7 s lag */
     if (drft) {
         int32_t tg = v->s[3] >> 16, cnt = v->s[3] & 0xFFFF;
@@ -165,7 +164,7 @@ static void noise_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
     }
     if (mode == NZ_LFSR) {
         uint32_t mask = taps;                         /* the register's own bits (MODE / LEN changes) */
-        whole = noise_steps(m->pitch16 + p[P_E7] * 16 + d16, &inc);
+        inc64 = noise_inc64(m->pitch16 + p[P_E7] * 16 + d16);
         mask |= mask >> 1;
         mask |= mask >> 2;
         mask |= mask >> 4;
@@ -191,9 +190,10 @@ static void noise_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
             break;
         }
         case NZ_LFSR: {
-            uint32_t o = ph, s;
-            ph += inc;
-            for (s = whole + (ph < o); s; s--)        /* ((2.0.2) whole: the steps a sample past one) */
+            uint64_t a = (uint64_t)ph + inc64;
+            uint32_t ns = (uint32_t)(a >> 32) < NZ_STEPS_MAX ? (uint32_t)(a >> 32) : NZ_STEPS_MAX;
+            ph = (uint32_t)a;
+            while (ns--)                               /* (after 2.8.3: as many steps as clocks in this sample) */
                 reg = (reg >> 1) ^ (-(reg & 1u) & taps);
             w = (reg & 1u) ? 12000 : -12000;
             break;
@@ -208,14 +208,14 @@ static void noise_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
         x = w;
         if (colr) {                                   /* pink: three leaky poles (Kellet), brown: a leaky integrator */
             int32_t pk;
-            b0 = ((b0 * 32690) >> 15) + ((w * 3245) >> 15);
-            b1 = ((b1 * 31555) >> 15) + ((w * 9716) >> 15);
+            b0 = clamp(((b0 * 32690) >> 15) + ((w * 3245) >> 15), -65535, 65535);   /* (after 2.8.3: bounded: a held */
+            b1 = clamp(((b1 * 31555) >> 15) + ((w * 9716) >> 15), -65535, 65535);   /* LFSR level grew them past 2^31 / 32690) */
             b2 = ((b2 * 18678) >> 15) + ((w * 17247) >> 14);
             pk = (b0 + b1 + b2 + ((w * 6055) >> 15)) >> 2;
             if (colr <= (64 << 8)) {
                 x = w + mulq15(pk - w, cf);
             } else {
-                br = ((br * 32580) >> 15) + ((w * 3480) >> 15);
+                br = clamp(((br * 32580) >> 15) + ((w * 3480) >> 15), -65535, 65535);
                 x = pk + mulq15(br - pk, cf);
             }
         }
@@ -256,39 +256,52 @@ static void noise_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
 
 /* {MODE, COLR, FREQ, RES, TRK, DENS, DRFT, CRSH / CLK} */
 static const preset_t NOISE_PRESETS[] = {
-    {"WIND", {NZ_ANLG, 64, 70, 100, 127, 0, 70, 0}, {90, 90, 110, 90}, 0, 0, FX(0, 30, 20, 80), TAG(PT_FX)},
-    {"RAIN", {NZ_DUST, 30, 88, 80, 64, 105, 40, 0}, {50, 90, 127, 70}, 0, 0, FX(0, 0, 20, 70), TAG(PT_FX)},   /* ((Skiff phase 9) its
-                                                                         * attack slower: it came in hard) */
+    {"WIND", {NZ_ANLG, 64, 70, 100, 127, 0, 70, 0}, {90, 90, 110, 90}, 0, 0, FX(0, 30, 20, 80)},
+    {"RAIN", {NZ_DUST, 30, 88, 80, 64, 105, 40, 0}, {10, 90, 127, 70}, 0, 0, FX(0, 0, 20, 70)},
     /* a 7-bit register (127 steps) clocked 84 semitones (7 octaves) above the key: one period per key period,
      * a pitched chip-style buzz */
-    {"ARCADE", {NZ_LFSR, 0, 127, 0, 127, 112, 0, 84}, {0, 80, 0, 50}, 0, 0, FX(0, 0, 10, 20), TAG(PT_FX)},
-    {"METAL", {NZ_META, 0, 100, 40, 100, 32, 0, 0}, {0, 75, 40, 60}, 10, 0, FX(0, 20, 30, 45), TAG(PT_FX)},
-    /* (Skiff) for the themes: CRYPT (dungeon synth), NEON (synthwave), QUARK (particles) */
-    {"CAVE WIND", {NZ_ANLG, 100, 70, 112, 127, 0, 100, 0}, {100, 90, 120, 100}, 0, 0, FX(0, 40, 10, 100), TAG(PT_FX)},
-    {"GEIGER", {NZ_DUST, 10, 100, 40, 64, 34, 0, 0}, {0, 90, 127, 40}, 0, 0, FX(0, 0, 5, 15), TAG(PT_FX)},
-    {"PLASMA", {NZ_META, 0, 90, 90, 100, 40, 80, 0}, {60, 90, 110, 90}, 0, 0, FX(0, 30, 30, 80), MORE({P_LRATE, 56}, {P_LD_FLT, 18}), TAG(PT_FX)},
-    /* (Skiff phase 9) more for every engine: basses, kits */
-    {"OCEAN", {NZ_ANLG, 50, 60, 20, 0, 0, 40, 0}, {100, 90, 120, 110}, 0, 0, FX(0, 30, 10, 90), MORE({P_LRATE, 20}, {P_LD_FLT, 40}, {P_LWAVE, 1}), TAG(PT_FX)},
+    {"NZ ARCADE", {NZ_LFSR, 0, 127, 0, 127, 112, 0, 84}, {0, 80, 0, 50}, 0, 0, FX(0, 0, 10, 20)},
+    {"NZ METAL", {NZ_META, 0, 100, 40, 100, 32, 0, 0}, {0, 75, 40, 60}, 10, 0, FX(0, 20, 30, 45)},
+    /* SLOOP 2.5 */
+    {"OCEAN", {NZ_ANLG, 100, 50, 20, 0, 0, 110, 0}, {100, 90, 127, 100}, 0, 0, FX(0, 20, 0, 70)},
+    {"VINYL", {NZ_DUST, 0, 110, 10, 0, 70, 20, 0}, {0, 64, 127, 40}, 0, 0, FX(0, 0, 0, 10)},
+    {"HISS", {NZ_ANLG, 0, 115, 0, 0, 0, 0, 0}, {20, 64, 127, 40}, 0, 0, FX(0, 0, 0, 20)},
+    {"RISER", {NZ_ANLG, 30, 60, 110, 127, 0, 0, 0}, {100, 90, 127, 60}, 0, 0, FX(0, 20, 30, 60)},
+    {"NZ SNARE", {NZ_ANLG, 20, 90, 30, 64, 0, 0, 0}, {0, 60, 0, 44}, 0, 0, FX(0, 0, 0, 25)},
+    {"BITCRUSH", {NZ_ANLG, 40, 90, 40, 64, 0, 0, 100}, {0, 70, 110, 40}, 0, 0, FX(0, 0, 20, 30)},
+    {"RADIO", {NZ_LFSR, 20, 70, 90, 64, 0, 60, 48}, {10, 70, 120, 50}, 0, 0, FX(0, 10, 30, 40)},
 };
+
+/* (after Clipper 1.2) UNISON (voice.c unison_spread): the phase moved by r (Q32) and the noise from its own
+ * seed (the note's: every voice the same noise at DTUNE 0) */
+static void noise_spread(track_t *t, voice_t *v, uint32_t r)
+{
+    (void)t;
+    v->ph[0] += r;
+    v->s[2] = (int32_t)((uint32_t)v->s[2] ^ r);
+    if (!v->s[2])
+        v->s[2] = 1;
+}
 
 static const engine_t ENG_NOISE = {
     .name = "NOISE",
-    .page_title = {"SOURCE", "MOVE"},
+    .page_title = {"SRC", "MOVE"},
     .edit = {
-        {"MODE", N_NOISE_MODE, 0, 3, 0, F_ENUM, 0},
-        {"COLOR", 0, 0, 127, 64, F_PCT, 0},
-        {"CUTOFF", 0, 0, 127, 80, F_CUTOFF, 0},
-        {"RES", 0, 0, 127, 30, F_PCT, 0},
-        {"KEYTRK", 0, 0, 127, 64, F_PCT, 0},
-        {"DENSITY", 0, 0, 127, 0, F_PCT, 0},           /* LFSR, META: the register (noise_desc) */
-        {"DRIFT", 0, 0, 127, 0, F_PCT, 0},
-        {"CRUSH", 0, 0, 127, 0, F_PCT, 0},           /* LFSR, META: the clock above the key */
+        {"MODE", F_ENUM, 0, 3, 0, N_NOISE_MODE, 0},
+        {"COLR", F_PCT, 0, 127, 64, 0, 0},
+        {"FREQ", F_CUTOFF, 0, 127, 80, 0, 0},
+        {"RES", F_PCT, 0, 127, 30, 0, 0},
+        {"TRK", F_PCT, 0, 127, 64, 0, 0},
+        {"DENS", F_PCT, 0, 127, 0, 0, 0},           /* LFSR, META: the register (noise_desc) */
+        {"DRFT", F_PCT, 0, 127, 0, 0, 0},
+        {"CRSH", F_PCT, 0, 127, 0, 0, 0},           /* LFSR, META: the clock above the key */
     },
     .presets = NOISE_PRESETS,
     .npresets = NELEM(NOISE_PRESETS),
     .note_on = noise_note_on,
     .render = noise_render,
-    .knob = {P_E2, P_E3, P_E1, P_REL},
-    .keep = 0xF3,                /* the filter, the colour poles */
+    .fil_page = 0,
+    .color = 0xC618,
+    .macro = {P_E2, P_E3, P_E1, P_REL},
     .desc = noise_desc,
 };

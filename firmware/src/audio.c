@@ -1,29 +1,28 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
-/* I2S output (ALNK0 -> external codec) and the
- * audio ISR: per half buffer, blocks of CTL samples: mix_block (fx.c: events ->
- * each synth part -> dist -> level / pan -> sends -> buses -> master) -> USB audio (uac_tap) -> the metronome's
- * click (click.c, the DAC only) -> 24-bit stereo. */
+/* I2S output (ALNK0 -> external codec) and the audio ISR: each half buffer is
+ * rendered in blocks of CTL samples by mix_block (fx.c: events -> each synth part
+ * -> dist -> level / pan -> sends -> drums -> buses -> master), then scaled to 24-bit stereo. */
 /* registers: hal/fm1_audio.h */
 #define HALF_WORDS (HALF_FRAMES * 2u)
-#define CPU_AVG (4096u / HALF_FRAMES)   /* halves the load meter averages: ~93 ms whatever the half */
-#define OUT_SHIFT 7               /* Q15 -> 24-bit, -6 dBFS ceiling (M0f ran clean at -18 dBFS) */
+#define OUT_SHIFT 7               /* Q15 -> 24-bit, -6 dBFS ceiling */
 
 static int32_t abuf[2u * HALF_WORDS] __attribute__((aligned(4)));
 
 /* diagnostics, kept across resets and UBOOT entry: read with `fm1t memr` */
 #define DBG_MAGIC 0x44424731u                       /* "DBG1" */
 struct felucca_dbg {
-    uint32_t magic, halves, max_us, nested, in_audio, late, timer_irqs, ui_frames;
+    uint32_t magic, halves, max_us, nested;
+    volatile uint32_t in_audio;           /* TIMER5 reads it to decide what may nest in the render */
+    uint32_t late, timer_irqs, ui_frames;
     uint32_t last_us, cpu_q8, boots;
     uint32_t stage, page, home;           /* where the main loop is (breadcrumbs) */
     uint32_t prev_stage, prev_page, prev_home, prev_rst, prev_frames;   /* as found at boot */
 } felucca_dbg __attribute__((section(".noinit")));
 static volatile uint32_t audio_halves, audio_max_us;
 static volatile uint32_t t5_nested_ticks;              /* TIMER4 ticks TIMER5 spent nested in this ISR (main.c) */
-static uint32_t audio_cpu_rem;                         /* keep the fractional IIR step: no low-load bias */
 #define SCOPE_N 512u
-static int16_t scope_buf[SCOPE_N];
+static int16_t scope_buf[SCOPE_N], scope_bufr[SCOPE_N];   /* left, right (the visualiser): the mix at full level */
 static uint32_t scope_w;
 
 static void audio_block(int32_t *out, uint32_t n)       /* mix (fx.c), then Q15 -> 24 bit */
@@ -31,69 +30,22 @@ static void audio_block(int32_t *out, uint32_t n)       /* mix (fx.c), then Q15 
     uint32_t i;
     mix_block(out, n);
 #if FELUCCA_UAC
-    uac_tap(out, n);                                    /* the USB audio input: the same master output */
+    uac_tap(usb_full_now ? usb_out : out, n);           /* the USB audio input: the master output, or at full level */
 #endif
-    if (fx_usb_fixed)                                   /* USB LEVEL FIXED: USB took the full level, the DAC */
-        usb_fixed_dac(out, n);                          /* (speaker, headphones) gets MASTER's (fx.c) */
-    for (i = 1; i < n; i += 2u)                         /* the HOME scope: the music, before the click */
-        scope_buf[scope_w++ & (SCOPE_N - 1u)] = (int16_t)out[2u * i];
-    click_render(out, n);                               /* the metronome (click.c): the DAC only, not USB */
     for (i = 0; i < n; i++) {
-        out[2u * i] *= 1 << OUT_SHIFT;
-        out[2u * i + 1u] *= 1 << OUT_SHIFT;
+        if (i & 1u)
+        {
+            scope_bufr[scope_w & (SCOPE_N - 1u)] = vis_tap[2u * i + 1u];   /* (fx.c: MASTER all the way up) */
+            scope_buf[scope_w++ & (SCOPE_N - 1u)] = vis_tap[2u * i];
+        }
+        out[2u * i] <<= OUT_SHIFT;
+        out[2u * i + 1u] <<= OUT_SHIFT;
     }
 }
 
-/* Overload: two halves in a row above 85 % (the render plus TIMER5 nested in it), fade one voice over the
- * next block, and one more each half while it lasts. Keep each part's
- * lowest POLY note and MONO / LEGATO / UNISON lead, as the shared budget does. */
+/* overload: shed_voice (voice.c) */
 static volatile uint8_t shed_req;
-static uint8_t shed_over;                              /* bit k: the half k halves ago was over 85 % */
-#define SHED_TICKS ((HALF_FRAMES * 1000000u / FS) * 85u / 100u * FM1_TICKS_PER_US)   /* 85 % of a half */
-static uint32_t shed_count;
-
-/* end of a half: all = its ticks, TIMER5 nested in it included -> the render alone in us. The deadline sees
- * both; shed after 2 overloaded halves in a row (out of line: keeps the ISR's render loops as they were) */
-static __attribute__((noinline)) uint32_t shed_check(uint32_t all)
-{
-    shed_over = (uint8_t)(shed_over << 1 | (all > SHED_TICKS));
-    if ((shed_over & 3u) == 3u)
-        shed_req = 1;
-    return (all - t5_nested_ticks) / FM1_TICKS_PER_US;
-}
-
-static void shed_voice(void)
-{
-    uint32_t p, i;
-    voice_t *best = 0;
-    for (p = 0; p < NPART; p++)
-        for (i = 0; i < NVOICE; i++) {
-            voice_t *v = &trk[p].v[i];
-            if (v->active && !v->gate && v->stage != 4u && (!best || v->env < best->env))
-                best = v;
-        }
-    if (best) {
-        voice_kill(best);
-        shed_count++;
-        return;
-    }
-    for (p = 0; p < NPART; p++) {
-        const track_t *t = &trk[p];
-        uint32_t mode = trk_vmode(t), low = mode == V_POLY ? lowest_held(t) : 0u;
-        for (i = 0; i < NVOICE; i++) {
-            voice_t *v = &trk[p].v[i];
-            if (v->active && v->gate && v->stage != 4u &&
-                ((mode == V_POLY && i != low) || (mode != V_POLY && i > 0u))) {
-                if (!best || v->age < best->age)
-                    best = v;
-            }
-        }
-    }
-    if (best) {
-        voice_kill(best);
-        shed_count++;
-    }
-}
+static uint8_t shed_over;                      /* bit k: the half k halves ago was over 85 % */
 
 void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) */
 {
@@ -113,23 +65,43 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
         }
 #if FELUCCA_UAC
         uac_render_start();
+        usb_full_now = (uint8_t)(usb_full && uac.feed);  /* menu USB AUDIO = FULL, while the computer records */
 #endif
-        for (b = 0; b < HALF_FRAMES; b += CTL) {
-            mo.tick = t0 + (HALF_FRAMES + b) * DAC_TICKS;   /* when this block plays ((2.2) MIDI OUT, usb.c; seq.c kb_lat) */
+#if FELUCCA_STATTIC
+        stattic_profile_begin();
+#endif
+        for (b = 0; b < HALF_FRAMES; b += CTL)
             audio_block(o + 2u * b, CTL);
-        }
+#if FELUCCA_STATTIC
+        stattic_profile_end();
+#endif
         fm1_audio_ack_half();
         audio_halves++;
-        us = shed_check(fm1_ticks() - t0);
+#if FELUCCA_CPU1
+        cpu1_load_half(HALF_FRAMES * 1000000u / FS);     /* core 1's load and core 0's wait for it (fx.c) */
+#endif
+        {   /* the deadline sees the render and TIMER5 nested in it (the USB audio stream); the load
+             * figures the render alone (after Felucca 1.0) */
+            uint32_t all = fm1_ticks() - t0;
+            us = (all - t5_nested_ticks) / FM1_TICKS_PER_US;
+            shed_over = (uint8_t)(shed_over << 1 | (all / FM1_TICKS_PER_US * 100u > (HALF_FRAMES * 1000000u / FS) * 85u));
+        }
         if (us > audio_max_us)
             audio_max_us = us;
-        {
-            uint32_t load = song.cpu_q8 * (CPU_AVG - 1u) + (us * 256u) / (HALF_FRAMES * 1000000u / FS) + audio_cpu_rem;
-            song.cpu_q8 = load / CPU_AVG;
-            audio_cpu_rem = load % CPU_AVG;
-        }
-        if (fm1_audio_free_half() != half)
-            felucca_dbg.late++;                         /* the DMA moved on while we rendered */
+        if ((shed_over & 3u) == 3u)
+            shed_req = 1;                               /* two in a row */
+        song.cpu_q8 = (song.cpu_q8 * 15u + (us * 256u) / (HALF_FRAMES * 1000000u / FS)) / 16u;
+        if (fm1_audio_free_half() != half) {
+            felucca_dbg.late++;
+#if FELUCCA_STATTIC
+            memcpy(stattic_profile.bad,stattic_profile.last,sizeof stattic_profile.bad);
+            stattic_profile.bad_count=felucca_dbg.late;
+            stattic_profile.bad_wall=(fm1_ticks()-t0)/FM1_TICKS_PER_US;
+            stattic_profile.bad_nested=t5_nested_ticks/FM1_TICKS_PER_US;
+            stattic_profile.bad_events=stattic_profile.events_last/FM1_TICKS_PER_US;
+            stattic_profile.bad_buses=stattic_profile.buses_last/FM1_TICKS_PER_US;
+#endif
+        }                         /* the DMA moved on while we rendered */
         felucca_dbg.halves++;
         felucca_dbg.last_us = us;
         if (us > felucca_dbg.max_us)
@@ -140,7 +112,7 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
 }
 extern void isr_alnk0(void);
 
-static void audio_init(void)                   /* codec and ALNK0 bring-up (fm1_audio.h) */
+static void audio_init(void)                   /* hal/fm1_audio.h */
 {
     uint32_t i;
     for (i = 0; i < 2u * HALF_WORDS; i++)

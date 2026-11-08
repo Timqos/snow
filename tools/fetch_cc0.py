@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
-"""Download the CC0 samples used by the SAMPLE engine into assets/samples-cc0/.
+"""Download the CC0 samples of the FLUTE set and the GM kit's hand percussion into
+assets/samples-cc0/ (the other built-in sets: tools/gen_builtin_hiphop.py).
 
 The files are already in the tree; this re-creates them from the source:
   https://github.com/sgossner/VSCO-2-CE  (CC0 1.0)
@@ -22,28 +23,25 @@ VCSL = "VCSL"
 VSCO = "VSCO-2-CE"
 # set: (repo, directory, [filename regexes, one file per regex, first match wins])
 PICK = {
-    "PIANO": (VCSL, "Chordophones/Zithers/Grand Piano, Kawai/Sustains",
-              [r"_C1_v2_rr1", r"_C2_v2_rr1", r"_C3_v2_rr1", r"_C4_v2_rr1", r"_C5_v2_rr1"]),
-    "HARP": (VCSL, "Chordophones/Composite Chordophones/Concert Harp", [r"_A2_mf1", r"_A4_mf1", r"_A6_mf1"]),
-    "MARIMBA": (VCSL, "Idiophones/Struck Idiophones/Marimba", [r"_C2_med", r"_B2_med", r"_B4_med"]),
-    "VIBES": (VCSL, "Idiophones/Struck Idiophones/Vibraphone/Soft Mallets", [r"_A2_v1", r"_C3_v1", r"_A4_v1"]),
-    "BELLS": (VCSL, "Idiophones/Struck Idiophones/Tubular Bells 1", [r"_C3_f", r"_C4_p"]),
-    "GLOCK": (VCSL, "Idiophones/Struck Idiophones/Glockenspiel", [r"medium_C5", r"medium_C6"]),
-    "PIZZ": (VSCO, "Strings/Violin Section/Pizz", [r"_A2_v1_rr1", r"_A3_v1_rr1", r"_A4_v1_rr1"]),
-    "SAX": (VCSL, "Aerophones/Reed Aerophones/Tenor Saxophone/Non-Vibrato",
-            [r"_A#1_vl2_rr1", r"_A#2_vl2_rr1", r"_A#3_vl2_rr1"]),
-    "ORGAN": (VCSL, "Aerophones/Edge-blown Aerophones/Pipe Organ/Quiet", [r"_C2_rr1", r"_C3_rr1", r"_C4_rr1"]),
-    "STRINGS": (VSCO, "Strings/Violin Section/susVib", [r"_A2_v1", r"_A3_v1", r"_B4_v1"]),
-    "BRASS": (VSCO, "Brass/Trumpet/sus", [r"_A2_v1_rr1", r"_C3_v1_rr1", r"_A4_v1_rr1"]),
     "FLUTE": (VSCO, "Woodwinds/Flute/susvib", [r"_C4_v1_1", r"_C5_v1_1", r"_C6_v1_1"]),
-    "SAX": (VCSL, "Aerophones/Reed Aerophones/Tenor Saxophone/Non-Vibrato",
-            [r"_A#1_vl2_rr1", r"_A#2_vl2_rr1", r"_A#3_vl2_rr1"]),
     "KIT": (VCSL, None, [
         ("Idiophones/Struck Idiophones/Tambourine 1", r"Tamb1_Hit_v2"),
         ("Idiophones/Struck Idiophones/Shaker, Small", r"ShakerDouble_Down_rr1"),
         ("Membranophones/Struck Membranophones/Conga", r"Conga_HitN_v2_rr1"),
         ("Idiophones/Struck Idiophones/Claves", r"Claves1_Hit_v2"),
         ("Idiophones/Struck Idiophones/Woodblock", r"wood_click_mp"),
+        # the acoustic kit (gen_samples.py names them by role and cuts them; ATTRIBUTION.txt lists each)
+        ("Membranophones/Struck Membranophones/Bass Drum 1", r"BDrumNew_hit_v5_rr1"),
+        ("Membranophones/Struck Membranophones/Snare Drum, Modern 1", r"Snare2_HitSN_v7_rr1"),
+        ("Membranophones/Struck Membranophones/Legacy Snares/OldSnare", r"snare_rim"),
+        ("Idiophones/Struck Idiophones/Claps", r"Clap_rr1"),
+        ("Idiophones/Struck Idiophones/Hi-Hat Cymbal", r"HiHat_HitC_v3_rr1"),
+        ("Idiophones/Struck Idiophones/Hi-Hat Cymbal", r"HiHat_HitO_rr1"),
+        ("Membranophones/Struck Membranophones/Tom 2/Stick", r"TomL_HitS_v4_rr1"),
+        ("Membranophones/Struck Membranophones/Tom 1/Stick", r"TomH_HitS_v4_rr1"),
+        ("Idiophones/Struck Idiophones/Suspended Cymbal 2", r"susCymb2_hit_f1"),
+        ("Idiophones/Struck Idiophones/Suspended Cymbal 2", r"susCymb2_hit_stick_mf1"),
+        ("Idiophones/Struck Idiophones/Cowbells", r"Cowbell1_Normal_v3_rr1"),
     ]),
 }
 

@@ -2,11 +2,6 @@
 /* Exercise the real keyboard, recording, arp and MIDI-out paths on the host.
  * Build with the same generated headers and flags as hostsim.c. */
 #include <assert.h>
-#include <stdint.h>
-/* (2.2) MENU > MIDI's settings (seq.c mset_io; no ui.c here): NOTES OUT KEYS, as the MIDI checks below were written
- * (the keys as pressed; ALL's what-plays-goes-out: tests/midi_out_test.c) */
-static uint8_t host_mset[16 * 32];
-static const uint8_t *const mset_io = host_mset;
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
@@ -66,10 +61,16 @@ static void mapping_test(void)
     for (k = 0; k < 27u; k++)
         assert(kb_map(t, k) == 48u + k);
     t->p[P_QUANT] = 2;
-    host_preset(t, ENGI_DRUM, 0);              /* DRUM (the GM map, any part; SAMPLE PERC until 1.0.2): the first */
-    t->engine = t->eng_req = ENGI_DRUM;        /* C is the kick */
-    for (k = 0; k < 27u; k++)
-        assert(kb_map(t, k) == 29u + k);
+    for (k = 0; k < 27u; k++) {                /* the drum track: the key's lane, whatever the scale */
+        TDRUM->p[P_QUANT] = 2;
+        assert(kb_map(TDRUM, k) == LANE_NOTE[lane_of_key(k)]);
+    }
+    t->engine = t->eng_req = 4;
+    if (drum_set() >= 0) {
+        t->p[P_E0] = (int16_t)drum_set();
+        for (k = 0; k < 27u; k++)
+            assert(kb_map(t, k) == 36u + k);
+    }
     t->engine = t->eng_req = 0;                /* SNAP (QNT 1, the old ON): every key, rounded down */
     t->p[P_QUANT] = 1;
     t->p[P_SCALE] = 2;                         /* C minor */
@@ -85,12 +86,11 @@ static void key_events_test(void)
     track_t *t = &trk[0];
     uint32_t before;
     memset(trk, 0, sizeof trk);
-    memset(&song, 0, sizeof song); sel_set(0);
+    memset(&song, 0, sizeof song);
     host_tracks_init();
     kb_prev = 0;
     usb.config = 1;
     mo_w = mo_r = 0;
-    host_mset[32u * 15u + 17u] = NO_KEYS;
     t->p[P_QUANT] = 2;
     t->p[P_SCALE] = 2;                      /* C minor: E key plays Eb */
     t->p[P_AMODE] = 1;
@@ -106,21 +106,21 @@ static void key_events_test(void)
     fm1_in.notes = (1u << 11) | (1u << 10); /* E and D#: only Eb sounds/records */
     keyboard_block();
     assert(t->arp_phys == 1 && t->nheld == 1 && t->held[0] == 63);
-    assert(t->step[0].n == 0);             /* ARP on: the arp's notes are recorded, not the keys */
-    arp_tick(t, 1);
+    assert(t->step[0].n == 0);             /* ARP on: what it plays is recorded, not the key */
+    arp_tick(t, CTL * (uint32_t)song.g[G_BPM]);
     assert(t->step[0].n == 1 && t->step[0].note[0] == 63);
     assert(mo_w == 1 && ((midi_out_q[0] >> 16) & 127u) == 63);
     t->p[P_SCALE] = 9;
     t->p[P_ROOT] = 6;
     t->p[P_TRANS] = 12;
     song.octave = 1;
-    sel_set(1);                          /* key-up follows the original note/part */
+    song.sel = 1;                          /* key-up follows the original note/part */
     fm1_in.notes = 0;
     keyboard_block();
     assert(t->arp_phys == 0 && t->nheld == 0);
     assert(mo_w == 2 && ((midi_out_q[1] >> 16) & 127u) == 63);
     assert(((midi_out_q[1] >> 8) & 255u) == 0x80u);
-    sel_set(0);
+    song.sel = 0;
     t->p[P_QUANT] = 0;
     fm1_in.notes = 1u << 8;                /* held black key must release after enabling mode */
     keyboard_block();
@@ -133,445 +133,271 @@ static void key_events_test(void)
     puts("scales: silent keys, arp, live recording, MIDI out and held-note changes ok");
 }
 
-/* the voices of t holding a note (gate on), and whether note n is one of them */
-static uint32_t gated(const track_t *t)
-{
-    uint32_t i, n = 0;
-    for (i = 0; i < NVOICE; i++)
-        n += t->v[i].gate != 0;
-    return n;
-}
-static int gated_note(const track_t *t, uint32_t note)
-{
-    uint32_t i;
-    for (i = 0; i < NVOICE; i++)
-        if (t->v[i].gate && t->v[i].note == note)
-            return 1;
-    return 0;
-}
 
-/* a voice of t held (gate on) by a note the sequencer does not hold: a note-off that will never come */
-static int stray(const track_t *t)
+/* 2.7: the arp modes of Felucca 1.5.1, C E G held (MIDI notes: as they are), OCT 1; ORD as pressed */
+static void arp_seq(track_t *t, int mode, uint32_t n, uint8_t *out)
 {
-    uint32_t i, k;
-    for (i = 0; i < NVOICE; i++) {
-        if (!t->v[i].gate)
-            continue;
-        for (k = 0; k < t->seq_n && t->seq_notes[k] != t->v[i].note; k++)
-            ;
-        if (k == t->seq_n)
-            return 1;
+    uint32_t i, list[65], cnt, len;
+    t->p[P_AMODE] = (int16_t)mode;
+    t->arp_idx = 0xFFFFFFFFu;
+    t->arp_walk = 0;
+    for (i = 0; i < n; i++) {
+        len = arp_list(t, list, &cnt);
+        t->arp_idx++;
+        out[i] = (uint8_t)list[arp_pick(t, list, len)];
     }
-    return 0;
 }
 
-/* QNT SEQ (#37): the sequencer's notes snap to the scale as they play, the steps stay as written; a scale
- * changed while notes ring ends exactly the notes that sounded (no stuck notes); drum kits never snap */
-static void seq_quant_test(void)
+static void arp_modes_test(void)
 {
-    track_t *t = &trk[0];
-    uint32_t period, i;
-    static const step_t STEPS[] = {
-        {.note = {61, 64}, .n = 2, .time = ST_NOTE},  /* C#4 E4: C major -> C4 E4 */
-        {.note = {66}, .n = 1, .time = ST_NOTE},      /* F#4 -> F4 */
-        {.note = {61}, .n = 1, .time = ST_NOTE},      /* held through two TIEs */
-        {.time = ST_TIE},
-        {.time = ST_TIE},
-        {.note = {61, 60}, .n = 2, .time = ST_NOTE},  /* both snap to C4: one note */
-        {.time = ST_REST},
+    static const struct { int mode; uint8_t want[8]; } M[] = {
+        {AM_UP, {60, 64, 67, 60, 64, 67, 60, 64}},
+        {AM_DN, {67, 64, 60, 67, 64, 60, 67, 64}},
+        {AM_UPDN, {60, 64, 67, 64, 60, 64, 67, 64}},
+        {AM_DNUP, {67, 64, 60, 64, 67, 64, 60, 64}},
+        {AM_UP8, {60, 64, 67, 72, 60, 64, 67, 72}},
+        {AM_CONV, {60, 67, 64, 60, 67, 64, 60, 67}},
+        {AM_DIVG, {64, 67, 60, 64, 67, 60, 64, 67}},
+        {AM_PINKY, {60, 67, 64, 67, 60, 67, 64, 67}},
+        {AM_THUMB, {60, 64, 60, 67, 60, 64, 60, 67}},
+        {AM_ORD, {67, 60, 64, 67, 60, 64, 67, 60}},
+        {AM_REPEAT, {64, 64, 64, 64, 64, 64, 64, 64}},
     };
+    track_t *t = &trk[0];
+    uint8_t got[16];
+    uint32_t i, j;
     memset(trk, 0, sizeof trk);
-    memset(&song, 0, sizeof song); sel_set(0);
+    memset(&song, 0, sizeof song);
     host_tracks_init();
-    song.g[G_BPM] = 120;
-    host_preset(t, 0, 0);                          /* ANALOG, POLY */
-    t->engine = t->eng_req = 0;
-    t->p[P_VOICE] = V_POLY;
-    t->p[P_SLEN] = (int16_t)NELEM(STEPS);
-    for (i = 0; i < NELEM(STEPS); i++)
-        t->step[i] = STEPS[i];
-    t->seq_active = 1;
-    t->p[P_SCALE] = 1;                             /* C major */
-    t->p[P_ROOT] = 0;
-    period = div_samples((uint32_t)t->p[P_SDIV]);
-
-    t->p[P_QUANT] = 0;                             /* OFF and SNAP: the sequence plays as written */
-    seq_start();
-    events_block(CTL);
-    assert(t->seq_n == 2 && t->seq_notes[0] == 61 && t->seq_notes[1] == 64 && gated_note(t, 61));
-    seq_stop();
-    t->p[P_QUANT] = 1;
-    seq_start();
-    events_block(CTL);
-    assert(t->seq_n == 2 && t->seq_notes[0] == 61 && gated_note(t, 61));
-    seq_stop();
-    assert(gated(t) == 0);
-
-    t->p[P_QUANT] = 3;                             /* SEQ */
-    seq_start();
-    events_block(CTL);
-    assert(t->seq_n == 2 && t->seq_notes[0] == 60 && t->seq_notes[1] == 64 && gated_note(t, 60) &&
-           gated_note(t, 64) && !gated_note(t, 61) && gated(t) == 2);
-    assert(t->step[0].note[0] == 61 && t->step[0].note[1] == 64);   /* stored as written */
-    t->p[P_SCALE] = 2;                             /* C minor while C4 E4 ring: E4 would be Eb4 now */
-    events_block(period);                          /* the gate ends them, step 2 plays F#4 -> F4 */
-    assert(!gated_note(t, 60) && !gated_note(t, 64) && !gated_note(t, 63));
-    assert(t->seq_idx == 1 && t->seq_n == 1 && t->seq_notes[0] == 65 && gated(t) == 1);
-    events_block(period);                          /* step 3: C#4 -> C4, held into the TIEs */
-    assert(t->seq_idx == 2 && t->seq_n == 1 && t->seq_notes[0] == 60 && gated_note(t, 60) && gated(t) == 1);
-    t->p[P_SCALE] = 0;                             /* CHR while it is held: C#4 itself now, but C4 sounds */
-    events_block(period);
-    t->p[P_ROOT] = 1;                              /* and a new root */
-    t->p[P_SCALE] = 1;
-    events_block(period);
-    assert(t->seq_idx == 4 && gated_note(t, 60) && gated(t) == 1);
-    t->p[P_ROOT] = 0;
-    events_block(period);                          /* step 6: C#4 and C4 both C4 now: one note, C4 retriggered */
-    assert(t->seq_idx == 5 && t->seq_n == 1 && t->seq_notes[0] == 60 && gated(t) == 1);
-    t->p[P_SCALE] = 5;                             /* PEN while it rings */
-    events_block(period);                          /* REST: released */
-    assert(t->seq_idx == 6 && t->seq_n == 0 && gated(t) == 0);
-    events_block(period);                          /* round again, then stop with notes sounding */
-    assert(t->seq_idx == 0 && gated(t) == 2 && gated_note(t, 60) && gated_note(t, 64));
-    t->p[P_SCALE] = 2;
-    seq_stop();
-    assert(gated(t) == 0);
-    for (i = 0; i < NELEM(STEPS); i++)
-        assert(!memcmp(&t->step[i], &STEPS[i], sizeof STEPS[i]));
-
-    /* a scale change on every block for a while, slides and TIEs included: nothing left held */
-    t->step[1].flags = SF_SLIDE;
-    seq_start();
-    for (i = 0; i < 4000u; i++) {
-        t->p[P_SCALE] = (int16_t)(i * 7u % 16u);
-        t->p[P_ROOT] = (int16_t)(i * 5u % 12u);
-        events_block(CTL);
-        assert(!stray(t));
+    assert(TP[P_AMODE].max == AM_CHORD);
+    t->p[P_AOCT] = 1, t->p[P_AORDER] = 0, t->p[P_AHOLD] = 0;
+    memset(held_key, 0, sizeof held_key);          /* (MIDI notes: played as they are) */
+    t->held[0] = 67, t->held[1] = 60, t->held[2] = 64, t->nheld = 3;   /* pressed G, C, E */
+    for (i = 0; i < sizeof M / sizeof M[0]; i++) {
+        arp_seq(t, M[i].mode, 8, got);
+        for (j = 0; j < 8u; j++)
+            if (got[j] != M[i].want[j]) {
+                fprintf(stderr, "arp mode %s step %u: %u, want %u\n", N_AMODE[M[i].mode], j, got[j], M[i].want[j]);
+                assert(0);
+            }
     }
-    seq_stop();
-    assert(gated(t) == 0 && t->seq_n == 0);
-    t->step[1].flags = 0;
-
-    /* drum kits and the DRUM engine never snap: their notes are GM drums */
-    host_preset(t, ENGI_DRUM, 0);
-    t->engine = t->eng_req = ENGI_DRUM;
-    t->p[P_SCALE] = 1;
-    t->p[P_ROOT] = 0;
-    t->step[0] = (step_t){.note = {37, 39}, .n = 2, .hit = 1u << 0, .time = ST_NOTE};
-    seq_start();
-    events_block(CTL);
-    assert(t->seq_n == 3 && t->seq_notes[0] == 37 && t->seq_notes[1] == 39 && t->seq_notes[2] == DRUM_LANE_NOTE[0]);
-    seq_stop();
-    assert(gated(t) == 0);
-    puts("scales: QNT SEQ snaps the sequence as it plays (steps unchanged), no stuck notes over scale changes, kits never");
-}
-
-/* #191: the arp's notes from the keys follow TRN, ROOT, SCALE and QNT as they change (latched with HOLD or held),
- * the octave they were pressed in; MIDI IN's notes play as they came; with nothing changed, exactly as before */
-static uint32_t arp_seen[8];
-static uint32_t arp_run(track_t *t, uint32_t steps)  /* the notes of `steps` arp steps into arp_seen; the count sounding */
-{
-    uint32_t period = div_samples((uint32_t)t->p[P_ARATE]), i;
-    for (i = 0; i < steps && i < 8u; i++) {
-        arp_tick(t, period);
-        arp_seen[i] = t->arp_note;
-    }
-    return steps;
-}
-static int arp_is(track_t *t, uint32_t a, uint32_t b)   /* UP over two notes: a b a b */
-{
-    arp_run(t, 4);
-    return arp_seen[0] == a && arp_seen[1] == b && arp_seen[2] == a && arp_seen[3] == b;
-}
-static void arp_reset(track_t *t)
-{
-    memset(trk, 0, sizeof trk);
-    memset(&song, 0, sizeof song); sel_set(0);
-    host_tracks_init();
-    kb_prev = 0;
-    fm1_in.notes = 0;
-    host_preset(t, 0, 0);                          /* ANALOG, POLY */
-    t->engine = t->eng_req = 0;
-    t->p[P_VOICE] = V_POLY;
-    t->p[P_AMODE] = 1;                             /* UP */
+    t->p[P_AOCT] = 2;                               /* UP+8 over 2 octaves: the first note over the top one */
+    arp_seq(t, AM_UP8, 7, got);
+    assert(got[5] == 79 && got[6] == 84);
     t->p[P_AOCT] = 1;
-    t->p[P_SCALE] = 2;                             /* C minor */
-    t->p[P_ROOT] = 0;
-    t->p[P_TRANS] = 0;
+    arp_seq(t, AM_WALK, 16, got);                   /* WALK: from the bottom, one place at a time */
+    assert(got[0] == 60);
+    for (j = 1; j < 16u; j++)
+        assert((got[j - 1] == 60 && got[j] == 64) || (got[j - 1] == 67 && got[j] == 64) ||
+               (got[j - 1] == 64 && (got[j] == 60 || got[j] == 67)));
+    t->p[P_AMODE] = AM_CHORD, t->p[P_AOCT] = 2;     /* CHORD: the held notes together, an octave up every other step */
+    t->arp_idx = 0xFFFFFFFFu;
+    assert(arp_step(t) && t->arp_note == 60 && t->arp_ch[0] == 64 && t->arp_ch[1] == 67 && !t->arp_ch[2]);
+    arp_end(t);
+    assert(!t->arp_note && !t->arp_ch[0] && !t->arp_ch[1]);
+    assert(arp_step(t) && t->arp_note == 72 && t->arp_ch[0] == 76 && t->arp_ch[1] == 79);
+    arp_end(t);
+    t->nheld = 0;
+    assert(!arp_step(t) && !t->arp_note);
+    t->p[P_AMODE] = 0, t->p[P_AOCT] = 1;
+    puts("arp: the 2.7 modes (Felucca 1.5.1): DNUP UP+8 CONV DIVG PINKY THUMB WALK REPEAT CHORD, ORD as pressed ok");
 }
 
-static void arp_follow_test(void)
+/* 2.7 (#52): ARP SWG with the transport stopped: the odd steps late by SWG, the even ones back on the grid */
+static void arp_swing_test(void)
 {
     track_t *t = &trk[0];
+    uint32_t div = 2, u = div_units(div), sw, pos = 0, last = 0, gaps[6], ng = 0, idx0, i, ok = 1;
+    memset(trk, 0, sizeof trk);
+    memset(&song, 0, sizeof song);
+    host_tracks_init();
+    memset(held_key, 0, sizeof held_key);
+    song.playing = 0;
+    t->p[P_AMODE] = AM_UP, t->p[P_ARATE] = (int16_t)div, t->p[P_AOCT] = 1, t->p[P_AGATE] = 64, t->p[P_APROB] = 127;
+    t->held[0] = 60, t->nheld = 1;
+    for (uint32_t swg = 100; swg >= 50u; swg -= 50u) {  /* (SWG 50 too: the first step's length) */
+    t->p[P_ASWING] = (int16_t)swg;
+    sw = swing_units(swg, u);
+    t->arp_new = 1, t->arp_idx = 0xFFFFFFFFu, ng = 0, pos = last = 0, ok = 1;
+    idx0 = t->arp_idx;
+    for (i = 0; i < 400000u && ng < 6u; i++) {         /* 100 units a tick */
+        uint32_t before = t->arp_idx;
+        arp_tick(t, 100);
+        pos += 100;
+        if (t->arp_idx != before) {
+            if (before != idx0)
+                gaps[ng++] = pos - last;
+            last = pos;
+        }
+    }
+    for (i = 0; i < ng; i++)                            /* to the odd step u + sw, to the even one u - sw (100 a tick) */
+        if ((i & 1u ? u - sw : u + sw) + 100u < gaps[i] || gaps[i] + 100u < (i & 1u ? u - sw : u + sw))
+            ok = 0;
+    printf("arp swing stopped SWG %u: steps %u %u %u %u (u %u, sw %u)\n", swg, gaps[0], gaps[1], gaps[2], gaps[3], u, sw);
+    assert(ng == 6u && ok && sw > 0u);
+    }
+    t->p[P_ASWING] = 0, t->arp_new = 1, t->arp_idx = 0xFFFFFFFFu, ng = 0, pos = last = 0;
+    idx0 = t->arp_idx;
+    for (i = 0; i < 400000u && ng < 4u; i++) {
+        uint32_t before = t->arp_idx;
+        arp_tick(t, 100);
+        pos += 100;
+        if (t->arp_idx != before) {
+            if (before != idx0)
+                gaps[ng++] = pos - last;
+            last = pos;
+        }
+    }
+    for (i = 0; i < ng; i++)
+        assert(gaps[i] + 100u >= u && gaps[i] <= u + 100u);   /* SWG 0: as before, every step u */
+    t->nheld = 0;
+    arp_tick(t, 100);
+    t->p[P_AMODE] = 0;
+    puts("arp: SWG works with the transport stopped (odd steps late), SWG 0 as before ok");
+}
+
+/* 2.7 (#106): CLK OUT: 24 pulses a beat, START with the downbeat's pulse, STOP; nothing with SYNC USB or CLK OUT OFF */
+static void clkout_test(void)
+{
+    uint32_t n = 32, i, f8 = 0, fa = 0, fc = 0, other = 0, beats = 4, blocks;
+    memset(&song, 0, sizeof song);
+    host_tracks_init();
+    usb.config = 1;
+    song.g[G_BPM] = 120;
+    song.g[G_CLKOUT] = 1, song.g[G_SYNC] = 0;
+    mo_w = mo_r = 0;
+    blocks = beats * BEAT_U / (n * 120u);
+    for (i = 0; i < blocks; i++) {
+        clkout_block(n);
+        while (mo_r != mo_w) {
+            uint32_t b = (midi_out_q[mo_r++ % MQ] >> 8) & 0xFFu;
+            f8 += b == 0xF8u, fa += b == 0xFAu, fc += b == 0xFCu, other += b != 0xF8u && b != 0xFAu && b != 0xFCu;
+        }
+    }
+    printf("clk out stopped, 4 beats: %u pulses\n", f8);
+    assert(f8 >= 24u * beats - 1u && f8 <= 24u * beats && !fa && !fc && !other);
+    song.playing = 1;
+    f8 = 0;
+    clkout_block(n);
+    while (mo_r != mo_w) {
+        uint32_t b = (midi_out_q[mo_r++ % MQ] >> 8) & 0xFFu;
+        if (b == 0xFAu) fa++, assert(f8 == 0u);          /* START first */
+        f8 += b == 0xF8u;
+    }
+    assert(fa == 1u && f8 == 1u);                       /* START, then the downbeat's pulse */
+    clkout_block(n);
+    song.playing = 0;
+    clkout_block(n);
+    while (mo_r != mo_w)
+        fc += ((midi_out_q[mo_r++ % MQ] >> 8) & 0xFFu) == 0xFCu;
+    assert(fc == 1u);
+    song.g[G_SYNC] = 1;                                 /* following a clock: nothing out */
+    for (i = 0; i < blocks; i++)
+        clkout_block(n);
+    assert(mo_r == mo_w);
+    song.g[G_SYNC] = 0, song.g[G_CLKOUT] = 0;
+    song.playing = 1;
+    for (i = 0; i < blocks; i++)
+        clkout_block(n);
+    assert(mo_r == mo_w);                               /* CLK OUT OFF: nothing (as before) */
+    song.playing = 0;
+    song.g[G_CLKOUT] = 1, song.playing = 1;
+    clkout_block(n);
+    song.g[G_CLKOUT] = 0;                               /* turned off while playing: STOP */
+    clkout_block(n);
+    fc = 0;
+    while (mo_r != mo_w)
+        fc += ((midi_out_q[mo_r++ % MQ] >> 8) & 0xFFu) == 0xFCu;
+    assert(fc == 1u);
+    song.playing = 0;
+    clkout_block(n);
+    puts("clk out: 24 pulses a beat (stopped too), START + downbeat pulse, STOP; none with SYNC USB or OFF ok");
+}
+
+/* 2.7 (#103): KBD HOLD (ARP 2 HOLD ON, MODE OFF): the notes keep sounding; a new chord replaces them; keys join while
+ * down; the MIDI note-off waits; HOLD OFF ends them. MODE OFF, HOLD OFF: as before */
+static int sounding(const track_t *t, uint32_t note)
+{
     uint32_t i;
-
-    /* the report: QNT SNAP, HOLD, a chord latched, then TRN */
-    arp_reset(t);
-    t->p[P_QUANT] = QN_SNAP;
-    t->p[P_AHOLD] = 1;
-    events_block(CTL);                             /* (the ISR sees HOLD on) */
-    fm1_in.notes = (1u << 7) | (1u << 11);         /* C4, E4 -> Eb4 in C minor */
+    for (i = 0; i < NVOICE; i++)
+        if (t->v[i].active && t->v[i].gate && t->v[i].note == note)
+            return 1;
+    return 0;
+}
+static uint32_t midi_offs(uint32_t note)
+{
+    uint32_t c = 0;
+    while (mo_r != mo_w) {
+        uint32_t pk = midi_out_q[mo_r++ % MQ];
+        c += ((pk >> 8) & 0xF0u) == 0x80u && ((pk >> 16) & 127u) == note;
+    }
+    return c;
+}
+static void kbd_hold_test(void)
+{
+    track_t *t = &trk[0];
+    memset(trk, 0, sizeof trk);
+    memset(&song, 0, sizeof song);
+    host_tracks_init();
+    memset(held_key, 0, sizeof held_key);
+    kb_prev = 0;
+    usb.config = 1;
+    song.g[G_CH1] = 1;
+    mo_w = mo_r = 0;
+    t->p[P_AMODE] = 0, t->p[P_AHOLD] = 1, t->p[P_QUANT] = 0, t->p[P_CHORD] = 0, t->p[P_VOICE] = V_POLY;
+    fm1_in.notes = 1u << 7 | 1u << 11;                  /* C4 + E4 down */
+    keyboard_block();
+    assert(sounding(t, 60) && sounding(t, 64));
+    fm1_in.notes = 0;                                   /* let go: they go on, no MIDI note-off yet */
+    keyboard_block();
+    assert(sounding(t, 60) && sounding(t, 64) && kh_has(t, 60) && midi_offs(60) == 0u);
+    fm1_in.notes = 1u << 14;                            /* G4 alone: the new chord replaces C E */
+    keyboard_block();
+    assert(!sounding(t, 60) && !sounding(t, 64) && sounding(t, 67) && midi_offs(60) == 1u);
+    fm1_in.notes = 1u << 14 | 1u << 18;                 /* B4 while G4 is down: joins */
     keyboard_block();
     fm1_in.notes = 0;
     keyboard_block();
-    assert(t->nheld == 2 && t->held[0] == 60 && t->held[1] == 63);
-    assert(arp_is(t, 60, 63));
-    t->p[P_TRANS] = 2;                             /* D4, F#4 -> F4: transposed, then onto the scale */
-    assert(arp_is(t, 62, 65));
-    t->p[P_TRANS] = 1;                             /* C#4 -> C4, F4 */
-    assert(arp_is(t, 60, 65));
-    t->p[P_TRANS] = 0;
-    t->p[P_SCALE] = 1;                             /* SCALE: C major, E4 itself now */
-    assert(arp_is(t, 60, 64));
-    t->p[P_ROOT] = 2;                              /* ROOT: D major, C4 -> B3, E4 */
-    assert(arp_is(t, 59, 64));
-    t->p[P_ROOT] = 0;
-    t->p[P_SCALE] = 2;                             /* back as it was: exactly the notes latched */
-    assert(arp_is(t, 60, 63));
-    song.octave = 1;                               /* the octave buttons: the next keys, not the latched ones */
-    assert(arp_is(t, 60, 63));
-    song.octave = 0;
-    assert(t->nheld == 2 && t->held[0] == 60 && t->held[1] == 63);   /* (what the keys started: their releases) */
-    t->p[P_AHOLD] = 0;                             /* HOLD off: the latched chord goes, nothing left sounding */
-    events_block(CTL);
-    arp_run(t, 2);
-    assert(t->nheld == 0 && t->arp_note == 0 && gated(t) == 0);
-
-    /* QNT OFF, no HOLD: the keys held follow TRN too; their release ends them, whatever TRN is now */
-    arp_reset(t);
-    t->p[P_QUANT] = QN_OFF;
-    fm1_in.notes = (1u << 7) | (1u << 11);         /* C4, E4 */
+    assert(sounding(t, 67) && sounding(t, 71));
+    t->p[P_AHOLD] = 0;                                  /* HOLD OFF: they end (the block's check) */
+    if (kh_any(t) && !kh_on(t))
+        kh_release(t);
+    assert(!sounding(t, 67) && !sounding(t, 71) && !kh_any(t));
+    fm1_in.notes = 1u << 7;                             /* HOLD OFF: as before */
     keyboard_block();
-    assert(arp_is(t, 60, 64));
-    t->p[P_TRANS] = -3;
-    assert(arp_is(t, 57, 61));
-    fm1_in.notes = 1u << 7;                        /* E4 up (it plays C#4 now) */
-    keyboard_block();
-    assert(t->nheld == 1);
-    arp_run(t, 2);
-    assert(arp_seen[0] == 57 && arp_seen[1] == 57);
     fm1_in.notes = 0;
     keyboard_block();
-    arp_run(t, 2);
-    assert(t->nheld == 0 && t->arp_note == 0 && gated(t) == 0);
-
-    /* MIDI IN into the arp: its notes are not the keyboard's, TRN never moved them (nor does it now) */
-    arp_reset(t);
-    t->p[P_QUANT] = QN_SNAP;
-    t->p[P_AHOLD] = 1;
-    input_on(t, 61, 100);
-    input_on(t, 66, 100);
-    input_off(t, 61);
-    input_off(t, 66);
-    assert(arp_is(t, 61, 66));
-    t->p[P_TRANS] = 5;
-    t->p[P_SCALE] = 1;
-    assert(arp_is(t, 61, 66));
-
-    /* CHRD: a key's chord moves with it (its notes as far above the key's note) */
-    arp_reset(t);
-    t->p[P_QUANT] = QN_OFF;
-    t->p[P_AHOLD] = 1;
-    t->p[P_CHRD] = CH_POW;                         /* C G C' */
+    assert(!sounding(t, 60));
+    t->p[P_AMODE] = 1, t->p[P_AHOLD] = 1;               /* ARP on + HOLD: the arp's latch, not KBD HOLD */
     fm1_in.notes = 1u << 7;
     keyboard_block();
     fm1_in.notes = 0;
     keyboard_block();
-    assert(t->nheld == 3);
-    arp_run(t, 3);
-    assert(arp_seen[0] == 60 && arp_seen[1] == 67 && arp_seen[2] == 72);
-    t->p[P_TRANS] = 2;
-    arp_run(t, 3);
-    assert(arp_seen[0] == 62 && arp_seen[1] == 69 && arp_seen[2] == 74);
-    t->p[P_CHRD] = 0;
-
-    /* QNT WHITE after the keys: a black key latched is silent now (left out); all of them: the arp rests */
-    arp_reset(t);
-    t->p[P_QUANT] = QN_OFF;
-    t->p[P_AHOLD] = 1;
-    fm1_in.notes = (1u << 7) | (1u << 8);          /* C4, C#4 */
-    keyboard_block();
-    fm1_in.notes = 0;
-    keyboard_block();
-    assert(arp_is(t, 60, 61));
-    t->p[P_QUANT] = QN_WHITE;                      /* C4 is the root, C#4 silent */
-    arp_run(t, 4);
-    for (i = 0; i < 4u; i++)
-        assert(arp_seen[i] == 60);
-    t->p[P_QUANT] = QN_OFF;
-    fm1_in.notes = 1u << 8;                        /* a new chord: C#4 alone */
-    keyboard_block();
-    fm1_in.notes = 0;
-    keyboard_block();
-    t->p[P_QUANT] = QN_WHITE;
-    arp_run(t, 4);
-    assert(t->nheld == 1 && t->arp_note == 0 && gated(t) == 0);
-    t->p[P_QUANT] = QN_OFF;
-    arp_run(t, 1);
-    assert(arp_seen[0] == 61);
-
-    /* the DRUM engine's own key map: as it came (TRN is not its) */
-    arp_reset(t);
-    host_preset(t, ENGI_DRUM, 0);
-    t->engine = t->eng_req = ENGI_DRUM;
-    t->p[P_AMODE] = 1;
-    t->p[P_AOCT] = 1;
-    t->p[P_AHOLD] = 1;
-    fm1_in.notes = (1u << 7) | (1u << 9);
-    keyboard_block();
-    fm1_in.notes = 0;
-    keyboard_block();
-    assert(held_key[0][0] == 0 && held_key[0][1] == 0);
-    assert(arp_is(t, kb_map(t, 7), kb_map(t, 9)));
-    t->p[P_TRANS] = 7;
-    assert(arp_is(t, t->held[0], t->held[1]));
-    puts("scales: the arp's latched / held keys follow TRN, ROOT, SCALE and QNT (#191); octave, MIDI IN, kits as before");
+    assert(!kh_any(t) && t->nheld == 1u);
+    t->p[P_AMODE] = 0, t->p[P_AHOLD] = 0, t->nheld = 0;
+    puts("kbd hold: notes held when let go, a new chord replaces them, keys join while down, MIDI off waits, HOLD OFF ends ok");
 }
 
-/* QNT SEQ+T (#218): TRN moves the sequence too, before it snaps; with OFF / SNAP / WHITE / SEQ the sequence plays as
- * written whatever TRN says (saved projects sound the same). A TRN turned while notes ring leaves nothing held;
- * the steps never change; kits are never transposed; the keys play as SNAP */
-static void seq_trn_test(void)
+/* 2.7 (#126): EDIT's MUTE mode (drum track) stays when EDIT is let go */
+static void mute_mode_test(void)
 {
-    track_t *t = &trk[0];
-    uint32_t period, i, q;
-    static const step_t STEPS[] = {
-        {.note = {60, 64}, .n = 2, .time = ST_NOTE},  /* C4 E4 */
-        {.note = {65}, .n = 1, .time = ST_NOTE},      /* F4, held into a TIE */
-        {.time = ST_TIE},
-        {.time = ST_REST},
-    };
-    memset(trk, 0, sizeof trk);
-    memset(&song, 0, sizeof song); sel_set(0);
-    host_tracks_init();
-    song.g[G_BPM] = 120;
-    host_preset(t, 0, 0);                          /* ANALOG, POLY */
-    t->engine = t->eng_req = 0;
-    t->p[P_VOICE] = V_POLY;
-    t->p[P_SLEN] = (int16_t)NELEM(STEPS);
-    for (i = 0; i < NELEM(STEPS); i++)
-        t->step[i] = STEPS[i];
-    t->seq_active = 1;
-    t->p[P_SCALE] = 1;                             /* C major */
-    t->p[P_ROOT] = 0;
-    t->p[P_TRANS] = 2;
-    period = div_samples((uint32_t)t->p[P_SDIV]);
-
-    for (q = QN_OFF; q <= QN_SEQ; q++) {           /* the four older values: TRN leaves the sequence alone */
-        t->p[P_QUANT] = (int16_t)q;
-        seq_start();
-        events_block(CTL);
-        assert(t->seq_n == 2 && t->seq_notes[0] == 60 && t->seq_notes[1] == 64 && gated(t) == 2);
-        seq_stop();
-        assert(gated(t) == 0);
-    }
-
-    t->p[P_QUANT] = QN_SEQT;                       /* +2: D4 F#4 -> D4 F4 in C major */
-    assert(kb_map(t, 7) == kb_map(t, 8) && kb_map(t, 7) == 62u);   /* the keys as SNAP: C4+2, C#4+2 -> D4 */
-    seq_start();
-    events_block(CTL);
-    assert(t->seq_n == 2 && t->seq_notes[0] == 62 && t->seq_notes[1] == 65 && gated_note(t, 62) &&
-           gated_note(t, 65) && gated(t) == 2);
-    t->p[P_TRANS] = -1;                            /* while they ring: they end as they sounded */
-    events_block(period);                          /* step 2: F4-1 = E4 */
-    assert(t->seq_idx == 1 && t->seq_n == 1 && t->seq_notes[0] == 64 && gated_note(t, 64) && gated(t) == 1);
-    t->p[P_TRANS] = 7;                             /* during the TIE: E4 held */
-    events_block(period);
-    assert(t->seq_idx == 2 && gated_note(t, 64) && gated(t) == 1);
-    events_block(period);                          /* REST */
-    assert(t->seq_idx == 3 && gated(t) == 0);
-    events_block(period);                          /* round again at +7: G4 B4 */
-    assert(t->seq_idx == 0 && t->seq_notes[0] == 67 && t->seq_notes[1] == 71 && gated(t) == 2);
-    for (i = 0; i < 4000u; i++) {                  /* TRN on every block: nothing left held */
-        t->p[P_TRANS] = (int16_t)((int32_t)(i * 7u % 49u) - 24);
-        events_block(CTL);
-        assert(!stray(t));
-    }
-    seq_stop();
-    assert(gated(t) == 0 && t->seq_n == 0);
-    for (i = 0; i < NELEM(STEPS); i++)
-        assert(!memcmp(&t->step[i], &STEPS[i], sizeof STEPS[i]));
-    t->p[P_TRANS] = 24;                            /* clamped to 127 at the top */
-    t->step[0] = (step_t){.note = {120}, .n = 1, .time = ST_NOTE};
-    seq_start();
-    events_block(CTL);
-    assert(t->seq_n == 1 && t->seq_notes[0] <= 127);
-    seq_stop();
-
-    host_preset(t, ENGI_DRUM, 0);                  /* a kit: GM drums, never transposed */
-    t->engine = t->eng_req = ENGI_DRUM;
-    t->p[P_QUANT] = QN_SEQT;
-    t->p[P_TRANS] = 5;
-    t->step[0] = (step_t){.note = {37}, .n = 1, .hit = 1u << 0, .time = ST_NOTE};
-    seq_start();
-    events_block(CTL);
-    assert(t->seq_n == 2 && t->seq_notes[0] == 37 && t->seq_notes[1] == DRUM_LANE_NOTE[0]);
-    seq_stop();
-    assert(gated(t) == 0);
-    t->p[P_TRANS] = 0;
-    t->p[P_QUANT] = QN_OFF;
-    puts("scales: QNT SEQ+T moves the sequence by TRN then snaps (steps unchanged, nothing held); other QNT values ignore TRN");
-}
-
-/* (2.1, #74) QNT SOLO: the white keys as WHITE; the black keys walk the same scale, five an octave, C#4 the root
- * (SOLO_OCT octaves up). Over both boards' keys: the FM-1's F3..G5 (0..26) and the SMK-37's C3..C6 (kb_semi: -5..31) */
-static void solo_test(void)
-{
-    /* the black keys C#3 .. A#5 (from F3) and their notes with ROOT C, before TRN and the octave: C major (7 notes) and
-     * the major pentatonic (5 notes: a C on every C#) */
-    static const int8_t SEMI[15] = {-4, -2, 1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25, 27, 29};
-    static const uint8_t NOTE[2][15] = {
-        {52, 53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74, 76},   /* MAJ: E3 F3 G3 A3 B3 C4 .. E5 */
-        {48, 50, 52, 55, 57, 60, 62, 64, 67, 69, 72, 74, 76, 79, 81},   /* PEN: C3 D3 E3 G3 A3 C4 .. A5 */
-    };
-    static const uint8_t SCALE[2] = {1, 5};
-    track_t *t = &trk[0];
-    uint32_t s, i, white;
-    int32_t k, root, oct, trans;
-    memset(trk, 0, sizeof trk);
-    host_tracks_init();
-    t->engine = t->eng_req = 0;
-    for (s = 0; s < 2u; s++) {
-        t->p[P_SCALE] = SCALE[s];
-        for (root = 0; root < 12; root++)
-            for (oct = -3; oct <= 3; oct++)
-                for (trans = -24; trans <= 24; trans++) {
-                    t->p[P_ROOT] = (int16_t)root;
-                    t->p[P_TRANS] = (int16_t)trans;
-                    t->p[P_QUANT] = QN_SOLO;
-                    for (i = 0; i < 15u; i++)
-                        assert(kb_pitch(t, (uint32_t)SEMI[i], oct) ==
-                               (uint32_t)clamp(NOTE[s][i] + root + 12 * (oct + SOLO_OCT) + trans, 0, 127));
-                    for (k = -5, i = 0, white = 0; k <= 31; k++) {   /* the white keys: WHITE's notes */
-                        uint32_t solo = kb_pitch(t, (uint32_t)k, oct);
-                        if (key_black((uint32_t)k)) {
-                            i++;
-                            continue;
-                        }
-                        t->p[P_QUANT] = QN_WHITE;
-                        assert(solo == kb_pitch(t, (uint32_t)k, oct) && solo != KB_SILENT);
-                        t->p[P_QUANT] = QN_SOLO;
-                        white++;
-                    }
-                    assert(i == 15u && white == 22u);
-                }
-    }
-    t->p[P_SCALE] = 1;                              /* the panel's keys (kb_map): C#4 the root, F#5 an octave up */
-    t->p[P_ROOT] = t->p[P_TRANS] = 0;
-    song.octave = 0;
-    assert(kb_map(t, 8) == 60u + 12u * SOLO_OCT && kb_map(t, 25) == 72u + 12u * SOLO_OCT && kb_map(t, 7) == 60u);
-    t->p[P_QUANT] = QN_OFF;
-    puts("scales: QNT SOLO's black keys walk the scale (7 and 5 notes, C3..C6, roots, octaves, TRN); white keys as WHITE");
+    er_mute = 1;
+    fm1_in.buttons = 0, fm1_in.notes = 0;
+    keyboard_block();
+    assert(er_mute == 1u);
+    er_mute = 0;
+    puts("edit mute mode: kept when EDIT is let go ok");
 }
 
 int main(void)
 {
     host_tracks_init();
-    solo_test();
     mapping_test();
     key_events_test();
-    seq_quant_test();
-    seq_trn_test();
-    arp_follow_test();
+    arp_modes_test();
+    arp_swing_test();
+    clkout_test();
+    kbd_hold_test();
+    mute_mode_test();
     return 0;
 }

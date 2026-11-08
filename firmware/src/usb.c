@@ -1,27 +1,24 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
-/* USB full-speed device on USB0: a
- * class-compliant USB-MIDI interface. All SIE traffic happens in one place,
- * usb_poll(), called from the TIMER5 ISR at 2 kHz, so INDEX is never shared
- * and no USB IRQ is needed. MIDI in goes to a ring the audio ISR drains;
- * MIDI out (the panel keys) comes from a ring the audio ISR fills.
- * SysEx F0 22 24 35 7D F7 (the stock soft key, tools/fm1_softkey.py) asks
- * the main loop to enter UBOOT. VID 0x1209 / PID 0x0001 is the pid.codes
- * TEST id: fine for the bench, must be replaced before any release.
+/* USB full-speed device on USB0: a class-compliant USB-MIDI interface.
+ * All SIE traffic happens in usb_poll(), called from the TIMER5 ISR at 2 kHz,
+ * so INDEX is never shared and no USB IRQ is needed. MIDI in goes to a ring
+ * the audio ISR drains; MIDI out comes from a ring the audio ISR fills.
+ * SysEx F0 22 24 35 7D F7 (soft key) asks the main loop to enter UBOOT.
+ * VID 0x1209 / PID 0x0001 is the pid.codes test id.
  * FELUCCA_CDC=1 adds a CDC-ACM serial function (IAD composite: EP2 notify,
- * EP3 bulk data) for the console in console.c; FELUCCA_USB_LAYOUT picks how
- * the composite presents itself, usb_cdc_switch / FELUCCA_CDC_DEFAULT=0 leave
- * the console out (descriptors, below).
+ * EP3 bulk data) for the console in console.c.
  * FELUCCA_UAC=1 adds a USB audio input (UAC1, class compliant): the master
  * output as 16-bit stereo at 44.1 kHz on an isochronous asynchronous IN
  * endpoint (EP4), so a computer can record the FM-1 over the cable. audio.c
  * fills a ring (uac_render_start, uac_tap); uac_service sends one packet per
  * USB frame from the TIMER5 ISR, nested in the render too (main.c). The
  * update loader leaves both off: MIDI only.
- * FELUCCA_UAC_48K=1 (the default with FELUCCA_UAC) offers 48 kHz too: the host picks the rate with
- * SET_CUR (UAC1 sampling frequency control, two discrete rates in the one alt setting). The engines stay
- * at 44.1 kHz; at 48 kHz uac_tap resamples (polyphase FIR 160 / 147, uac_fir.h) into the ring. 44.1 kHz,
- * the rate until a host asks for another, sends the samples as before, bit for bit. */
+ * SLOOP 2.5, after Felucca 1.1.5: FELUCCA_UAC_48K=1 (the default with FELUCCA_UAC) offers 48 kHz too, for
+ * phones and apps that only take 48 kHz: the host picks the rate with SET_CUR (two discrete rates in the one alt
+ * setting). The engines stay at 44.1 kHz; at 48 kHz uac_tap48 resamples (a polyphase FIR 160 / 147, uac_fir.h:
+ * 12 taps a phase, Q15, Felucca's 24 x Q30 made smaller) into the ring. 44.1 kHz, the rate until a host asks
+ * for another, sends the samples as before, bit for bit. */
 #include "../hal/fm1_usb.h"   /* registers; relative, so the loader and the host tests find it too */
 #ifndef FELUCCA_CDC
 #define FELUCCA_CDC 0
@@ -32,23 +29,9 @@
 #ifndef FELUCCA_UAC_48K
 #define FELUCCA_UAC_48K 1
 #endif
-#ifndef FELUCCA_UAC_AS_FIRST
-#define FELUCCA_UAC_AS_FIRST 1
-#endif
-#ifndef FELUCCA_UAC_MIDI_LAST
-#define FELUCCA_UAC_MIDI_LAST 1  /* (2.2) the MIDI interface after the audio streaming one (descriptors, below) */
-#endif
 #if !FELUCCA_UAC
 #undef FELUCCA_UAC_48K
 #define FELUCCA_UAC_48K 0
-#undef FELUCCA_UAC_AS_FIRST
-#define FELUCCA_UAC_AS_FIRST 0
-#undef FELUCCA_UAC_MIDI_LAST
-#define FELUCCA_UAC_MIDI_LAST 0
-#endif
-#if FELUCCA_UAC_MIDI_LAST       /* (its collection lists the audio streaming interface first already) */
-#undef FELUCCA_UAC_AS_FIRST
-#define FELUCCA_UAC_AS_FIRST 0
 #endif
 enum { S_FADDR = 0, S_POWER = 1, S_INTRTX1 = 2, S_INTRTX2 = 3, S_INTRRX1 = 4, S_INTRRX2 = 5, S_INTRUSB = 6,
        S_INTRTX1E = 7, S_INTRTX2E = 8, S_INTRRX1E = 9, S_INTRRX2E = 10, S_INTRUSBE = 11, S_FRAME1 = 12,
@@ -130,16 +113,13 @@ static struct {
 } uac;
 #if FELUCCA_UAC_48K
 #include "uac_fir.h"
-/* the resampler's input history: the last 32 frames, written twice so a window of UAC_FIR_N never wraps */
-#define RS_H 32u
+/* the resampler's input history: the last 16 frames, written twice so a window of UAC_FIR_N never wraps */
+#define RS_H 16u
 _Static_assert(RS_H >= UAC_FIR_N && (RS_H & (RS_H - 1u)) == 0, "the history holds a window");
 static struct {
     int16_t l[2u * RS_H], r[2u * RS_H];   /* r right after l (the FIR loop reads both from one pointer) */
     uint32_t w;                  /* input frames written */
-    uint32_t ph;                 /* the next output's phase, 0..159 (its newest input frame: the next written) */
-#if FELUCCA_UAC_TONE
-    uint32_t tone;
-#endif
+    uint32_t ph;                 /* the next output's phase, 0..159 */
 } rs;
 #endif
 #endif
@@ -156,9 +136,10 @@ static struct {
     uint8_t last_setup[8];
     uint8_t sysex[16];
     uint8_t sx_len, sx_on;
-    uint8_t rx_pend;             /* EP1 OUT packet seen, not yet taken (the MIDI ring was too full) */
     volatile uint8_t uboot_req;
     volatile uint8_t ota_req;    /* F0 22 24 35 7F F7: M-UPGRADE upgrade command (FELUCCA_OTA) */
+    uint8_t rx_pend;             /* EP1 OUT packet seen, not yet taken (the MIDI ring was too full) */
+    uint32_t rx_held, rx_bad;    /* packets held back (NAK) for room, malformed events ignored */
 } usb;
 
 #if FELUCCA_OTA
@@ -176,317 +157,215 @@ static volatile uint32_t so_w, so_r;
 
 /* MIDI rings: 4-byte USB-MIDI event packets */
 #define MQ 64u
-#ifdef FELUCCA_LOADER
-#define MQO MQ
-#else
-#define MQO 128u                 /* (2.2) MIDI OUT: two halves of a busy pattern's notes wait for their blocks to play */
-#endif
-static uint32_t midi_in_q[MQ], midi_out_q[MQO];
-static uint32_t midi_in_ms[MQ];
-static uint8_t midi_in_source[MQ];                    /* 1 USB, 2 TRS */
-static volatile uint32_t fm1_ms;                    /* also declared by core.h; parser-only host tests */
+static uint32_t midi_in_q[MQ], midi_out_q[MQ];
 static volatile uint32_t mi_w, mi_r, mo_w, mo_r;
-static volatile uint8_t midi_in_overflow;               /* audio ISR discards a broken stream and releases notes */
-
-static int midi_enqueue(uint32_t pkt, uint32_t source)
+static volatile uint8_t midi_in_lost;               /* (2.8.3) a note message did not fit: seq.c ends the MIDI notes held
+                                                     * (a lost note-off must not leave a note stuck; after Melodee 1.5) */
+static void midi_out_event(uint32_t pkt)            /* from the audio ISR */
 {
-    uint32_t at = mi_w % MQ;
-    if (midi_in_overflow)
-        return 0;
-    if (mi_w - mi_r >= MQ) {
-        midi_in_overflow = 1;
-        return 0;
-    }
-    midi_in_q[at] = pkt;
-    midi_in_ms[at] = fm1_ms;
-    midi_in_source[at] = (uint8_t)source;
-    RING_PUBLISH();
-    mi_w++;
-    return 1;
-}
-
-#ifndef FELUCCA_LOADER
-/* (2.2) MIDI OUT leaves when the audio it belongs to plays, not when it is rendered (a half's four blocks at once: up to
- * ~3 ms early, and in a burst). An event is due at mo.tick, the TIMER4 tick its block starts to play at (audio.c, set
- * each block); one from the main loop or TIMER5 (a knob's CC, TRS THRU) at mo.now, TIMER5's latest tick. ep1_tx sends
- * the head events that are due, in order (TIMER5, 2 kHz, also nested in a render), so they keep the audio's spacing
- * within the poll's 0.5 ms. Producers never overlap: the audio ISR (only a nested TIMER5, which produces nothing, can
- * preempt it), TIMER5 outside a render, the main loop with IRQs off. (SMK-37) the TRS jack takes the same events (mo_trs,
- * its own read index rt): a slot is free once both have passed it. Off the ISR's merged globals (the ISR's code keeps
- * its layout) and out of .pool (the SMK's is near its guard) */
-static struct {
-    uint32_t due[MQO];
-    uint32_t tick, now;          /* the block being rendered plays at; TIMER5's tick */
-    uint32_t drops, flushes;     /* (diagnostics) the ring full; a packet nobody read, dropped */
-#if BOARD_SMK37
-    volatile uint32_t rt;        /* the TRS jack's read index */
-#endif
-    uint8_t wait;                /* polls the last packet has waited for the host */
-} mo __attribute__((section(".bss.mo")));
-
-/* (2.2) MENU > MIDI's settings the ISRs read, in the unit's settings (ui.c mset_io: favorites.factory; a build without
- * the UI: none, every one at its default, 0): NOTES OUT and the switches in [15][17] (MO_*), REMOTE's channel in
- * [15][5] bits 3..7, AUTO CHANNEL's in [1][1] bits 0..4 (0 OFF, 1..16; more: OFF). The tracks' channels: seq.c */
-static const uint8_t *const mset_io;
-#define MSET(r, b) (mset_io ? mset_io[32u * (r) + (b)] : 0u)
-enum { NO_ALL, NO_KEYS, NO_OFF };                  /* NOTES OUT ([15][17] bits 0..1; 3: ALL) */
-#define MO_CLOCK_OFF 4u                            /* CLOCK OUT OFF */
-#define MO_CC_ON 8u                                /* CC OUT ON */
-#define MO_THRU_ON 16u                             /* THRU ON */
-static uint32_t mset_ch(uint32_t v) { return v >= 1u && v <= 16u ? v : 0u; }   /* REMOTE, AUTO: 1..16, else OFF (0) */
-
-/* queue an event (a USB-MIDI packet) due at TIMER4 tick due: 0 when the ring is full (nothing changed). The FM-1 with
- * no host: as sent (nobody hears it; what it pairs with stays exact) */
-static int mo_put(uint32_t pkt, uint32_t due)
-{
-    uint32_t used = mo_w - mo_r;
-#if BOARD_SMK37
-    uint32_t ut = mo_w - mo.rt;
-    used = !usb.config || ut > used ? ut : used;
-#else
-    if (!usb.config)
-        return 1;
-#endif
-    if (used >= MQO) {
-        mo.drops++;
-        return 0;
-    }
-    midi_out_q[mo_w % MQO] = pkt;
-    mo.due[mo_w % MQO] = due;
-    RING_PUBLISH();
-    mo_w++;
-    return 1;
-}
-
-/* the head events due by now into p (4 bytes each, max bytes at most), in order: the bytes taken */
-static uint32_t mo_take(uint8_t *p, uint32_t max, uint32_t now)
-{
-    uint32_t n = 0;
-    while (mo_r != mo_w && n + 4u <= max) {
-        uint32_t at = mo_r % MQO, pkt;
-        RING_PUBLISH();                                 /* (the slot read strictly between the index checks) */
-        if ((int32_t)(now - mo.due[at]) < 0)
-            break;
-        pkt = midi_out_q[at];
-        p[n] = (uint8_t)pkt;
-        p[n + 1u] = (uint8_t)(pkt >> 8);
-        p[n + 2u] = (uint8_t)(pkt >> 16);
-        p[n + 3u] = (uint8_t)(pkt >> 24);
-        n += 4u;
+    if (usb.config && mo_w - mo_r < MQ) {
+        midi_out_q[mo_w % MQ] = pkt;
         RING_PUBLISH();
-        mo_r++;
-    }
-    return n;
-}
-
-#if BOARD_SMK37
-/* (SMK-37 Pro) the due events to the TRS jack's MIDI OUT (hal/smk_uart_tx.h; TIMER5, before its tick): each event's
- * own bytes (by its CIN: 3, 2 or 1), realtime ahead of the bytes queued (smk_uart_tx_rt). 31250 baud is about 3 bytes a
- * ms: with fewer than 24 bytes left in the UART's ring a note-on is dropped (its note-off still goes) */
-static __attribute__((noinline)) void mo_trs(uint32_t now)
-{
-    while (mo.rt != mo_w) {
-        uint32_t at = mo.rt % MQO, pkt, nb, cin;
-        RING_PUBLISH();
-        if ((int32_t)(now - mo.due[at]) < 0)
-            break;
-        pkt = midi_out_q[at];
-        cin = pkt & 15u;
-        nb = (0x7AFFE7E0u >> (2u * cin)) & 3u;          /* a CIN's bytes: 2/3 system common, 8..E channel, F one */
-        if (nb == 1u && ((pkt >> 8) & 0xFFu) >= 0xF8u)
-            smk_uart_tx_rt((pkt >> 8) & 0xFFu);
-        else if (nb && !(cin == 9u && (pkt >> 24) && SMK_UT_TX_RING - (uint8_t)(smk_ut_w - smk_ut_r) < 24u)) {
-            smk_uart_tx_put((pkt >> 8) & 0xFFu);
-            if (nb > 1u)
-                smk_uart_tx_put((pkt >> 16) & 0x7Fu);
-            if (nb > 2u)
-                smk_uart_tx_put((pkt >> 24) & 0x7Fu);
-        }
-        RING_PUBLISH();
-        mo.rt++;
+        mo_w++;
     }
 }
-#endif
-#endif
 
 /* ------------------------------------------------------- descriptors --- */
-/* Two functions: audio + MIDI (0 audio control, 1 MIDI streaming, 2 audio streaming with FELUCCA_UAC; (2.2) with
- * FELUCCA_UAC_MIDI_LAST, the default: 1 audio streaming, 2 MIDI streaming)
- * and, with FELUCCA_CDC, the CDC-ACM console (communication + data). The endpoints never move:
- * EP1 MIDI, EP2 CDC notify, EP3 CDC data, EP4 audio.
- * bcdDevice: 3.00 MIDI, +0.10 the audio input (+0.20 since 1.1: 44.1 and 48 kHz, FELUCCA_UAC_48K), +0.08 the
- * audio streaming interface first in the AC collection (Skiff 1.3, from Felucca 1.5.1: FELUCCA_UAC_AS_FIRST,
- * Felucca #67), (2.2) +0.80 the MIDI interface last (FELUCCA_UAC_MIDI_LAST, from Felucca's felucca-bsp cd76d43 by
- * Charles Vestal, bisected by darosh on macOS 15.8.1, fm1-loom #7; Skiff #59, PR #60 by DevinMcDonald: macOS 13-15 show
- * no USB audio device while the MIDI streaming interface sits between the audio control and audio streaming ones,
- * whatever the collection lists; MIDI stays listed: Linux's snd-usb-audio makes a MIDI port only for a listed one),
- * +0.01 CDC (+0.02 per FELUCCA_USB_LAYOUT step, so a host never reuses what it learnt about another layout).
- * FELUCCA_USB_LAYOUT, how the CDC build presents itself (#67: macOS 13-15 attach Apple's CDC composite
- * driver to a misc / IAD device that has a CDC function, and their kernel audio driver then never
- * takes the audio interfaces; macOS 26 / 27 (usbaudiod, matched per interface) and iOS / iPadOS work):
- *   0  1.0: device class EF 02 01 (misc / IAD), audio + MIDI IF 0.., CDC last         (the default)
- *   1  CDC first: CDC IF 0-1, then audio + MIDI, both with IADs, EF 02 01
- *   2  as 0 with device class 00 00 01: outside AppleUSBCDC's device personalities
- *      (02 * *, EF 02 01, 00 00 00); the IADs stay for Windows / Linux (test build)
- *   3  as 0 with device class 00 00 00 (test build: does AppleUSBCDC's "Vendor" personality take it?)
- * usb_cdc_on (FELUCCA_CDC_DEFAULT at boot; usb_cdc_switch re-enumerates): 0 presents the device without
- * the console, byte for byte as a FELUCCA_CDC=0 build: device class 0, audio + MIDI, no IAD. */
-#ifndef FELUCCA_USB_LAYOUT
-#define FELUCCA_USB_LAYOUT 0
-#endif
-#ifndef FELUCCA_CDC_DEFAULT
-#define FELUCCA_CDC_DEFAULT 1
-#endif
+/* interfaces: 0 audio control, 1 MIDI streaming, 2 audio streaming (FELUCCA_UAC), then CDC's two.
+ * bcdDevice: 3.00 MIDI, +0.01 CDC, +0.10 the audio input, +0.20 more with 48 kHz (2.5), +0.08 the audio
+ * streaming interface first in the AC collection (2.7.2, UAC_BCD_AS) (hosts cache descriptors per version) */
+#define UAC_BCD_AS (0x08 * FELUCCA_UAC)
+#define CDC_IF (2 + FELUCCA_UAC)
+#define UAC_AS_IF 2u
+#define CFG_LEN (101 + 74 * FELUCCA_CDC + 74 * FELUCCA_UAC + 3 * FELUCCA_UAC_48K)
+#define USB_NIF (2 + FELUCCA_UAC + 2 * FELUCCA_CDC)
+#if FELUCCA_CDC
+static const uint8_t DEV_DESC[18] = {18, 1, 0x00, 0x02, 0xEF, 0x02, 0x01, 64, 0x09, 0x12, 0x01, 0x00,
+                                     0x01 + 0x10 * (FELUCCA_UAC + FELUCCA_UAC_48K) + UAC_BCD_AS, 0x03, 1, 2, 0, 1};   /* misc/IAD */
+static const uint8_t CFG_DESC[] = {
+    9, 2, CFG_LEN & 0xFF, CFG_LEN >> 8, USB_NIF, 1, 0, 0x80, 50,
+    8, 0x0B, 0, 2 + FELUCCA_UAC, 1, 1, 0, 0,            /* IAD: audio + MIDI (IF 0-1, 0-2) */
+#else
 #ifndef FELUCCA_USB_PID
 #define FELUCCA_USB_PID 0x0001   /* the update loader is 0x0002 */
 #endif
-#if FELUCCA_USB_LAYOUT < 0 || FELUCCA_USB_LAYOUT > 3
-#error "FELUCCA_USB_LAYOUT is 0..3"
-#endif
-
-#define D_CFG(len, nif) 9, 2, (len) & 0xFF, (len) >> 8, (nif), 1, 0, 0x80, 50
-#define D_IAD(first, n, cls, sub, proto) 8, 0x0B, (first), (n), (cls), (sub), (proto), 0
-#if FELUCCA_UAC_48K
-#define D_FMT 14, 0x24, 2, 1, 2, 2, 16, 2, 0x44, 0xAC, 0x00, 0x80, 0xBB, 0x00,   /* 44100, 48000 */
-#define FMT_LEN 14
-#elif FELUCCA_UAC
-#define D_FMT 11, 0x24, 2, 1, 2, 2, 16, 1, UAC_RATE & 0xFF, (UAC_RATE >> 8) & 0xFF, UAC_RATE >> 16,
-#define FMT_LEN 11
-#else
-#define FMT_LEN 0
-#endif
-#if FELUCCA_UAC
-/* the AC header's collection (Felucca #67): the audio streaming interface first, then the MIDI one. The kernel
- * AppleUSBAudio (macOS up to 15; AUAConfigurationDictionary::parseConfigurationDescriptor) drops a MIDI streaming
- * interface from the collection while it walks it with the count from bInCollection: with MIDI listed first, the
- * next look-up runs past the shortened list, the parser gives up before the audio streaming interface and no
- * audio device appears (MIDI still works). Listed last, MIDI is dropped at the end of the walk. The class spec
- * gives the order no meaning (Linux takes each listed interface on its own); FELUCCA_UAC_AS_FIRST=0: Skiff 1.0
- * .. 1.2's order (MIDI first). The interface numbers do not move. (2.2) That alone did not do it on macOS 13-15:
- * FELUCCA_UAC_MIDI_LAST moves the MIDI interface itself after the audio streaming one (the collection (a) + 1, (a) + 2
- * is then audio streaming, MIDI) */
-#if FELUCCA_UAC_AS_FIRST
-#define AC_COLL(a) (a) + 2, (a) + 1
-#else
-#define AC_COLL(a) (a) + 1, (a) + 2
-#endif
-#define D_AC(a)                                                                                      \
-    9, 4, (a), 0, 0, 1, 1, 0, 0,                                                                     \
-    10, 0x24, 1, 0x00, 0x01, 31, 0, 2, AC_COLL(a),         /* AC header 1.00: audio + MIDI streaming */ \
-    12, 0x24, 2, 1, 0x03, 0x06, 0, 2, 0x03, 0x00, 0, 0,    /* input terminal 1: line, 2 ch (L R) */      \
-    9, 0x24, 3, 2, 0x01, 0x01, 0, 1, 0,                    /* output terminal 2: USB streaming, from 1 */
-#define D_AS(s)                                                                                      \
-    9, 4, (s), 0, 0, 1, 2, 0, 0,                           /* audio streaming, alt 0: no bandwidth */    \
-    9, 4, (s), 1, 1, 1, 2, 0, 0,                           /* alt 1: the stream */                      \
-    7, 0x24, 1, 2, 1, 0x01, 0x00,                          /* AS general: terminal 2, delay 1, PCM */   \
-    D_FMT                                                  /* type I: 2 ch, 16 bit, the rates */        \
-    9, 5, 0x84, 0x05, UAC_MAXP & 0xFF, UAC_MAXP >> 8, 1, 0, 0,   /* EP4 IN isochronous async, 1 ms */   \
-    7, 0x25, 1, 0x01, 0, 0, 0,                             /* CS endpoint: sampling frequency control */
-#else
-#define D_AC(a) 9, 4, (a), 0, 0, 1, 1, 0, 0, 9, 0x24, 1, 0x00, 0x01, 9, 0, 1, (a) + 1,
-#define D_AS(s)
-#endif
-#define D_MIDI(m)                                                                                    \
-    9, 4, (m), 0, 2, 1, 3, 0, 0,                                                                     \
-    7, 0x24, 1, 0x00, 0x01, 0x41, 0x00,                                                              \
-    6, 0x24, 2, 1, 1, 0,                                                                             \
-    6, 0x24, 2, 2, 2, 0,                                                                             \
-    9, 0x24, 3, 1, 3, 1, 2, 1, 0,                                                                    \
-    9, 0x24, 3, 2, 4, 1, 1, 1, 0,                                                                    \
-    9, 5, 0x01, 2, 64, 0, 0, 0, 0,                                                                   \
-    5, 0x25, 1, 1, 1,                                                                                \
-    9, 5, 0x81, 2, 64, 0, 0, 0, 0,                                                                   \
-    5, 0x25, 1, 1, 3,
-#if FELUCCA_UAC_MIDI_LAST                                  /* ((2.2) the collection: (a) + 1 audio streaming, then MIDI) */
-#define D_AUDIO(a) D_AC(a) D_AS((a) + 1) D_MIDI((a) + 2)   /* audio + MIDI from interface a */
-#else
-#define D_AUDIO(a) D_AC(a) D_MIDI((a) + 1) D_AS((a) + 2)
-#endif
-#define AUD_NIF (2 + FELUCCA_UAC)
-#define AUD_LEN (92 + (63 + FMT_LEN) * FELUCCA_UAC)
-#define D_CDC(c)                                                                                     \
-    D_IAD((c), 2, 2, 2, 1),                                /* IAD: CDC ACM */                           \
-    9, 4, (c), 0, 1, 2, 2, 1, 0,                           /* communication */                          \
-    5, 0x24, 0x00, 0x10, 0x01,                             /* header 1.10 */                            \
-    5, 0x24, 0x01, 0x00, (c) + 1,                          /* call management: the data IF */           \
-    4, 0x24, 0x02, 0x02,                                   /* ACM: line coding + state */               \
-    5, 0x24, 0x06, (c), (c) + 1,                           /* union */                                  \
-    7, 5, 0x82, 3, 8, 0, 16,                               /* EP2 IN interrupt (never sent) */          \
-    9, 4, (c) + 1, 0, 2, 0x0A, 0, 0, 0,                    /* data */                                   \
-    7, 5, 0x03, 2, 64, 0, 0,                               /* EP3 OUT bulk */                           \
-    7, 5, 0x83, 2, 64, 0, 0,                               /* EP3 IN bulk */
-#define CDC_LEN 66                                         /* with its IAD */
-#define BCD_LO(cdc)                                                                                  \
-    (0x10 * (FELUCCA_UAC + FELUCCA_UAC_48K) + 0x08 * FELUCCA_UAC_AS_FIRST + 0x80 * FELUCCA_UAC_MIDI_LAST +          \
-     ((cdc) ? 0x01 + 2 * FELUCCA_USB_LAYOUT : 0))
-#define D_DEV(bcdusb, cls, sub, proto, cdc)                                                          \
-    18, 1, (bcdusb) & 0xFF, (bcdusb) >> 8, (cls), (sub), (proto), 64, 0x09, 0x12, FELUCCA_USB_PID & 0xFF, \
-    FELUCCA_USB_PID >> 8, BCD_LO(cdc), 0x03, 1, 2, 0, 1
-
-/* without the console (FELUCCA_CDC=0, or usb_cdc_on = 0): class 0, no IAD, as a plain USB-MIDI / audio device */
-#define CFG_LEN_PLAIN (9 + AUD_LEN)
-static const uint8_t DEV_DESC_PLAIN[18] = {D_DEV(0x0110, 0, 0, 0, 0)};
-static const uint8_t CFG_DESC_PLAIN[] = {D_CFG(CFG_LEN_PLAIN, AUD_NIF), D_AUDIO(0)};
-typedef char cfg_plain_len_ok[sizeof CFG_DESC_PLAIN == CFG_LEN_PLAIN ? 1 : -1];
-#if FELUCCA_CDC
-#define CFG_LEN (9 + 8 + AUD_LEN + CDC_LEN)
-#define USB_NIF (AUD_NIF + 2)
-#if FELUCCA_USB_LAYOUT == 1
-#define AUD_IF_CDC 2u                                      /* the audio function's first interface */
-#define CDC_IF_CDC 0u
-#else
-#define AUD_IF_CDC 0u
-#define CDC_IF_CDC AUD_NIF
-#endif
-#if FELUCCA_USB_LAYOUT == 2
-static const uint8_t DEV_DESC[18] = {D_DEV(0x0200, 0x00, 0x00, 0x01, 1)};
-#elif FELUCCA_USB_LAYOUT == 3
-static const uint8_t DEV_DESC[18] = {D_DEV(0x0200, 0x00, 0x00, 0x00, 1)};
-#else
-static const uint8_t DEV_DESC[18] = {D_DEV(0x0200, 0xEF, 0x02, 0x01, 1)};   /* misc / IAD */
-#endif
+static const uint8_t DEV_DESC[18] = {18, 1, 0x10, 0x01, 0, 0, 0, 64, 0x09, 0x12, FELUCCA_USB_PID & 0xFF,
+                                     FELUCCA_USB_PID >> 8, 0x00 + 0x10 * (FELUCCA_UAC + FELUCCA_UAC_48K) + UAC_BCD_AS, 0x03,
+                                     1, 2, 0, 1};
 static const uint8_t CFG_DESC[] = {
-    D_CFG(CFG_LEN, USB_NIF),
-#if FELUCCA_USB_LAYOUT == 1
-    D_CDC(CDC_IF_CDC)
+    9, 2, CFG_LEN & 0xFF, CFG_LEN >> 8, USB_NIF, 1, 0, 0x80, 50,
 #endif
-    D_IAD(AUD_IF_CDC, AUD_NIF, 1, 1, 0),                  /* IAD: audio + MIDI */
-    D_AUDIO(AUD_IF_CDC)
-#if FELUCCA_USB_LAYOUT != 1
-    D_CDC(CDC_IF_CDC)
+    9, 4, 0, 0, 0, 1, 1, 0, 0,
+#if FELUCCA_UAC
+    /* AC header 1.00, its collection: the audio streaming interface first, then the MIDI one (2.7.2, after
+     * Felucca 1.5.1, #67). macOS up to 15 (the kernel's AppleUSBAudio, parseConfigurationDescriptor) drops the
+     * MIDI streaming interface from the collection while it walks it with bInCollection's count: MIDI listed
+     * first, the walk runs past the shortened list and gives up before the audio streaming interface, and no
+     * audio input appears (MIDI still works). Listed last, MIDI is dropped at the end. The class spec gives the
+     * order no meaning (Windows, Linux, macOS 26 take each listed interface on its own) */
+    10, 0x24, 1, 0x00, 0x01, 31, 0, 2, UAC_AS_IF, 1,
+    12, 0x24, 2, 1, 0x03, 0x06, 0, 2, 0x03, 0x00, 0, 0, /* input terminal 1: line, 2 ch (L R) */
+    9, 0x24, 3, 2, 0x01, 0x01, 0, 1, 0,                 /* output terminal 2: USB streaming, from 1 */
+#else
+    9, 0x24, 1, 0x00, 0x01, 9, 0, 1, 1,
+#endif
+    9, 4, 1, 0, 2, 1, 3, 0, 0,
+    7, 0x24, 1, 0x00, 0x01, 0x41, 0x00,
+    6, 0x24, 2, 1, 1, 0,
+    6, 0x24, 2, 2, 2, 0,
+    9, 0x24, 3, 1, 3, 1, 2, 1, 0,
+    9, 0x24, 3, 2, 4, 1, 1, 1, 0,
+    9, 5, 0x01, 2, 64, 0, 0, 0, 0,
+    5, 0x25, 1, 1, 1,
+    9, 5, 0x81, 2, 64, 0, 0, 0, 0,
+    5, 0x25, 1, 1, 3,
+#if FELUCCA_UAC
+    9, 4, UAC_AS_IF, 0, 0, 1, 2, 0, 0,                  /* IF2 audio streaming, alt 0: no bandwidth */
+    9, 4, UAC_AS_IF, 1, 1, 1, 2, 0, 0,                  /* alt 1: the stream */
+    7, 0x24, 1, 2, 1, 0x01, 0x00,                       /* AS general: terminal 2, delay 1, PCM */
+#if FELUCCA_UAC_48K
+    14, 0x24, 2, 1, 2, 2, 16, 2, 0x44, 0xAC, 0x00, 0x80, 0xBB, 0x00,   /* type I: 2 ch, 16 bit, 44100 / 48000 */
+#else
+    11, 0x24, 2, 1, 2, 2, 16, 1, UAC_RATE & 0xFF, (UAC_RATE >> 8) & 0xFF, UAC_RATE >> 16,
+                                                        /* type I: 2 ch, 16 bit, one rate */
+#endif
+    9, 5, 0x84, 0x05, UAC_MAXP & 0xFF, UAC_MAXP >> 8, 1, 0, 0,   /* EP4 IN isochronous async, 1 ms */
+    7, 0x25, 1, 0x01, 0, 0, 0,                          /* CS endpoint: sampling frequency control */
+#endif
+#if FELUCCA_CDC
+    8, 0x0B, CDC_IF, 2, 2, 2, 1, 0,                     /* IAD: CDC ACM (IF 2-3, 3-4) */
+    9, 4, CDC_IF, 0, 1, 2, 2, 1, 0,                     /* communication */
+    5, 0x24, 0x00, 0x10, 0x01,                          /* header 1.10 */
+    5, 0x24, 0x01, 0x00, CDC_IF + 1,                    /* call management: the data IF */
+    4, 0x24, 0x02, 0x02,                                /* ACM: line coding + state */
+    5, 0x24, 0x06, CDC_IF, CDC_IF + 1,                  /* union */
+    7, 5, 0x82, 3, 8, 0, 16,                            /* EP2 IN interrupt (never sent) */
+    9, 4, CDC_IF + 1, 0, 2, 0x0A, 0, 0, 0,              /* data */
+    7, 5, 0x03, 2, 64, 0, 0,                            /* EP3 OUT bulk */
+    7, 5, 0x83, 2, 64, 0, 0,                            /* EP3 IN bulk */
 #endif
 };
 typedef char cfg_len_ok[sizeof CFG_DESC == CFG_LEN ? 1 : -1];
-static uint8_t usb_cdc_on = FELUCCA_CDC_DEFAULT != 0;      /* the console is presented (read by the TIMER5 ISR) */
-#define USB_CDC_ON usb_cdc_on
-#define AUD_IF (usb_cdc_on ? AUD_IF_CDC : 0u)
+#if FELUCCA_CDC
+/* SLOOP 2.4, after Felucca 1.0.3 (#67): menu USB SERIAL. ON presents the serial console as before (the
+ * descriptors above, byte for byte); OFF, the default, presents the device as a FELUCCA_CDC=0 build does: class 0,
+ * no IAD, audio + MIDI only (the same bytes: tests/uac_test.c compares them). With the console, macOS 13-15 let
+ * Apple's CDC composite driver take the device and the USB audio input never appears. The console is a developer
+ * tool; the editor, the installer and the soft key use USB-MIDI. Read once, before usb_start (main.c: the settings
+ * are loaded first), so the host sees one device from the start */
+static uint8_t usb_cdc_on;
+static const uint8_t DEV_DESC_PLAIN[18] = {18, 1, 0x10, 0x01, 0, 0, 0, 64, 0x09, 0x12, 0x01, 0x00,
+                                           0x00 + 0x10 * (FELUCCA_UAC + FELUCCA_UAC_48K) + UAC_BCD_AS, 0x03, 1, 2, 0, 1};
+#define CFG_PLAIN_LEN (CFG_LEN - 74)                    /* without the audio IAD (8) and the CDC block (66) */
+static uint8_t cfg_plain[CFG_PLAIN_LEN];
+static const uint8_t *cfg_plain_get(void)
+{
+    if (!cfg_plain[0]) {
+        memcpy(cfg_plain, CFG_DESC, 9);
+        cfg_plain[2] = CFG_PLAIN_LEN & 0xFF;
+        cfg_plain[3] = CFG_PLAIN_LEN >> 8;
+        cfg_plain[4] = USB_NIF - 2;
+        memcpy(cfg_plain + 9, CFG_DESC + 17, CFG_PLAIN_LEN - 9);
+    }
+    return cfg_plain;
+}
+static int usb_cdc_now(void) { return usb_cdc_on; }   /* (the menu: what this start presents) */
 #else
-#define DEV_DESC DEV_DESC_PLAIN
-#define CFG_DESC CFG_DESC_PLAIN
-#define USB_CDC_ON 0
-#define AUD_IF 0u
+static int usb_cdc_now(void) { return 0; }
 #endif
-#define UAC_AS_IF (AUD_IF + 2u - FELUCCA_UAC_MIDI_LAST)        /* ((2.2) MIDI last: the audio streaming one is 1) */
 static const uint8_t STR0[4] = {4, 3, 0x09, 0x04};
 static const uint8_t STR1[] = {42, 3, 'H', 0, 0xFC, 0, 'g', 0, 'e', 0, 'l', 0, 't', 0, 'o', 0, 'n', 0, ' ', 0, 'I', 0,
                                'n', 0, 's', 0, 't', 0, 'r', 0, 'u', 0, 'm', 0, 'e', 0, 'n', 0, 't', 0, 's', 0};
+#if FELUCCA_STATTIC
 #ifdef FELUCCA_LOADER
+static const uint8_t STR2[]={30,3,'S',0,'T',0,'A',0,'T',0,'T',0,'I',0,'C',0,' ',0,'U',0,'p',0,'d',0,'a',0,'t',0,'e',0};
+#else
+static const uint8_t STR2[]={16,3,'S',0,'T',0,'A',0,'T',0,'T',0,'I',0,'C',0};
+#endif
+#elif defined(FELUCCA_LOADER)
 static const uint8_t STR2[] = {30, 3, 'F', 0, 'e', 0, 'l', 0, 'u', 0, 'c', 0, 'c', 0, 'a', 0, ' ', 0, 'U', 0, 'p', 0,
                                'd', 0, 'a', 0, 't', 0, 'e', 0};
 #else
 static const uint8_t STR2[] = {16, 3, 'F', 0, 'e', 0, 'l', 0, 'u', 0, 'c', 0, 'c', 0, 'a', 0};
 #endif
 
+#if FELUCCA_UAC_48K
+/* SLOOP 2.7 beta: menu AUDIO > USB RATE, for the hosts that record the stream badly (reports: Android phones,
+ * distorted, while a computer records clean). main.c sets usb_rate_mode before usb_start; a change takes effect
+ * at the next start, as USB SERIAL does (the host reads the descriptors when the FM-1 appears).
+ *   0 AUTO  44.1 and 48 kHz, the host picks: the descriptors of 2.5 / 2.6 (2.7.2: with the AC collection's new
+ *           order, bcdDevice x.28);
+ *   1 44.1  44.1 kHz only: the descriptors of a FELUCCA_UAC_48K=0 build (SLOOP 2.4's) byte for byte: the format
+ *           of one rate, packets of 46 frames at most, bcdDevice x.1x; the resampler never runs, the samples
+ *           go out as rendered;
+ *   2 48    48 kHz only (bcdDevice x.3x, a version of its own: hosts cache descriptors per version).
+ * The copies are made from the descriptors above (CDC or not) when the host asks for them. */
+static uint8_t usb_rate_mode;
+static uint8_t dev_rate[18], cfg_rate[CFG_LEN];
+static void rate_desc(const uint8_t **d, uint16_t *l, int cfg)
+{
+    const uint8_t *src = *d;
+    uint32_t n = *l, off, k = 0;
+    if (!usb_rate_mode || usb_rate_mode > 2u)
+        return;
+    if (!cfg) {
+        memcpy(dev_rate, src, 18);
+        dev_rate[12] = (uint8_t)(usb_rate_mode == 1u ? dev_rate[12] - 0x10u : dev_rate[12] + 0x10u);
+        *d = dev_rate;
+        return;
+    }
+    for (off = 0; off < n && src[off] >= 2u && off + src[off] <= n; off += src[off]) {
+        const uint8_t *p = src + off;
+        uint8_t *q = cfg_rate + k;
+        if (p[0] == 14u && p[1] == 0x24u && p[2] == 2u && p[3] == 1u && p[7] == 2u) {   /* type I: one rate */
+            memcpy(q, p, 11);
+            q[0] = 11u;
+            q[7] = 1u;
+            if (usb_rate_mode == 2u)
+                memcpy(q + 8, p + 11, 3);              /* 48000 */
+            k += 11u;
+            continue;
+        }
+        memcpy(q, p, p[0]);
+        if (usb_rate_mode == 1u && p[0] == 9u && p[1] == 5u && p[2] == 0x84u) {   /* 46 frames at most */
+            q[4] = (uint8_t)((46u * 4u) & 0xFFu);
+            q[5] = (uint8_t)((46u * 4u) >> 8);
+        }
+        k += p[0];
+    }
+    cfg_rate[2] = (uint8_t)(k & 0xFFu);
+    cfg_rate[3] = (uint8_t)(k >> 8);
+    *d = cfg_rate;
+    *l = (uint16_t)k;
+}
+static int usb_rate_now(void) { return usb_rate_mode; }   /* (the menu: what this start offers) */
+#else
+static void rate_desc(const uint8_t **d, uint16_t *l, int cfg) { (void)d, (void)l, (void)cfg; }
+static int usb_rate_now(void) { return 0; }
+#endif
+
 static int get_desc(uint32_t wvalue, const uint8_t **d, uint16_t *l)
 {
     switch (wvalue >> 8) {
     case 1:
-        *d = USB_CDC_ON ? DEV_DESC : DEV_DESC_PLAIN;
-        *l = 18;
+        *d = DEV_DESC;
+        *l = sizeof DEV_DESC;
+#if FELUCCA_CDC
+        if (!usb_cdc_on)
+            *d = DEV_DESC_PLAIN;
+#endif
+        rate_desc(d, l, 0);
         return 1;
     case 2:
-        *d = USB_CDC_ON ? CFG_DESC : CFG_DESC_PLAIN;
-        *l = (uint16_t)(USB_CDC_ON ? sizeof CFG_DESC : sizeof CFG_DESC_PLAIN);
+        *d = CFG_DESC;
+        *l = sizeof CFG_DESC;
+#if FELUCCA_CDC
+        if (!usb_cdc_on) {
+            *d = cfg_plain_get();
+            *l = CFG_PLAIN_LEN;
+        }
+#endif
+        rate_desc(d, l, 1);
         return 1;
     case 3:
         switch (wvalue & 0xFFu) {
@@ -567,20 +446,26 @@ static void uac_stream(uint32_t alt)                    /* SET_INTERFACE, config
         uac.fill_hi = 0;
     }
 }
+#endif
 
-/* SET_CUR sampling frequency (any time: before or after SET_INTERFACE; a bus reset goes back to 44.1).
- * 48 kHz when built with it and asked for (the nearer of the two), else 44.1. A change restarts the
- * stream: silence packets until the next render primes the ring at the new rate. */
+#if FELUCCA_UAC
+/* SET_CUR sampling frequency (any time: before or after SET_INTERFACE; a bus reset or a new configuration go
+ * back to 44.1). 48 kHz when built with it and asked for (the nearer of the two), else 44.1. A change restarts
+ * the stream: silence packets until the next render primes the ring at the new rate. */
 static void uac_rate_set(uint32_t hz)
 {
-    uint8_t r48 = FELUCCA_UAC_48K && hz >= (UAC_RATE + 48000u) / 2u;
+    uint8_t r48 = (uint8_t)(FELUCCA_UAC_48K && hz >= (UAC_RATE + 48000u) / 2u);
+#if FELUCCA_UAC_48K
+    if (usb_rate_mode == 1u || usb_rate_mode == 2u)
+        r48 = (uint8_t)(usb_rate_mode == 2u);           /* (menu USB RATE: the one rate described) */
+#endif
     if (r48 == uac.r48)
         return;
     uac.go = 0;
     RING_PUBLISH();
     uac.r48 = r48;
     uac.acc = 0;
-    uac.pkts = uac.frames = 0;                          /* the measured rate (console) starts again */
+    uac.pkts = uac.frames = 0;
 }
 #endif
 
@@ -598,8 +483,6 @@ static void ep1_config(void)
     sie_wr(S_INTRRX1E, 0x02);
     fm1_usb_ep_enable(1u << 1);
 #if FELUCCA_CDC
-    if (!usb_cdc_on)
-        goto no_cdc;                                    /* presented without the console: EP2 / EP3 unused */
     fm1_usb_ep_txbuf(2, ep2tx);
     sie_wr(S_INDEX, 2);
     sie_wr(S_TXMAXP, 0xFF);
@@ -617,7 +500,6 @@ static void ep1_config(void)
     sie_wr(S_INTRRX1E, 0x0A);
     fm1_usb_ep_enable((1u << 2) | (1u << 3));
     cdc.rx_pend = 1;                                    /* look once: a packet may already wait */
-no_cdc:;
 #endif
 #if FELUCCA_UAC
     fm1_usb_ep4_txbuf(ep4tx);
@@ -744,9 +626,6 @@ static void ep0_service(void)
         if (s[2] > 1u)
             goto stall;
         usb.config = s[2];
-#ifndef FELUCCA_LOADER
-        mo_r = mo_w;                                    /* ((2.2) MIDI OUT: nothing stale for a new host) */
-#endif
         if (usb.config == 1u)
             ep1_config();
         else
@@ -788,7 +667,11 @@ static void ep0_service(void)
         e0_send(zero2, 1, wlength);
         return;
     case 0x0201: {                                      /* CLEAR_FEATURE(ENDPOINT_HALT): data toggle reset */
-        uint32_t ep = s[4] & 0x0Fu, last = USB_CDC_ON ? 3u : 1u;
+#if FELUCCA_CDC
+        uint32_t ep = s[4] & 0x0Fu, last = usb_cdc_on ? 3u : 1u;   /* (USB SERIAL OFF: EP2 / EP3 are not described) */
+#else
+        uint32_t ep = s[4] & 0x0Fu, last = 1u;
+#endif
 #if FELUCCA_UAC
         if (wvalue == 0 && s[4] == 0x84u)
             goto ack;                                   /* isochronous: no halt, no toggle */
@@ -806,8 +689,6 @@ static void ep0_service(void)
     }
 #if FELUCCA_CDC
     case 0x2120:                                        /* SET_LINE_CODING: 7 bytes follow */
-        if (!usb_cdc_on)
-            goto stall;
         if (wlength) {
             cdc.e0_rx = 1;
             sie_wr(S_INDEX, 0);
@@ -816,18 +697,12 @@ static void ep0_service(void)
         }
         goto ack;
     case 0xA121:                                        /* GET_LINE_CODING */
-        if (!usb_cdc_on)
-            goto stall;
         e0_send(cdc.line, 7, wlength);
         return;
     case 0x2122:                                        /* SET_CONTROL_LINE_STATE */
-        if (!usb_cdc_on)
-            goto stall;
         cdc.dtr = s[2] & 1u;
         goto ack;
     case 0x2123:                                        /* SEND_BREAK */
-        if (!usb_cdc_on)
-            goto stall;
         goto ack;
 #endif
 #if FELUCCA_UAC
@@ -851,7 +726,9 @@ static void ep0_service(void)
         if (s[4] != 0x84u || s[3] != 1u)
             goto stall;
 #if FELUCCA_UAC_48K
-        if (s[1] == 0x83u || (s[1] == 0x81u && uac.r48)) {
+        if (s[1] == 0x81u ? uac.r48 != 0u : s[1] == 0x83u ? usb_rate_mode != 1u : usb_rate_mode == 2u) {
+                                                        /* CUR: the rate now; MAX 48 (44.1 in USB RATE 44.1);
+                                                         * MIN 44.1 (48 in USB RATE 48) */
             e0_send(RATE48, 3, wlength);
             return;
         }
@@ -926,52 +803,52 @@ static void sysex_byte(uint8_t b)
     }
 }
 
-static void midi_in_event(uint32_t pkt)                 /* one USB-MIDI event packet */
+/* one USB-MIDI event packet: SysEx bytes to sysex_byte, channel voice messages and the clock /
+ * transport realtime ones to the MIDI ring; a malformed packet (status not matching its CIN, a data
+ * byte with bit 7) is ignored (after Felucca 1.0) */
+static void midi_in_event(uint32_t pkt)
 {
     uint32_t cin = pkt & 15u, st = (pkt >> 8) & 0xFFu;
-    if (cin >= 4u && cin <= 7u) {
+    if (cin >= 4u && cin <= 7u) {                      /* SysEx */
         uint32_t k, nb = cin == 4u || cin == 7u ? 3u : cin == 6u ? 2u : 1u;
         for (k = 0; k < nb; k++)
             sysex_byte((uint8_t)(pkt >> (8u * (k + 1u))));
         return;
     }
-    if (st >= 0x80u && st < 0xF8u) {
-        usb.sx_on = 0;                                 /* channel/system common also ends SysEx */
+    if (st >= 0x80u && st < 0xF8u) {                   /* channel / system common also ends a SysEx */
+        usb.sx_on = 0;
 #if FELUCCA_OTA
         sx_collect = 0;
 #endif
     }
-    if (cin == 0xFu && (st == 0xF8u || st == 0xFAu || st == 0xFBu || st == 0xFCu)) {
-        midi_enqueue(0xFu | st << 8, 1u);
-#if BOARD_SMK37 && !defined(FELUCCA_LOADER)
-        if (MSET(15, 17) & MO_THRU_ON)                 /* ((2.2) THRU: USB IN to the TRS jack's MIDI OUT) */
-            smk_uart_tx_rt(st);
-#endif
+    if (cin == 0xFu && (st == 0xF8u || st == 0xFAu || st == 0xFBu || st == 0xFCu)) {   /* clock, transport */
+        if (mi_w - mi_r < MQ) {
+            midi_in_q[mi_w % MQ] = 0xFu | st << 8;
+            RING_PUBLISH();
+            mi_w++;
+        }
         return;
     }
-#ifdef FELUCCA_LOADER
     if (cin >= 8u && cin <= 0xEu && (st >> 4) == cin && !((pkt >> 16) & 0x80u) &&
-        ((cin == 0xCu || cin == 0xDu) || !(pkt & 0x80000000u))) {
-#else
-    if (((cin >= 8u && cin <= 0xEu && (st >> 4) == cin) || (cin == 3u && st == 0xF2u)) && !((pkt >> 16) & 0x80u) &&
-        ((cin == 0xCu || cin == 0xDu) || !(pkt & 0x80000000u))) {   /* ((2.2) and Song Position) */
-#endif
-        midi_enqueue(pkt, 1u);
-#if BOARD_SMK37 && !defined(FELUCCA_LOADER)
-        if (MSET(15, 17) & MO_THRU_ON) {               /* (whole messages: TIMER5 is the jack's one writer) */
-            smk_uart_tx_put(st);
-            smk_uart_tx_put((pkt >> 16) & 0x7Fu);
-            if ((st & 0xE0u) != 0xC0u)
-                smk_uart_tx_put((pkt >> 24) & 0x7Fu);
+        (cin == 0xCu || cin == 0xDu || !(pkt & 0x80000000u))) {
+        if (mi_w - mi_r < MQ) {
+            midi_in_q[mi_w % MQ] = pkt;
+            RING_PUBLISH();
+            mi_w++;
+        } else if (cin == 8u || cin == 9u) {
+            midi_in_lost = 1;
         }
-#endif
+        return;
     }
+    if (cin >= 8u)
+        usb.rx_bad++;
 }
 
-/* one EP1 OUT packet (<= 16 events) into the MIDI ring, or 0: fewer than 16 + 8 slots free, so the packet
- * stays (the host is NAKed) and is retried next poll; a burst never overflows the ring (that panics), and
- * 8 slots stay for TRS MIDI, which shares the ring and cannot wait (31250 baud: about 3 messages a half).
- * The update loader never drains the ring (it wants SysEx only): no back-pressure there. */
+/* one EP1 OUT packet (<= 16 events) into the MIDI ring, or 0: fewer than 16 + 8 slots free, so the
+ * packet stays (the host is NAKed) and is taken on a later poll: a burst from a DAW never drops a
+ * note-off (0.9 dropped what did not fit: hanging notes), and 8 slots stay for the TRS input, which
+ * shares the ring and cannot wait. The update loader never drains the ring: no back-pressure there.
+ * (After Felucca 1.0.) */
 #define EP1_ROOM (16u + 8u)
 static int ep1_take(const uint8_t *b, uint32_t n)
 {
@@ -998,8 +875,10 @@ static void ep1_rx(void)                                /* leaves the packet (NA
     if (n > 64u)
         n = 64u;
     fm1_usb_rx_sync();
-    if (!ep1_take(ep1rx, n))
-        return;                                         /* rx_pend stays: retried next poll */
+    if (!ep1_take(ep1rx, n)) {
+        usb.rx_held++;
+        return;                                         /* rx_pend stays: taken on a later poll */
+    }
     usb.rx_pend = 0;
     usb.rx_pkts++;
     csr = (csr & ~0x164u) | 0x10u;
@@ -1053,7 +932,6 @@ static void ota_frame_done(void)
 }
 #endif
 
-#ifdef FELUCCA_LOADER
 static void ep1_tx(void)
 {
     uint32_t csr, n = 0;
@@ -1101,54 +979,6 @@ static void ep1_tx(void)
     sie_wr(S_TXCSR1, sie_rd(S_TXCSR1) | 0x01u);
     usb.tx_pkts++;
 }
-#else
-/* (2.2) TIMER5: from usb_poll, and nested in a render as uac_service (main.c: INDEX set on every access, TIMER5 never
- * preempts itself). The editor's SysEx first, never split by notes; then the MIDI OUT events that are due (mo_take).
- * A packet the host has not taken in 20 ms (40 polls: no app has the port open) is dropped (FlushFIFO), and so on: an
- * app opening it later gets what plays then, not a stale note-on whose note-off went nowhere */
-static void ep1_tx(void)
-{
-    uint32_t csr, n = 0, now = mo.now;
-#if FELUCCA_OTA
-    if (so_w == so_r && (mo_w == mo_r || (int32_t)(now - mo.due[mo_r % MQO]) < 0))
-        return;
-#else
-    if (mo_w == mo_r || (int32_t)(now - mo.due[mo_r % MQO]) < 0)
-        return;
-#endif
-    sie_wr(S_INDEX, 1);
-    csr = sie_rd(S_TXCSR1);
-    if (csr & 0x01u) {                                  /* previous packet still pending */
-        if (++mo.wait >= 40u) {
-            sie_wr(S_TXCSR1, 0x08);                     /* FlushFIFO */
-            mo.wait = 0;
-            mo.flushes++;
-        }
-        return;
-    }
-    mo.wait = 0;
-    if (csr & 0x80u)
-        sie_wr(S_TXCSR1, csr & ~0x80u);
-#if FELUCCA_OTA
-    while (so_r != so_w && n < 64u) {
-        uint32_t pkt = sx_out_q[so_r % SXQ];
-        ep1tx[n] = (uint8_t)pkt;
-        ep1tx[n + 1] = (uint8_t)(pkt >> 8);
-        ep1tx[n + 2] = (uint8_t)(pkt >> 16);
-        ep1tx[n + 3] = (uint8_t)(pkt >> 24);
-        n += 4u;
-        so_r++;
-    }
-    if (!sx_busy && so_r == so_w)
-#endif
-        n += mo_take(ep1tx + n, 64u - n, now);
-    if (!n)
-        return;
-    fm1_usb_ep_send(1, ep1tx, n);
-    sie_wr(S_TXCSR1, sie_rd(S_TXCSR1) | 0x01u);
-    usb.tx_pkts++;
-}
-#endif
 
 #if FELUCCA_CDC
 static void ep3_rx(void)                                /* leaves the packet (NAK) while the ring is full */
@@ -1242,9 +1072,9 @@ static inline int32_t uac_s16(int32_t v)
 
 #if FELUCCA_UAC_48K
 /* 44.1 -> 48 kHz (x 160 / 147), one block: each input frame enters the history, then the 1 or 2 output
- * frames whose newest input it is: phase ph, the window of UAC_FIR_N frames ending at it, the taps of
- * phase ph (or of 159 - ph backwards: the prototype is symmetric), Q15 ((Skiff 2.0) was Q30) into
- * 64-bit sums. */
+ * frames whose newest input it is: phase ph, the window of UAC_FIR_N frames ending at it, the taps of phase
+ * ph (or of 159 - ph backwards: the prototype is symmetric), Q15 into 32-bit sums (the taps' absolute sum
+ * stays under 2.0: no overflow) */
 static __attribute__((noinline)) void uac_tap48(const int32_t *out, uint32_t n)
 {
     uint32_t w = ua_w, i, j, k = 0, h = rs.w, ph = rs.ph;
@@ -1261,34 +1091,24 @@ static __attribute__((noinline)) void uac_tap48(const int32_t *out, uint32_t n)
         s = (h - UAC_FIR_N) & (RS_H - 1u);              /* the window: oldest .. this frame */
         do {
             const int16_t *x = &rs.l[s];                /* R: x[2 * RS_H] */
-            int64_t al = 0, ar = 0;
-            int32_t yl, yr;
+            int32_t al = 1 << (UAC_FIR_Q - 1), ar = 1 << (UAC_FIR_Q - 1);
             if (ph < UAC_FIR_L / 2u) {
                 const int16_t *c = UAC_FIR[ph];
                 for (j = UAC_FIR_N; j; j--, x++) {
                     int32_t t = *c++;
-                    al += (int64_t)t * x[0];
-                    ar += (int64_t)t * x[2u * RS_H];
+                    al += t * x[0];
+                    ar += t * x[2u * RS_H];
                 }
             } else {
                 const int16_t *c = &UAC_FIR[UAC_FIR_L - 1u - ph][UAC_FIR_N - 1u];
                 for (j = UAC_FIR_N; j; j--, x++) {
                     int32_t t = *c--;
-                    al += (int64_t)t * x[0];
-                    ar += (int64_t)t * x[2u * RS_H];
+                    al += t * x[0];
+                    ar += t * x[2u * RS_H];
                 }
             }
-            yl = uac_s16((int32_t)((al + (1 << (UAC_FIR_Q - 1))) >> UAC_FIR_Q));
-            yr = uac_s16((int32_t)((ar + (1 << (UAC_FIR_Q - 1))) >> UAC_FIR_Q));
-#if FELUCCA_UAC_TONE
-            {   /* bench: the triangles at 48 kHz (not resampled), one per output frame */
-                uint32_t t = rs.tone, q = t < 50u ? t : 100u - t, q2 = t < 50u ? 50u - t : t - 50u;
-                rs.tone = t == 99u ? 0u : t + 1u;
-                yl = (int32_t)q * 1000 - 25000;
-                yr = (int32_t)q2 * 1000 - 25000;
-            }
-#endif
-            ua_ring[(w + k++) & (UA_N - 1u)] = (uint32_t)(uint16_t)yl | (uint32_t)(uint16_t)yr << 16;
+            ua_ring[(w + k++) & (UA_N - 1u)] = (uint32_t)(uint16_t)uac_s16(al >> UAC_FIR_Q) |
+                                               (uint32_t)(uint16_t)uac_s16(ar >> UAC_FIR_Q) << 16;
             ph += UAC_FIR_M;
         } while (ph < UAC_FIR_L);
         ph -= UAC_FIR_L;
@@ -1422,8 +1242,8 @@ static void usb_poll(void)                              /* TIMER5 ISR, 2 kHz */
     uint32_t iu, it, ir;
     if (!usb.up)
         return;
-    if (fm1_usb_sof_take()) {                           /* SOF pending: NOT a reliable "host is there" */
-                                                        /* (it keeps firing with the cable out) */
+    if (fm1_usb_sof_take()) {                           /* SOF pending: not a reliable "host is there", */
+                                                        /* it keeps firing with the cable out */
         usb.sof_seen++;
         usb.no_sof = 0;
     } else if (++usb.no_sof > usb.max_gap) {
@@ -1491,13 +1311,13 @@ static void usb_poll(void)                              /* TIMER5 ISR, 2 kHz */
     if (it & 0x01u)
         ep0_service();
     if (ir & 0x02u)
-        usb.rx_pend = 1;
-    if (usb.rx_pend)                                    /* not every poll: 3 SIE round trips each */
+        usb.rx_pend = 1;                                /* (the flag reads once: remember the packet) */
+    if (usb.rx_pend)
         ep1_rx();
     if (usb.config)
         ep1_tx();
 #if FELUCCA_CDC
-    if (usb.config && usb_cdc_on) {
+    if (usb.config) {
         if (ir & 0x08u)
             cdc.rx_pend = 1;
         if (cdc.rx_pend)                                /* not every poll: 3 SIE round trips each */
@@ -1546,24 +1366,3 @@ static void usb_detach(void)
     usb.up = 0;
     fm1_usb_off();
 }
-
-#if FELUCCA_CDC
-/* Present the device with or without the serial console (main loop; at boot before usb_start, or later
- * from a setting). A change while attached drops off the bus; usb_retry attaches again within a second
- * with the other descriptors, and the host enumerates the device afresh. */
-static __attribute__((unused)) void usb_cdc_switch(uint32_t on)
-{
-    on = on != 0;
-    if (on == usb_cdc_on)
-        return;
-    if (usb.up) {
-        usb.up = 0;                                     /* usb_poll (TIMER5) stops before the SIE goes */
-        RING_PUBLISH();
-        fm1_usb_off();
-    }
-    usb.config = 0;
-    cdc.dtr = 0;                                        /* the console stops writing */
-    cdc.rx_pend = 0;
-    usb_cdc_on = (uint8_t)on;
-}
-#endif

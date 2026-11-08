@@ -5,64 +5,39 @@
  *
  * The host serves the package ("logical image") with cmd 0x30 reads (ota.c).
  * The loader:
- *   1. reads the UFW header and finds flash.bin, which must be exactly
- *      [0, LDR_APP_HI): the head and this board's app area (the PRCT end), so
- *      another board's package (its app area another size) is refused;
+ *   1. reads the UFW header and finds flash.bin;
  *   2. checks that the package's app area decrypts with THIS chip's key
  *      (taken from isd_config.ini in the device's own flash head), so a
  *      package for another key is refused before anything is erased;
- *   2b. reads the whole flash.bin once and checks it against the CRC16 of its
- *      UFW entry (the vendor tools' check), keeping each app sector's CRC16:
- *      a damaged or truncated package is refused before anything is erased;
  *   3. writes ONLY the app area [0x4000, 0x93000), sector by sector, skipping
- *      sectors that are already equal, and verifies each one; a sector that
- *      comes in different from the checked pass is read again, never written;
- *      the flash head (SPL, isd_config) is never written;
- *   4. asks 0xF0000000 ("success"), then invalidates the update record (RAM
- *      and flash: 4K boundary - 256 between 0x93000 and 0xFC000, outside
- *      Felucca's store, where only user data lives) so the SPL boots the new
- *      app, and resets.
- * Power loss during 3: the record is still there, and a cut leaves no app to
- * start: 3 erases the app's first sector before any other write and writes it
- * last (the SMK-37 Pro's boot stage was seen to start a valid app over a
- * pending record). The SPL then runs the loader again on the next power-on and
- * the host can resume.
+ *      sectors that are already equal, and verifies each one; the flash head
+ *      (SPL, isd_config) is never written;
+ *   4. checks the CRC16 the package stores for flash.bin against everything it
+ *      was served (the head too, which it never writes; a mismatch: up to two
+ *      more passes, rewriting what differs), asks 0xF0000000 ("success"), then
+ *      invalidates the update record (RAM and flash) so the SPL boots the new
+ *      app, and resets. A damaged package or no "success" leaves the record:
+ *      the loader stays (also after a power cycle) and the host can resume.
+ * Power loss during 3: the record is still there, the SPL runs the loader
+ * again on the next power-on and the host can resume.
  *
- * Hooks from the platform (loader.c, ldr_test.c):
+ * Hooks from the platform (loader.c, tests/ldr_test.c):
  *   ldr_fread(off, p, n)  ldr_erase(off)  ldr_prog(off, p, n)   flash, 0 = ok
  *   ldr_record_clear()    forget the RAM update record
+ *   ldr_flash_known()     the flash chip is the 1 MiB part SLOOP's storage expects (else nothing is
+ *                         written: the update records go and the old firmware starts again)
  *   ldr_progress(done, total)
  * plus the ota.c hooks (frames, time, idle). */
 #define LDR_APP_LO 0x4000u
-#if BOARD_SMK37
-/* SMK-37 Pro: app area up to the stock PRCT end; records only in the VM, so ldr_records_drop can never
- * erase BTIF / USRTRIM (0xC0000..0xC1FFF, the key calibration) or anything above */
-#define LDR_APP_HI 0x9D000u
-#define LDR_REC_LO 0x9D000u
-#define LDR_REC_HI 0xC0000u
-/* records are dropped in the whole VM, where the stock app may have staged its own (its staging address is only
- * known at run time): the store there holds only Skiff's objects (commit records at +0; the samples and the pattern pool are in
- * USRFLASH 0xC2000.., outside this window), so no skipped range */
-#define LDR_DATA_LO 0u
-#define LDR_DATA_HI 0u
-_Static_assert(LDR_APP_HI <= LDR_REC_LO && LDR_REC_HI <= 0xC0000u && LDR_APP_LO >= 0x4000u,
-               "SMK loader windows must stay below BTIF / USRTRIM and above the head");
-#else
 #define LDR_APP_HI 0x93000u
 #define LDR_REC_LO 0x93000u                     /* update records live above the app ... */
-#define LDR_REC_HI 0xFC000u                     /* ... and below Felucca's globals (Felucca's records: 0xE4F00, */
-#define LDR_DATA_LO 0x97000u                    /* the stock firmware's: 0xE8F00), never in Felucca's store, whose */
-#define LDR_DATA_HI 0xE0000u                    /* bytes (user samples) the host writes */
-#endif
-#define LDR_NSEC ((LDR_APP_HI - LDR_APP_LO) >> 12)
-#ifndef LDR_STAGE
-#define LDR_STAGE(stage, sector) ((void)0)       /* (the SMK loader: its start record, loader.c ldr_crumb.h) */
-#endif
+#define LDR_REC_HI 0xFC000u                     /* ... and below Felucca's globals */
 
 static int ldr_fread(uint32_t off, void *p, uint32_t n);
 static int ldr_erase(uint32_t off);
 static int ldr_prog(uint32_t off, const void *p, uint32_t n);
 static void ldr_record_clear(void);
+static int ldr_flash_known(void);
 static void ldr_progress(uint32_t done, uint32_t total);
 
 /* SFC cipher: per 32-byte block, key ^ (block offset >> 2) */
@@ -109,41 +84,34 @@ static int ldr_chip_key(uint32_t *key)
     return -3;
 }
 
-/* 2b. flash.bin [0, fl_size) from the host, before any erase: its CRC16 must be the UFW entry's (want); sc gets
- * the CRC16 of each app sector as it came in */
-static int ldr_check(uint32_t fl_off, uint32_t fl_size, uint32_t want, uint16_t *sc, uint8_t *b)
+#define LDR_EBADPKG (-12)                       /* flash.bin as served does not match the package's CRC16 */
+#define LDR_ENOFIN (-13)                        /* no "success" from the host */
+#define LDR_EFLASH (-14)                        /* another flash chip: nothing written, the records dropped */
+
+/* the update records (RAM, and flash: a 4K boundary - 256) go: the SPL boots the app */
+static void ldr_records_drop(void)
 {
-    uint32_t i, n, crc = 0;
-    for (i = 0; i < fl_size; i += n) {
-        n = fl_size - i > 512u ? 512u : fl_size - i;
-        if (ota_read(fl_off + i, b, n))
-            return -7;
-        crc = ota_crc16(b, n, crc);
-        if (i >= LDR_APP_LO && i < LDR_APP_HI) {     /* (512-byte reads from 0: never across a sector) */
-            uint32_t k = (i - LDR_APP_LO) >> 12;
-            sc[k] = (uint16_t)ota_crc16(b, n, (i & 0xFFFu) ? sc[k] : 0u);
-        }
+    uint32_t s;
+    ldr_record_clear();
+    for (s = LDR_REC_HI; s > LDR_REC_LO; s -= 0x1000u) {
+        uint8_t r[80];
+        if (ldr_fread(s - 0x100u, r, 80))
+            break;
+        if (ota_rd16(r + 6) == 0x5441u && ota_rd16(r) && ota_rd16(r) == ota_crc16(r + 2, 78, 0))
+            ldr_erase(s - 0x1000u);
     }
-    return crc == want ? 0 : -12;
 }
 
-static int ldr_session(void)
+static int ldr_pass(void)
 {
     static uint8_t hdr[0x400], sec[0x1000], cur[0x1000];
-    static uint16_t sc[LDR_NSEC];
-    uint32_t i, k, fl_off, fl_size, ota_off, ota_len, key, s, want = ~0u, done = 0;   /* (no CRC16: no flash.bin entry) */
+    uint32_t i, k, fl_off, fl_size, ota_off, ota_len, key, s, n, want, crc = 0, done = 0;
     int rc;
-    uint32_t n, head_gone = 0;                           /* (step 3: the app's header erased) */
-    /* 1. UFW header + entry list (ota.c; it leaves the entries decoded in hdr) */
-    if ((rc = ota_ufw(hdr, &fl_off, &fl_size, &ota_off, &ota_len)) != 0)
+    /* 1. UFW header + entry list (ota.c) */
+    if ((rc = ota_ufw(hdr, &fl_off, &fl_size, &ota_off, &ota_len, &want)) != 0)
         return rc;
-    if (!fl_off)
+    if (!fl_off || fl_size < LDR_APP_HI)
         return -3;
-    if (fl_size != LDR_APP_HI)
-        return -14;                                      /* another board's package: refused before any erase */
-    for (i = 0; i < ota_rd16(hdr + 8); i++)
-        if (ota_rd16(hdr + 0x40 + i * 0x50u) == 0)
-            want = ota_rd16(hdr + 0x40 + i * 0x50u + 4u);   /* flash.bin's data CRC16 */
     /* 2. the package's app area must decrypt with this chip's key */
     if ((rc = ldr_chip_key(&key)) != 0)
         return -40 + rc;
@@ -152,36 +120,26 @@ static int ldr_session(void)
     ldr_sfc(sec, 32, 0, key);
     if (ota_crc16(sec + 2, 30, 0) != ota_rd16(sec))
         return -6;                                       /* package for another chip key */
-    /* 2b. the whole package first: nothing is erased for a damaged one */
-    LDR_STAGE(2, 0);
-    if ((rc = ldr_check(fl_off, fl_size, want, sc, sec)) != 0)
-        return rc;
-    /* 3. app area, sector by sector. The SMK-37 Pro's boot stage starts a valid app over a pending update record (seen
-     * on the unit, stock V016 and Skiff alike), so a write cut short must leave no valid app: the app's first sector
-     * (its header, the one the chip-key check decrypts) is erased before any other sector is written, and written
-     * last; the FM-1 the same. 0x5000 up, then 0x4000 */
-    for (n = 1; n <= LDR_NSEC; n++) {
-        uint32_t again;
-        s = LDR_APP_LO + (n % LDR_NSEC) * 0x1000u;
-        LDR_STAGE(3, s);
-        for (again = 0;; again++) {                      /* as checked in 2b, else read it again */
-            for (k = 0; k < 0x1000u; k += 512u)
-                if (ota_read(fl_off + s + k, sec + k, 512))
-                    return -7;
-            if (ota_crc16(sec, 0x1000u, 0) == sc[(s - LDR_APP_LO) >> 12])
-                break;
-            if (again == 2u)
-                return -13;
-        }
+    if (!ldr_flash_known()) {                            /* SLOOP would run without its storage and could not */
+        ldr_records_drop();                              /* be updated again: keep the firmware there is */
+        return LDR_EFLASH;
+    }
+    /* the head of flash.bin is never written, but it is part of the package's CRC */
+    for (s = 0; s < LDR_APP_LO; s += 512u) {
+        if (ota_read(fl_off + s, sec, 512))
+            return -7;
+        crc = ota_crc16(sec, 512, crc);
+    }
+    /* 3. app area, sector by sector */
+    for (s = LDR_APP_LO; s < LDR_APP_HI; s += 0x1000u) {
+        for (k = 0; k < 0x1000u; k += 512u)
+            if (ota_read(fl_off + s + k, sec + k, 512))
+                return -7;
+        crc = ota_crc16(sec, 0x1000u, crc);
         if (ldr_fread(s, cur, 0x1000u))
             return -8;
         if (!ota_memeq(sec, cur, 0x1000u)) {
             uint32_t tries;
-            if (!head_gone && s != LDR_APP_LO) {         /* (the first sector that changes: the header goes first) */
-                if (ldr_erase(LDR_APP_LO))
-                    return -9;
-                head_gone = 1;
-            }
             for (tries = 0; tries < 2u; tries++) {
                 if (ldr_erase(s))
                     return -9;
@@ -199,21 +157,33 @@ static int ldr_session(void)
         done += 0x1000u;
         ldr_progress(done, LDR_APP_HI - LDR_APP_LO);
     }
-    /* 4. finish: the host confirms, the record goes, the SPL boots the app */
-    LDR_STAGE(4, 0);
+    for (s = LDR_APP_HI; s < fl_size; s += n) {          /* (a flash.bin longer than the app area) */
+        n = fl_size - s < 512u ? fl_size - s : 512u;
+        if (ota_read(fl_off + s, sec, n))
+            return -7;
+        crc = ota_crc16(sec, n, crc);
+    }
+    /* 4. finish: the whole package arrived as it was built, the host confirms, the record goes,
+     *    the SPL boots the app */
+    if (crc != want)
+        return LDR_EBADPKG;
     for (i = 0; i < 4u; i++)
         if (!ota_read(0xF0000000u, sec, 8))
             break;
-    ldr_record_clear();
-    for (s = LDR_REC_HI; s > LDR_REC_LO; s -= 0x1000u) {   /* flash records: 4K boundary - 256 */
-        uint8_t r[80];
-        if (s - 0x1000u >= LDR_DATA_LO && s - 0x1000u < LDR_DATA_HI)
-            continue;                                    /* Felucca's store: user data that may look like one */
-        if (ldr_fread(s - 0x100u, r, 80))
-            break;
-        if (ota_rd16(r + 6) == 0x5441u && ota_rd16(r) && ota_rd16(r) == ota_crc16(r + 2, 78, 0))
-            ldr_erase(s - 0x1000u);
-    }
-    LDR_STAGE(5, 0);
+    if (i == 4u)
+        return LDR_ENOFIN;
+    ldr_records_drop();
     return 0;
+}
+
+/* a pass that does not add up (a byte damaged on the way) is run again: the host answers any read, so it
+ * just serves the image once more and the sectors that differ are rewritten; a package that is damaged
+ * itself fails every pass and the record stays */
+static int ldr_session(void)
+{
+    int rc = LDR_EBADPKG;
+    uint32_t pass;
+    for (pass = 0; pass < 3u && rc == LDR_EBADPKG; pass++)
+        rc = ldr_pass();
+    return rc;
 }

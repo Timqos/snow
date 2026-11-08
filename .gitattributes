@@ -1,8 +1,7 @@
-* text=auto eol=lf
+* text=auto
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.sh text eol=lf
 *.wav binary
-*.ttf binary
-*.woff binary
 *.png binary
-*.jpg binary
-*.fwsc binary
-*.bin binary
+*.ttf binary

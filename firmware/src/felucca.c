@@ -1,157 +1,211 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
-/* FELUCCA: one compilation unit (the HAL is header-only). Each file uses what the files above it
- * define, so the order matters. */
-
-#include "fm1_cc.h"              /* BOARD_SMK37, SMK_MODEL: the board this build is for */
-
-/* ---------------------------------------------------- build options --- */
-/* build.py: FELUCCA_<NAME>=0 / 1 in the environment overrides these. Elsewhere: FELUCCA_SLICE, FELUCCA_FM4
- * (core.h: the SLICE engine, the DIGITAL engine), FELUCCA_ICONS (icons.c, the parameter icons; on by default),
- * FELUCCA_OTA_RAMONLY (ota.c). */
-#ifndef FELUCCA_FLASH
-#define FELUCCA_FLASH 1          /* flash driver + storage.c: settings, projects, user presets */
-#endif
-#ifndef FELUCCA_OTA
-#define FELUCCA_OTA 1            /* M-UPGRADE update entry and the editor SysEx; needs FELUCCA_FLASH */
-#endif
-#ifndef FELUCCA_OTA_DRYRUN
-#define FELUCCA_OTA_DRYRUN 0     /* 1 = stage, ask "success", then undo: no record, no reset */
-#endif
-#ifndef FELUCCA_CDC
-#define FELUCCA_CDC 1            /* USB CDC-ACM serial console */
-#endif
-#ifndef FELUCCA_UAC
-#define FELUCCA_UAC 1            /* USB audio input: the master output, 16-bit stereo 44.1 kHz (usb.c) */
-#endif
-#ifndef FELUCCA_UAC_TONE
-#define FELUCCA_UAC_TONE 0       /* bench: the USB input sends test triangles instead of the music */
-#endif
-#ifndef FELUCCA_UART
-#if BOARD_SMK37
-#define FELUCCA_UART 0           /* SMK-37 Pro: the TRS jack is MIDI OUT (UART1 TX, PC7), no MIDI IN; PH8 is a key-matrix
-                                  * row there and must never become UART RX */
-#else
-#define FELUCCA_UART 1           /* TRS MIDI IN on UART1 / PH8 */
-#endif
-#endif
-#if BOARD_SMK37 && FELUCCA_UART
-#error "BOARD_SMK37: midi_uart.c is the FM-1 MIDI IN driver (RX on PH8, a key-matrix row on the SMK)"
-#endif
-#ifndef FELUCCA_ID
-#if BOARD_SMK37
-#define FELUCCA_ID SMK_MODEL "_700"   /* package identity (build.py: the .fwsc marker string) */
-#else
-#define FELUCCA_ID "FM-1_700"    /* package identity (build.py: the .fwsc marker string) */
-#endif
-#endif
-#ifndef FELUCCA_VERSION
-#define FELUCCA_VERSION "v2.2"       /* Skiff's; shown in the menu, the console and the editor; build.py --release X.Y */
-#endif
-#if FELUCCA_OTA && !FELUCCA_FLASH
-#error "FELUCCA_OTA needs FELUCCA_FLASH"
-#endif
-#ifndef FELUCCA_CPU2
-#define FELUCCA_CPU2 1           /* (Skiff 1.3, as Felucca 1.6.1) 1: the second core is built in and renders some tracks when
-                                  * MENU > SYSTEM > CPU is 2 CORES (BETA; 1 CORE by default: as 1.2; hal/fm1_cpu1.h, fx.c
-                                  * mix_block). 0 (FELUCCA_CPU2=0 build.py): none of it (no core 1 stack, waiting loop or
-                                  * buffers). (The same default: core.h) */
-#endif
-#define FM1_CPU1_USED FELUCCA_CPU2   /* hal/fm1_sys.h: the second core is built in; every reset holds it first (its
-                                      * waiting loop is in RAM the ROM and the SPL use at boot) */
-/* (Skiff) audio code run from RAM (.ram_hot, app.ld), out of the XIP cache: the FX layer's (perform.c). From XIP it
- * shared the cache with the engines: on the unit, REPEAT 1/32 held cost +6 % CPU alone but +15 % under six busy
- * tracks (late halves, voices shed); 2 % by instruction count (the emulator). Never runs with the flash busy (the
- * audio ISR is off then), so it may call XIP code. Only here, the unit's build: core.h leaves it empty elsewhere.
- * RAM and XIP are over 4 MB apart, beyond a direct call's reach (fm1_flash.h FL_FAR): a call between them goes
- * through a pointer the compiler cannot fold back, AUDIO_FAR (the linker refuses a direct one). flatten: this clang
- * inlines nothing into a function of another section by itself, and the helpers (dsp.c clamp, perform.c pf_mix ..)
- * left as calls would be calls to XIP; flatten inlines them there only, the rest of the image as it was */
-#define AUDIO_RAM __attribute__((section(".ram_hot"), flatten))
-static inline __attribute__((always_inline)) void *audio_far(void *p) { void *volatile q = p; return q; }
-#define AUDIO_FAR(fn) ((__typeof__(&fn))audio_far((void *)&fn))
-
-/* ------------------------------------------------------------- HAL --- */
+/* SLOOP (based on FELUCCA): one compilation unit (the HAL is header-only). Order matters. */
 #include <stdint.h>
 #include "fm1_time.h"
 #include "fm1_sys.h"
 #include "fm1_irq.h"
 #include "fm1_guard.h"
-#if FELUCCA_CPU2
-#include "fm1_cpu1.h"
-#define C1_ON() fm1_c1_on                    /* fx.c mix_block: a second core is answering */
-#define C1_RUN(fn, arg) fm1_cpu1_run(fn, arg)
-#define C1_WAIT() fm1_cpu1_wait()
-#endif
-#if BOARD_SMK37
-#include "smk_input.h"           /* SMK-37 Pro: keys, buttons, knobs, button LEDs, pads, faders, wheels, battery */
-#include "smk_compat.h"          /* (the FM-1's LED glow and power-on sweep: none on the SMK) */
-#include "smk_uart_tx.h"         /* the TRS jack: MIDI OUT (UART1 TX, PC7) */
-#else
 #include "fm1_input.h"
-#endif
 #include "fm1_timer.h"
 #include "fm1_audio.h"
-#if !BOARD_SMK37
-#include "fm1_adc.h"             /* (the SMK's battery and MASTER: smk_input.h) */
-#endif
+#include "fm1_adc.h"
 #include "fm1_lcd_hw.h"
-#include "fm1_clk.h"             /* (Skiff) the core clock; MENU > CPU CLOCK 320 MHZ's switch (main.c) */
-#define CLK_MHZ() fm1_clk_mhz()  /* the core clock now (ui.c: 360 elsewhere) */
-#include "felucca_tables.h"      /* generated by build.py (tools/gen_tables.py) */
+#include "fm1_cpu1.h"      /* the second core (X0X): started in main.c, used by the render later */
+#include "felucca_tables.h"
 
-/* ----------------------------------------------------- base, display --- */
 #include "libc.c"
 #include "lcd.c"
 #include "gfx.c"
-
-/* ----------------------------------------------------------- sound --- */
+#define STATTIC_GUARD_SAVE() fm1_irq_guard_save()
+#define STATTIC_GUARD_RESTORE(f) fm1_irq_guard_restore(f)
+#define STATTIC_PROFILE_TICKS() fm1_ticks()
 #include "core.h"
-#include "engines.c"             /* dsp.c, the eng_*.c files, the factory patterns */
+#include "cpu1.h"           /* the second core's job API (defined in cpu1.c; the host tests have their own) */
+#include "engines.c"
+#include "drums.c"
 #include "params.c"
-#include "mod.c"               /* the modulation matrix, used by voice.c and fx.c */
+#if FELUCCA_STATTIC
+#include "stattic_mod.c"
+#endif
 #include "voice.c"
-#include "slicer.c"              /* per-track SLICER insert, used by fx.c */
+#include "slicer.c"          /* per-track SLICER insert, used by fx.c */
 #include "fx.c"
-
-/* ------------------------------------------------- MIDI, sequencer --- */
+#ifndef FELUCCA_OTA
+#define FELUCCA_OTA 1            /* M-UPGRADE update entry; needs FELUCCA_FLASH */
+#endif
+#ifndef FELUCCA_OTA_DRYRUN
+#define FELUCCA_OTA_DRYRUN 0     /* 1 = stage, ask "success", then undo: no record, no reset */
+#endif
+#ifndef FELUCCA_CPU1
+#define FELUCCA_CPU1 1          /* the second core (cpu1.c); 0: one core, as SLOOP 2.5 */
+#endif
+#ifndef FELUCCA_ID
+#define FELUCCA_ID "FM-1_900"    /* package identity (build.py: the .fwsc marker string) */
+#endif
+#ifndef FELUCCA_CDC
+#define FELUCCA_CDC 0            /* USB CDC-ACM serial console, a developer's tool (menu USB SERIAL). 2.7: out of the FM-1
+                                  * build (its 6-8 KB: the flash is full); FELUCCA_CDC=1 builds it back */
+#endif
+#ifndef FELUCCA_UAC                      /* (before usb.c: it defaults to 0) */
+#define FELUCCA_UAC 1            /* USB audio input: the master output, 16-bit stereo 44.1 kHz (usb.c, after Felucca 1.0) */
+#endif
+#ifndef FELUCCA_UAC_TONE
+#define FELUCCA_UAC_TONE 0       /* bench: the USB input sends test triangles instead of the music */
+#endif
 #include "usb.c"
+#ifndef FELUCCA_UART
+#define FELUCCA_UART 1           /* TRS MIDI IN on UART1 (3.5 mm jack) */
+#endif
 #if FELUCCA_UART
 #include "midi_uart.c"
 #endif
+#define FELUCCA_ARRANGER 1
+#include "arranger.c"
 #include "seq.c"
+#if FELUCCA_STATTIC
+#include "stattic_runtime.c"
+#endif
 #include "audio.c"
-
-/* -------------------------------------------------------------- UI --- */
+#include "cpu1.c"           /* the second core: boot, self-test, state (ABOUT, console) */
 #include "panel.c"
 #include "ui.c"
-#include "menu_items.c"          /* MENU's rows and settings (ui_menu.c, editor_menu.c) */
-#include "icons.c"               /* parameter icons (FELUCCA_ICONS), used by ui_draw.c */
-#include "ui_graph.c"
+#include "ui_song.c"
+#include "ui_studio.c"
+#include "icons.c"           /* parameter icons (FELUCCA_ICONS), used by ui_draw.c */
 #include "ui_draw.c"
+#include "ui_vis.c"           /* the full-screen visualiser (HOME on HOME, 2.4) */
+#include "ui_layers.c"       /* hold a function button: what the keys and knobs do (TE style) */
 #include "ui_menu.c"
 #include "ui_input.c"
-#include "ui_layer.c"              /* the quick layers (FX GLO SCL EDIT REC held; SEQ TOOLS: ui_tools.c) */
-
-/* --------------------------------------------- storage, update, editor --- */
+#ifndef FELUCCA_FLASH
+#define FELUCCA_FLASH 1          /* flash driver + storage.c */
+#endif
+#if FELUCCA_OTA && !FELUCCA_FLASH
+#error "FELUCCA_OTA needs FELUCCA_FLASH"
+#endif
 #if FELUCCA_FLASH
 #include "fm1_flash.h"
-#include "storage_hw.c"
+static uint8_t flash_ok;                 /* JEDEC id matched at boot (persist_boot) */
+static int st_read(uint32_t off, void *dst, uint32_t n)   /* 256-byte IRQ-off windows: audio keeps up */
+{
+    uint8_t *d = dst;
+    while (n) {
+        uint32_t k = n > 256u ? 256u : n, f = irq_save();
+        int rc = FL_FAR(fl_read_ram)(off, d, k);
+        irq_restore(f);
+        if (rc)
+            return rc;
+        off += k;
+        d += k;
+        n -= k;
+    }
+    return 0;
+}
+static void audio_silence(void)                 /* IRQs off: the DMA would loop stale audio (buzz) */
+{
+    uint32_t i;
+    for (i = 0; i < sizeof abuf / sizeof abuf[0]; i++)
+        abuf[i] = 0;
+}
+/* a sector erase with the audio silenced inside the same interrupts-off window (silenced before it, the
+ * audio interrupt could render a fresh half that the DMA then loops for the whole erase: a buzz) */
+static int fl_erase4k_quiet(uint32_t off, uint32_t *took)
+{
+    uint32_t f = irq_save();
+    int rc;
+    audio_silence();
+    rc = FL_FAR(fl_erase4k_ram)(off, took);
+    irq_restore(f);
+    return rc;
+}
+static int st_erase(uint32_t off)
+{
+    uint32_t took;
+    if (!FL_STORE_OK(off, 0x1000u))
+        return -8;
+    return fl_erase4k_quiet(off, &took);
+}
+static int st_prog(uint32_t off, const void *src, uint32_t n)
+{
+    if (!FL_STORE_OK(off, n))
+        return -8;
+    return fl_write(off, src, n);
+}
+#define ST_XIP_PTR(off) fm1_xip_ptr(off)   /* sloop-lab: storage.c st_xip, an object read where it is (fm1_xip.h) */
 #include "storage.c"
 #endif
-#include "upreset.c"             /* user presets (RAM mirror; flash with FELUCCA_FLASH) */
+#include "upreset.c"          /* user presets (read in the XIP window; the host test keeps a RAM mirror) */
 #include "project.c"
-#include "bank.c"                /* Skiff: the pattern bank (SAVE > PATTERNS) */
 #if FELUCCA_OTA
+static uint8_t recovery_active;
+#define OTA_IDENTITY (recovery_active ? "FM-1_000" : FELUCCA_ID)
+/* 2.7 beta: the update (ota.c) keeps its own buffers, as in 2.6: the update path never shares RAM */
 #include "ota.c"
-#include "ota_hw.c"
-#include "editor.c"              /* web editor SysEx (needs the OTA SysEx plumbing) */
+static void recovery_poll(void);
+static uint32_t ota_now_ms(void) { return fm1_ms; }
+static void ota_idle(void)
+{
+    fm1_wdt_feed();
+    if (recovery_active) recovery_poll();
+}
+static int ota_in_area(uint32_t off, uint32_t n) { return FL_IN(off, n, OTA_AREA, OTA_AREA + OTA_AREA_LEN); }
+static int ota_erase(uint32_t off)
+{
+    uint32_t took;
+    if (!ota_in_area(off, 0x1000u) || (off & 0xFFFu))
+        return -8;
+    return fl_erase4k_quiet(off, &took);
+}
+static int ota_prog(uint32_t off, const void *p, uint32_t n)
+{
+    if (!ota_in_area(off, n))
+        return -8;
+    return fl_write(off, p, n);
+}
+static int ota_fread(uint32_t off, void *p, uint32_t n) { return st_read(off, p, n); }
+static void ota_show(uint32_t step, int32_t code)
+{
+    static const char *const STEP[] = {"", "PACKAGE", "CHECK HEAD", "LOADER", "CONFIRM", "RESTART"};
+    char b[24];
+    if (recovery_active) return;             /* keep polled USB alive during OTA */
+    lcd_fill(0, 0, 240, 240, C_BLACK);
+    draw_text_box(0, 92, 240, &FONT_S, FELUCCA_STATTIC?"STATTIC UPDATE":"UPDATE", C_WHITE, 1);
+    if (step < 9u) {
+        draw_text_box(0, 124, 240, &FONT_S, STEP[step < 6u ? step : 0], C_HI, 1);
+        return;
+    }
+    if (code == 1)
+        str_cpy(b, "DRY RUN OK", sizeof b);
+    else {
+        uint32_t k = 0, v = (uint32_t)-code;
+        str_cpy(b, "FAILED  -", sizeof b);
+        while (b[k])
+            k++;
+        if (v >= 10u)
+            b[k++] = (char)('0' + v / 10u);
+        b[k++] = (char)('0' + v % 10u);
+        b[k] = 0;
+    }
+    draw_text_box(0, 124, 240, &FONT_S, b, C_HI, 1);
+    fm1_delay_ms(1500);
+}
+static void ota_commit(const uint8_t *parm)
+{
+    bootguard_clear(&bootguard);                        /* intentional update reset */
+    usb_detach();
+    fm1_delay_ms(30);
+    fm1_enter_update(parm);                             /* record into RAM, core reset (fm1_sys.h) */
+}
+#endif
+#if FELUCCA_OTA
+#include "editor.c"          /* web editor SysEx (needs the OTA SysEx plumbing) */
 #endif
 #if FELUCCA_CDC
 #include "console.c"
 #endif
-#if BOARD_SMK37
-#include "smk_ui.c"              /* the SMK-37's own controls: pads, faders, wheels, pedal, < >, KEY VELOCITY */
+#if FELUCCA_OTA
+#include "recovery.c"        /* early, polled USB updater; no synth or settings */
 #endif
-#include "master.c"              /* the MASTER pot (#137: read before the audio starts) */
+#include "splash.c"          /* SLOOP boot logo (build/gen/sloop_logo.h) */
 #include "main.c"

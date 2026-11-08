@@ -44,8 +44,8 @@ static const uint8_t WRAM[16][16] = {
 static const char *const N_DCY[] = {"CONST", "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10",
                                     "D11", "D12", "D13", "D14", "D15", "L1", "L2", "L3", "L4", "L5", "L6", "L7",
                                     "L8", "L9", "L10", "L11", "L12", "L13", "L14", "L15", 0};
-static const param_desc_t LOFI_WAVNUM = {"WAV#", N_WRAM, 0, 127, 64, F_INT, 0};   /* = edit[2] but the names */
-static const param_desc_t LOFI_DCY = {"DCY", N_DCY, 0, 127, 0, F_INT, 0};        /* = edit[3] but the names */
+static const param_desc_t LOFI_WAVNUM = {"WAV#", F_INT, 0, 127, 64, N_WRAM, 0};   /* = edit[2] but the names */
+static const param_desc_t LOFI_DCY = {"DCY", F_INT, 0, 127, 0, N_DCY, 0};        /* = edit[3] but the names */
 
 static const param_desc_t *lofi_desc(const track_t *t, uint32_t k)
 {
@@ -193,8 +193,8 @@ static void lofi_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
             held = s;
         }
         ph0 += inc;
-        lp += mulq15(held - lp, lpk);
-        out[i] += voice_amp(lp, m, i);
+        lp += mulq15(clamp(held - lp, -65535, 65535), lpk);   /* (a WAVE / CHIP change mid-note: no wrap) */
+        out[i] += mulq15(mulq15(lp, amp_at(m, i)), VOICE_FS);
     }
     v->ph[0] = ph0;
     v->s[0] = held;
@@ -204,39 +204,40 @@ static void lofi_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
 }
 
 static const preset_t LOFI_PRESETS[] = {
-    {"PULSE LD", {0, 0, 32, 0, 0, 20, 0, 127}, {0, 60, 90, 30}, 0, 1, FX(0, 0, 40, 20), TAG(PT_LEAD)},
-    {"WAVE BASS", {1, 1, 0, 0, 0, 0, 0, 90}, {0, 50, 70, 20}, 0, 1, FX(0, 0, 10, 0), TAG(PT_BASS)},
-    {"ARP 8BIT", {2, 0, 96, 0, 0, 0, 2, 110}, {0, 60, 80, 40}, 0, 0, FX(0, 0, 30, 20), TAG(PT_LEAD)},
-    /* wave RAM VOXA (DUTY 92 / 8 = 11), a little vibrato */
-    {"WAVE LEAD", {0, 4, 92, 0, 0, 18, 0, 110}, {0, 70, 90, 30}, 0, 1, FX(0, 0, 40, 25), TAG(PT_LEAD)},
-    /* STEP: 25 % pulse, DCY 34 = D7 (a 15-step decay over 0.5 s), REL ~54 ms of staircase after note-off */
-    {"STEP LEAD", {4, 0, 40, 34, 0, 16, 0, 127}, {0, 64, 127, 55}, 0, 1, FX(0, 0, 40, 20), TAG(PT_LEAD)},
-    /* (Skiff) for the themes: CRYPT (dungeon synth), NEON (synthwave), QUARK (particles) */
-    {"PHOTON", {2, 1, 64, 0, 16, 0, 0, 120}, {0, 70, 0, 40}, 0, 0, FX(0, 0, 50, 35), TAG(PT_PLUCK)},
-    /* (Skiff phase 9) more for every engine: basses, kits */
-    {"TRI BASS", {0, 1, 64, 0, 0, 0, 0, 100}, {0, 60, 90, 20}, 0, 1, FX(0, 0, 5, 5), TAG(PT_BASS)},
-    {"CHIP BELL", {2, 0, 20, 0, 30, 0, 0, 110}, {0, 70, 0, 50}, 0, 0, FX(0, 0, 40, 40), TAG(PT_PLUCK)},
+    {"GAME LEAD", {0, 0, 32, 0, 0, 20, 0, 127}, {0, 60, 90, 30}, 0, 1, FX(0, 0, 36, 18)},
+    {"GB BASS", {1, 1, 0, 0, 0, 0, 0, 90}, {0, 50, 70, 20}, 0, 1, FX(0, 0, 6, 0), XP(P_TRANS + 1, -12)},
+    {"8BIT ARP", {2, 0, 96, 0, 0, 0, 2, 110}, {0, 60, 80, 40}, 0, 0, FX(0, 0, 30, 20), ARP(1, 2, 2, 40)},
+    /* SLOOP 2.5: {CHIP, WAVE, DUTY, CRSH, SWP, VIB, ARP, TONE} */
+    {"NES BASS", {2, 1, 64, 0, 0, 0, 0, 127}, {0, 50, 80, 20}, 0, 1, FX(0, 0, 0, 4), XP(P_TRANS + 1, -12)},
+    {"CHIP CHORD", {2, 0, 32, 0, 0, 0, 2, 110}, {0, 60, 80, 40}, 0, 0, FX(0, 0, 30, 20)},
+    {"1BIT BEEP", {3, 0, 64, 0, 0, 0, 0, 100}, {0, 40, 60, 20}, 0, 0, FX(0, 0, 25, 15)},
+    {"WAVE LEAD", {0, 4, 40, 0, 0, 40, 0, 120}, {2, 60, 100, 30}, 0, 1, FX(0, 0, 30, 20), XP(P_GLIDE + 1, 30)},
+    {"CHIP NOISE", {2, 3, 64, 0, 90, 0, 0, 127}, {0, 55, 0, 24}, 0, 0, FX(0, 0, 10, 10)},
 };
 
+/* (after Clipper 1.2) UNISON (voice.c unison_spread): the oscillator moved by r (Q32) of a turn of the note and
+ * the noise register from its own place (every note's from 0x7FFF: every voice the same noise) */
+static void lofi_spread(track_t *t, voice_t *v, uint32_t r)
+{
+    (void)t;
+    v->ph[0] += r;
+    v->s[2] = (int32_t)(((uint32_t)v->s[2] ^ (r >> 17)) & 0x7FFFu);
+    if (!v->s[2])
+        v->s[2] = 1;
+}
+
 static const engine_t ENG_LOFI = {
-    .name = "LOFI",
-    .page_title = {"CHIP", "MOTION"},
-    .edit = {
-        {"CHIP", N_CHIP, 0, 4, 0, F_ENUM, 0},
-        {"WAVE", N_RWAVE, 0, 4, 0, F_ENUM, 0},
-        {"DUTY", 0, 0, 127, 64, F_INT, 0},              /* WRAM: the table, DUTY / 8 (lofi_desc) */
-        {"CRUSH", 0, 0, 127, 0, F_PCT, 0},               /* STEP: the envelope (lofi_desc) */
-        {"SWEEP", 0, 0, 127, 0, F_PCT, 0},
-        {"VIBRATO", 0, 0, 127, 0, F_PCT, 0},
-        {"ARP", N_RARP, 0, 3, 0, F_ENUM, 0},
-        {"TONE", 0, 0, 127, 127, F_PCT, 0},
+    "LOFI", {"CHIP", "MOTN"},
+    {
+        {"CHIP", F_ENUM, 0, 4, 0, N_CHIP, 0},
+        {"WAVE", F_ENUM, 0, 4, 0, N_RWAVE, 0},
+        {"DUTY", F_INT, 0, 127, 64, 0, 0},              /* WRAM: the table, DUTY / 8 (lofi_desc) */
+        {"CRSH", F_PCT, 0, 127, 0, 0, 0},               /* STEP: the envelope (lofi_desc) */
+        {"SWP", F_PCT, 0, 127, 0, 0, 0},
+        {"VIB", F_PCT, 0, 127, 0, 0, 0},
+        {"ARP", F_ENUM, 0, 3, 0, N_RARP, 0},
+        {"TONE", F_PCT, 0, 127, 127, 0, 0},
     },
-    .presets = LOFI_PRESETS,
-    .npresets = NELEM(LOFI_PRESETS),
-    .note_on = lofi_note_on,
-    .render = lofi_render,
-    .knob = {P_E1, P_E2, P_E3, P_REL},
-    .keep = 0x11,                /* the held sample and the low-pass */
-    .amp = lofi_amp,
-    .desc = lofi_desc,
+    LOFI_PRESETS, sizeof(LOFI_PRESETS) / sizeof(LOFI_PRESETS[0]), 1, lofi_note_on, lofi_render,
+    0x3F2C, {P_E1, P_E2, P_E3, P_REL}, 0, lofi_amp, lofi_desc,
 };

@@ -1,11 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Physical panel: which matrix button / encoder carries which printed label.
- * The matrix ids are known, the printed labels are not, so
- * the mapping is a table with a best guess, overridable by HARDWARE CALIBRATION
- * (hold OCT- and OCT+ while powering on): FELUCCA asks for each label in turn.
- * The learned table lives in .noinit and, with FELUCCA_FLASH, in flash with
- * the settings (project.c); read it back with `fm1t memr` to bake it in. */
+ * The default table can be overridden by HARDWARE CALIBRATION (hold OCT- and
+ * OCT+ while powering on), which asks for each label in turn. The learned
+ * table lives in .noinit and, with FELUCCA_FLASH, in flash with the settings
+ * (project.c). */
+/* (B_SCL: the button printed SEL, the key / scale button between FX and ENV) */
 enum { B_FX, B_SCL, B_ENV, B_LFO, B_EDIT, B_GLO, B_HOME, B_SAVE, B_ARP, B_SEQ, B_PLAY, B_REC,
        B_OCTDN, B_OCTUP, NB };
 enum { EN_SELECT, EN_ALGO, EN_PRESET, EN_K1, EN_K2, EN_K3, EN_K4, NE };
@@ -13,21 +13,7 @@ static const char *const B_NAME[NB] = {"FX", "SEL", "ENV", "LFO", "EDIT", "GLO",
                                         "ARP", "SEQ", "PLAY", "REC", "OCT-", "OCT+"};
 static const char *const E_NAME[NE] = {"SELECT", "ALGORITHM", "PRESETS", "KNOB 1", "KNOB 2",
                                         "KNOB 3", "KNOB 4"};
-#ifndef FM1_NBTN                        /* (host builds without a HAL: the FM-1's buttons and knobs) */
-#define FM1_NBTN 14u
-#endif
-#ifndef FM1_NENC
-#define FM1_NENC 7u
-#endif
-#if BOARD_SMK37
-#define PANEL_MAGIC 0x504E5331u          /* "PNS1" (SMK-37 Pro): bump when PANEL_DEFAULT changes */
-#define PANEL_NBTN FM1_NBTN              /* the matrix's buttons and knobs (panel_init): 18, 8 */
-#define PANEL_NENC FM1_NENC
-#else
 #define PANEL_MAGIC 0x50414E35u          /* "PAN5": bump when PANEL_DEFAULT changes */
-#define PANEL_NBTN NB                    /* (as written before: the FM-1 build stays the same) */
-#define PANEL_NENC NE
-#endif
 
 typedef struct {
     uint32_t magic;
@@ -37,45 +23,25 @@ typedef struct {
 } panel_t;
 panel_t panel __attribute__((section(".noinit")));
 
-#if BOARD_SMK37
-/* SMK-37 Pro (smk_input.h button ids, after genkigenki's layer): the printed SMK name -> the FM-1 function. FX = FX,
- * SCALE = SEL, CHORD = ENV, NOTE REPEAT = LFO, PARA = EDIT, GLOBE = GLO, PATCH = HOME, BT = SAVE, ARP and SEQ as
- * printed, SEQ PLAY = PLAY, SEQ REC = REC, OCTAVE- / + as printed; KNOB BANK, FADER BANK, < and > are not an FM-1
- * button. The knobs as the FM-1's top row: K1 = MASTER (smk_input.h: a virtual pot), K2 = SELECT, K3 = ALGORITHM,
- * K4 = PRESETS, K5..K8 = KNOB 1..4. A first mapping for bring-up, not the UX pass's; HARDWARE CALIBRATION (OCTAVE- +
- * OCTAVE+ at power-on) teaches another */
 static const panel_t PANEL_DEFAULT = {
     PANEL_MAGIC,
-    {14, 8, 9, 7, 13, 10, 12, 11, 6, 15, 16, 17, 4, 5},
-    {1, 2, 3, 4, 5, 6, 7},
+    {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0, 1},   /* PLAY = 12, REC = 13 */
+    {0, 1, 6, 2, 3, 4, 5},                           /* SELECT = enc 0, ALGORITHM = enc 1, PRESETS = enc 6 */
     {1, 1, 1, 1, 1, 1, 1},
 };
-#else
-static const panel_t PANEL_DEFAULT = {
-    PANEL_MAGIC,
-    {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0, 1},   /* PLAY = 12, REC = 13 (measured on hardware) */
-    {0, 1, 6, 2, 3, 4, 5},                           /* SELECT = enc 0, ALGORITHM = enc 1, PRESETS = enc 6 (printed labels) */
-    {1, 1, 1, 1, 1, 1, 1},
-};
-#endif
 
-static void panel_init(void)                     /* also after a flash load: ids are used as array indexes and shifts */
+UI_SMALL static void panel_init(void)                     /* also after a flash load: ids are used as array indexes and shifts */
 {
-    uint32_t i, buttons = 0, encoders = 0, ok = panel.magic == PANEL_MAGIC;
-    for (i = 0; ok && i < NB; i++) {
-        ok = panel.btn[i] < PANEL_NBTN && !(buttons & (1u << panel.btn[i]));
-        if (ok) buttons |= 1u << panel.btn[i];
-    }
-    for (i = 0; ok && i < NE; i++) {
-        ok = panel.enc[i] < PANEL_NENC && !(encoders & (1u << panel.enc[i])) &&
-             (panel.dir[i] == 1 || panel.dir[i] == -1);
-        if (ok) encoders |= 1u << panel.enc[i];
-    }
+    uint32_t i, ok = panel.magic == PANEL_MAGIC;
+    for (i = 0; ok && i < NB; i++)
+        ok = panel.btn[i] < 14u;
+    for (i = 0; ok && i < NE; i++)
+        ok = panel.enc[i] < 7u && (panel.dir[i] == 1 || panel.dir[i] == -1);
     if (!ok)
         panel = PANEL_DEFAULT;
 }
 
-static uint32_t panel_btn_of(uint32_t matrix_id)        /* label of a matrix button, NB if none */
+UI_SMALL static uint32_t panel_btn_of(uint32_t matrix_id)        /* label of a matrix button, NB if none */
 {
     uint32_t b;
     for (b = 0; b < NB; b++)
@@ -84,80 +50,106 @@ static uint32_t panel_btn_of(uint32_t matrix_id)        /* label of a matrix but
     return NB;
 }
 
+UI_SMALL static void panel_led(uint32_t label, int on) { fm1_led_key(panel.btn[label], on); }
+
 /* steps of a role, + = clockwise */
-static uint8_t panel_moved;                     /* a knob turned since ui.c scr_input last looked (SCREEN OFF) */
-static int32_t panel_enc(uint32_t role)
+static uint32_t ui_input_ms;                    /* the last button, key or knob turn (ui_input.c; autosave) */
+/* the knobs (roles, bit per EN_*) not to be read again in this UI pass (ui_input: a layer took them, #102 of
+ * Felucca): panel_enc returns 0 and leaves their detents for the next pass */
+static uint32_t enc_hold;
+UI_SMALL static int32_t panel_enc(uint32_t role)
 {
-    int32_t s = fm1_enc_take(panel.enc[role]) * panel.dir[role];
+    int32_t s;
+    if ((enc_hold >> role) & 1u)
+        return 0;
+    s = fm1_enc_take(panel.enc[role]) * panel.dir[role];
     if (s)
-        panel_moved = 1;
+        ui_input_ms = fm1_ms;                      /* a knob turning is not idle either: autosave waits */
     return s;
 }
 
-/* Keep the retained settings layout fixed. palette: the index into UI_PALETTES (SET3 held an index
- * into the 20 palettes of earlier firmware) */
-#define SETTINGS_MAGIC 0x53455434u              /* "SET4" */
-#define SETTINGS_MAGIC_OLD 0x53455433u          /* "SET3" */
+/* user settings that survive a reset */
+#define SETTINGS_MAGIC 0x53455433u              /* "SET3" */
 struct { uint32_t magic, palette, lowcut, zoom; } settings __attribute__((section(".noinit")));
 
+/* the lights (menu LIGHTS / KEYS / NOTES), for playing in the dark: kept in flash with the settings
+ * (project.c persist_t.lights), read at every boot; not in .noinit, so nothing there moves. The same
+ * word keeps SYNC and the REC screen's MODE / START (seq.c rec_tempo, rec_count) */
+enum { LIGHTS_OFF, LIGHTS_LOW, LIGHTS_MID, LIGHTS_HIGH, LIGHTS_N };
+enum { KEYS_OFF, KEYS_C, KEYS_WHITE, KEYS_ALL, KEYS_N };   /* (ALL: SLOOP 2.4; an older SLOOP reads it as OFF) */
+static uint8_t lights_lvl, lights_keys;
+static uint8_t lights_notes;                   /* 1: on a synth track the sounding notes light their keys */
+static uint8_t lights_sync;                    /* GLO > SYSTEM > SYNC (G_SYNC), kept here: 0 INT, 1 USB, 2 TRS */
+static uint8_t lights_mout;                    /* GLO > SYSTEM > MIDI (G_MIDI): 1 = the sequencer goes to MIDI OUT too */
+static uint8_t lights_min;                     /* GLO > SYSTEM > IN (G_ROUTE): 0 NOTES, 1 CLOCK only, 2..17 (2.6) CH 1..16 only */
+/* 2.6: GLO > MIDI CH1 CH2 CH3, GLO > DRUMS > CH, GLO > MIDI > OTHER: settings of the FM-1 (kept with the MIDI LEARN map
+ * after the SYN kits: project.c midi_part), mirrored in song.g (felucca_init) */
+#define MIDI_SET_DEF {1, 2, 3, 10, 0, 2, 0, 0, 0, 0}   /* CH1 CH2 CH3, drums, OTHER, (2.6) BEND, (2.7) FX CH, DR MAP, REMOTE,
+                                                     * CLK OUT */
+static uint8_t midi_set[10] = MIDI_SET_DEF;
+static uint8_t fxfade;                          /* (2.7.2) FX layer SELECT (FX held): the punch-in FX fade, 0..15 (punch.c);
+                                                 * a setting of the FM-1, mirrored in song.g[G_FXFADE], kept in BEND's byte */
+static const uint16_t LIGHTS_NS[LIGHTS_N] = {0u, 500u, 1000u, 2000u};   /* the backlight pulse a frame (ns): a lit
+                                                * LED ~95 us, the glow (landmarks) 4 us (fm1_input.h) */
+static uint8_t usb_serial;                      /* menu USB SERIAL: 1 = the serial console presented (usb.c) */
+static uint8_t usb_rate;                        /* menu USB RATE (2.7 beta): 0 AUTO, 1 44.1, 2 48 kHz (usb.c usb_rate_mode, at the next start) */
+static uint8_t cpu1_off;                        /* menu 2ND CORE: 1 = OFF, every render unit on core 0 (cpu1.h cpu1_units);
+                                                 * 2.7: ON by default (bit 26 set = OFF); core 1 starts at power-on only when ON */
+static uint8_t vis_style;                       /* the visualiser's style, 0..11 (ui_vis.c) */
+static uint8_t knob_accel_off;                  /* menu KNOB ACCEL (2.7): 1 = OFF, one value a detent however fast (ui_input.c accel) */
+static uint8_t step_adv_off;                    /* menu SEQ > STEP ADVANCE (2.7.1): 1 = OFF, the STEP page's cursor stays where it
+                                                 * is when the keys are let go (KNOB 1 moves it); kept in the MIDI part */
+static uint8_t drum_preview;                    /* menu DRUM PREVIEW (2.7.1): 1 = ON, a drum sound picked with a knob is heard; OFF (the
+                                                 * default): silent, for live (ui_studio.c). Kept in the MIDI part (project.c) */
+UI_SMALL static uint32_t lights_word(void)
+{
+    return (uint32_t)lights_lvl | (uint32_t)lights_keys << 4 | (uint32_t)(lights_notes != 0u) << 8 |
+           (uint32_t)(rec_tempo != 0u) << 9 | (uint32_t)(rec_count != 0u) << 10 | (uint32_t)(usb_full != 0u) << 11 |
+           (uint32_t)(lights_sync % 3u) << 12 | (uint32_t)(lights_mout != 0u) << 14 | (uint32_t)(lights_min == 1u) << 15 |
+           (uint32_t)(usb_serial != 0u) << 16 | (uint32_t)(vis_style % 12u) << 17 |
+           (uint32_t)(lights_min >= 2u && lights_min <= 17u ? lights_min - 1u : 0u) << 21 |   /* 2.6: CH n (n 1..16; 0 none) */
+           (uint32_t)(cpu1_off != 0u) << 26 |          /* 2ND CORE OFF (2.7: ON by default; 2.6 took 21..25) */
+           (uint32_t)(knob_accel_off != 0u) << 27 |    /* KNOB ACCEL OFF (2.7; 0 = ON, as before 2.7) */
+           (uint32_t)(usb_rate % 3u) << 28 |           /* USB RATE (2.7 beta; 0 = AUTO, as before) */
+           (uint32_t)(theme_on != 0u) << 30 |
+           (uint32_t)(rec_quant_off != 0u) << 31;      /* REC screen QUANT OFF (2.7, seq.c; 0 = ON, as before) */           /* COLOR on your theme (2.7; gfx.c; an older SLOOP shows palette) */
+}
+UI_SMALL static void lights_from_word(uint32_t w)
+{
+    lights_lvl = (uint8_t)((w & 15u) < LIGHTS_N ? (w & 15u) : LIGHTS_OFF);
+    lights_keys = (uint8_t)(((w >> 4) & 15u) < KEYS_N ? ((w >> 4) & 15u) : KEYS_OFF);
+    lights_notes = (uint8_t)((w >> 8) & 1u);
+    rec_tempo = (uint8_t)((w >> 9) & 1u);       /* the REC screen: MODE, START (seq.c) */
+    rec_count = (uint8_t)((w >> 10) & 1u);
+    usb_full = (uint8_t)((w >> 11) & 1u);       /* menu USB AUDIO (fx.c) */
+    lights_sync = (uint8_t)(((w >> 12) & 3u) % 3u);
+    lights_mout = (uint8_t)((w >> 14) & 1u);    /* GLO > SYSTEM > MIDI (seq.c) */
+    lights_min = (uint8_t)((w >> 15) & 1u);     /* GLO > SYSTEM > IN (seq.c) */
+    if (((w >> 21) & 31u) >= 1u && ((w >> 21) & 31u) <= 16u)
+        lights_min = (uint8_t)(((w >> 21) & 31u) + 1u);   /* 2.6: CH n (an older SLOOP reads NOTES) */
+    usb_serial = (uint8_t)((w >> 16) & 1u);
+    vis_style = (uint8_t)(((w >> 17) & 15u) % 12u);   /* the visualiser (ui_vis.c); 0 in 2.3 = OSCILLOSCOPE */     /* menu USB SERIAL (usb.c usb_cdc_on, at the next start); 0 in 2.3 = OFF */
+    cpu1_off = (uint8_t)((w >> 26) & 1u);       /* menu 2ND CORE (ui_menu.c); 2.7: bit 26 set = OFF, so any older settings
+                                                 * word (2.6 and before: 0) reads as ON, the two-core SLOOP (an early 2.7 beta
+                                                 * set it for ON: that FM-1 reads OFF once) */
+    cpu1_units = cpu1_off ? 0 : -1;
+    knob_accel_off = (uint8_t)((w >> 27) & 1u);  /* menu KNOB ACCEL (2.7): an older word reads ON */
+    usb_rate = (uint8_t)(((w >> 28) & 3u) % 3u); /* menu USB RATE (2.7 beta): an older word reads AUTO */
+    theme_on = (uint8_t)((w >> 30) & 1u);
+    rec_quant_off = (uint8_t)((w >> 31) & 1u);  /* REC screen QUANT (2.7): an older word reads ON */        /* menu COLOR on your theme (2.7, gfx.c): shown once it is there */
+}
+
 static void settings_save(void);              /* project.c: flash copy (FELUCCA_FLASH) */
-static void theme_apply(void);                /* ui.c: the palette, (Skiff #27) THEME CUSTOM's colours over it */
+static uint8_t settings_later;                 /* changed while playing: saved once stopped (project.c) */
 
-/* HOLD (menu): how long a button is held before its layer opens (ui_input.c). Saved in the settings record's
- * retired bold field as HOLD_TAG | index; any other value there (0 or 1 from older firmware) is the default */
-#define HOLD_TAG 0x484C4400u
-#define HOLD_DEF 1u
-static const uint16_t HOLD_MS[4] = {300, 400, 500, 600};
-static uint8_t settings_hold = HOLD_DEF;
-static uint32_t hold_from_stored(uint32_t v) { return (v & ~3u) == HOLD_TAG ? v & 3u : HOLD_DEF; }
-static uint32_t hold_to_stored(uint32_t old, uint32_t i)
+UI_SMALL static void settings_init(void)
 {
-    return i % 4u != HOLD_DEF ? HOLD_TAG | (i & 3u) : old > 1u ? 0u : old;
-}
-static int hold_stored_ok(uint32_t v) { return v <= 1u || (v & ~3u) == HOLD_TAG; }
-
-/* LEDS (menu): OFF, DIM LO, DIM HI, INV. DIM HI (the default), the idle buttons and keys glow dim (~1/30) and the
- * active ones are lit (#35); DIM LO the same, darker (~1/60, hal/fm1_input.h FM1_LED_DIM_LO_NS); OFF no glow,
- * the active ones lit (as 1.0); INV the idle ones lit and the active ones dark, as the stock firmware (ui_input.c
- * ui_leds). Saved in the settings record's retired zoom field as LEDS_TAG | mode, the modes append-only: DIM 0
- * (now DIM HI) and INV 1 keep their values, OFF 2 and DIM LO 3 are new; any other value there (0 or 1 from older
- * firmware) is DIM HI. LEDS_MENU: the menu's order, darkest first */
-#define LEDS_TAG 0x4C454400u                    /* "LED" */
-enum { LEDS_DIM, LEDS_INV, LEDS_OFF, LEDS_DIM_LO, LEDS_COUNT };
-static const uint8_t LEDS_MENU[LEDS_COUNT] = {LEDS_OFF, LEDS_DIM_LO, LEDS_DIM, LEDS_INV};
-static const char *const LEDS_NAME[LEDS_COUNT] = {"DIM HI", "INV", "OFF", "DIM LO"};
-static uint8_t settings_leds = LEDS_DIM;
-static uint32_t leds_from_stored(uint32_t v) { return (v & ~3u) == LEDS_TAG && (v & 3u) < LEDS_COUNT ? v & 3u : LEDS_DIM; }
-static uint32_t leds_to_stored(uint32_t old, uint32_t m)
-{
-    return m != LEDS_DIM && m < LEDS_COUNT ? LEDS_TAG | m : old > 1u ? 0u : old;
-}
-static int leds_stored_ok(uint32_t v) { return v <= 1u || ((v & ~3u) == LEDS_TAG && (v & 3u) < LEDS_COUNT); }
-/* the menu's next / previous mode (KNOB 1 stops at the ends, OCT+ (s 0) cycles) */
-static uint32_t leds_step(uint32_t m, int32_t s)
-{
-    uint32_t i = 0;
-    while (i + 1u < LEDS_COUNT && LEDS_MENU[i] != m)
-        i++;
-    i = s > 0 ? (i + 1u < LEDS_COUNT ? i + 1u : i) : s < 0 ? (i ? i - 1u : 0u) : (i + 1u) % LEDS_COUNT;
-    return LEDS_MENU[i];
-}
-
-static int settings_init(void)                 /* 1: no settings were kept (a new unit): the defaults */
-{
-    int fresh = 0;
-    if (settings.magic == SETTINGS_MAGIC_OLD && settings.palette < 20u) {
-        settings.magic = SETTINGS_MAGIC;
-        settings.palette = palette_from_stored(settings.palette);
-    }
     if (settings.magic != SETTINGS_MAGIC || settings.palette >= NPALETTES) {
         settings.magic = SETTINGS_MAGIC;
-        settings.palette = UI_SKIFF_INDEX;     /* Skiff's look (main.c: STYLE BLOCKS with it); Felucca's: GREY */
+        settings.palette = 4;                  /* MONO (default) */
         settings.lowcut = 0;
-        settings.zoom = 0;                     /* (retired: the LEDS setting, settings_persist.c) */
-        fresh = 1;
+        settings.zoom = 0;                     /* large readout of the touched value: off */
     }
-    theme_apply();
-    fx_lowcut = (uint8_t)(settings.lowcut % 3u);
-    return fresh;
+    palette_set(settings.palette);
+    fx_lowcut = (uint8_t)(settings.lowcut != 0);
 }
