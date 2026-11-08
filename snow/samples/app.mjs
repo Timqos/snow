@@ -11,7 +11,13 @@ const device=Array.from({length:BANKS},()=>null);       // what the FM-1 holds (
 const work=Array.from({length:BANKS},()=>[]);           // what this page shows and would save
 const dirty=Array(BANKS).fill(false);
 
-const status=(text,error=false)=>{$('status').textContent=text;$('status').classList.toggle('error',error);};
+let toastTimer=0;
+const status=(text,error=false)=>{          /* (shown where the person is looking: at the top, under "Add sounds" and as a toast) */
+  for(const id of ['status','add-status']){$(id).textContent=text;$(id).classList.toggle('error',error);}
+  const t=$('toast');t.textContent=text;t.classList.toggle('error',error);t.classList.add('show');
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),error?12000:7000);
+};
+const isFull=zones=>zones.length>=16&&!zones.some(z=>z.deleted)||SMP.MAX_DATA-bytesOf(zones)<1500;
 const clone=zones=>zones.map(z=>({...z}));
 const bytesOf=zones=>zones.reduce((n,z)=>n+z.data.length,0);
 const live=zones=>zones.filter(z=>!z.deleted);
@@ -37,9 +43,12 @@ function render(){
     card.className='bank'+(dirty[s]?' changed':'')+(+$('target').value===s&&link?' target':'');
     const top=document.createElement('div');top.className='bank-top';
     const name=document.createElement('span');name.className='bank-name';name.textContent=`USR ${s+1}`;
+    const chips=document.createElement('span');chips.className='chips';
+    if(link&&+$('target').value===s){const h=document.createElement('span');h.className='tag here';h.textContent='adding here';chips.append(h);}
+    if(link&&isFull(zones)){const f=document.createElement('span');f.className='tag full';f.textContent='full';chips.append(f);}
     const tag=document.createElement('span');tag.className='tag'+(dirty[s]?' dirty':device[s]?' ok':'');
     tag.textContent=!link&&!device[s]?'not read':dirty[s]?'changed · not saved':live(zones).length?'on the FM-1':'empty';
-    top.append(name,tag);card.append(top);
+    chips.append(tag);top.append(name,chips);card.append(top);
     const meter=document.createElement('div');meter.className='meter'+(used>SMP.SLOT_SIZE||count>16?' full':'');
     const fill=document.createElement('i');fill.style.width=`${Math.min(100,used/SMP.SLOT_SIZE*100)}%`;meter.append(fill);card.append(meter);
     const counts=document.createElement('div');counts.className='counts';
@@ -61,12 +70,16 @@ function render(){
     });
     card.append(list);
     const acts=document.createElement('div');acts.className='bank-actions';
-    const add=document.createElement('button');add.textContent='Add sounds here';add.disabled=busy||!link;
+    const add=document.createElement('button');add.textContent=isFull(zones)?'Full':'Add sounds here';add.disabled=busy||!link||isFull(zones);
     add.onclick=()=>{$('target').value=s;cancelReplace();render();$('add-step').scrollIntoView({behavior:'smooth'});};
-    const save=document.createElement('button');save.className='primary';save.textContent='Save to FM-1';save.disabled=busy||!link||!dirty[s];save.onclick=()=>action(()=>saveBank(s));
+    const save=document.createElement('button');save.className=dirty[s]?'primary':'';save.textContent=dirty[s]?'Save to FM-1':device[s]?'Saved ✓':'Save to FM-1';
+    save.title=dirty[s]?'Write this bank to the FM-1':'Nothing to save: this bank is the same as on the FM-1';save.disabled=busy||!link||!dirty[s];save.onclick=()=>action(()=>saveBank(s));
+    const clear=document.createElement('button');clear.textContent='Clear bank';clear.disabled=busy||!link||!live(zones).length;
+    clear.onclick=()=>{if(!confirm(`Remove all ${live(work[s]).length} sounds from USR ${s+1}? (Nothing changes on the FM-1 until you press “Save to FM-1”.)`))return;
+      work[s]=[];dirty[s]=true;cancelReplace();render();status(`USR ${s+1} cleared here. Press “Save to FM-1” on USR ${s+1} to empty it on the device.`);};
     const undo=document.createElement('button');undo.textContent='Undo changes';undo.disabled=busy||!dirty[s];
     undo.onclick=()=>{work[s]=clone(device[s]||[]);dirty[s]=false;cancelReplace();render();status(`USR ${s+1}: changes undone.`);};
-    acts.append(add,save,undo);card.append(acts);
+    acts.append(add,save,undo,clear);card.append(acts);
     const file=document.createElement('div');file.className='bank-file';
     const dl=document.createElement('a');dl.textContent='Download as a bank file';
     dl.onclick=()=>{if(live(work[s]).length)download(`STATTIC-USR${s+1}.stbank`,buildEncodedSlot('STATTIC',work[s]));else status(`USR ${s+1} is empty.`,true);};
@@ -165,8 +178,9 @@ $('files').onchange=()=>action(async()=>{
   }
   if(added){work[s]=next;dirty[s]=true;}
   const left=SMP.MAX_DATA-bytesOf(work[s]);
-  status((added?`USR ${s+1}: ${added} ${CAT[cat]} sound${added>1?'s':''} added here, ${(left/1024).toFixed(1)} KiB and ${16-work[s].length} places left. Press “Save to FM-1” on USR ${s+1} to put ${added>1?'them':'it'} on the device.`:'Nothing was added.')+
-    (skipped.length?` Not added: ${skipped.join('; ')}.`:''),!added);
+  status((added?`USR ${s+1}: ${added} ${CAT[cat]} sound${added>1?'s':''} added here, ${(left/1024).toFixed(1)} KiB and ${16-work[s].length} places left. Press “Save to FM-1” on USR ${s+1} to put ${added>1?'them':'it'} on the device.`:
+    `Nothing was added: USR ${s+1} is full (${live(work[s]).length} of 16 sounds, ${(left/1024).toFixed(1)} KiB free). Choose another bank in “Into bank”, or delete sounds (✕ or “Clear bank”) and save.`)+
+    (skipped.length&&(added||skipped.some(x=>!x.includes('is full')))?` Not added: ${skipped.join('; ')}.`:''),!added);
 });
 const short=name=>name.replace(/\.[^.]+$/,'').slice(0,24);
 
