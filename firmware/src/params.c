@@ -273,7 +273,7 @@ static const param_desc_t *track_desc(const track_t *t, uint32_t id)
     if(is_drum(t) && id==P_E0) return &DRUM_KIT_DESC;
 #if FELUCCA_STATTIC
     if(is_drum(t)&&id>=P_E1&&id<=P_E4){
-        static const param_desc_t d[4]={PD("TONE",F_PCT,0,127,127),PD("SHAPE",F_PCT,0,127,0),PD("SWEEP",F_PCT,0,127,64),PD("DECAY",F_PCT,0,127,64)};
+        static const param_desc_t d[4]={PD("FILTER",F_PCT,0,127,127),PD("DRIVE",F_PCT,0,127,0),PD("BEND",F_PCT,0,127,64),PD("LENGTH",F_PCT,0,127,64)};
         return &d[id-P_E1];
     }
     if(t->eng_req==STATTIC_CH_ENGINE&&id==P_REL)return &ESYNC_DESC[2];

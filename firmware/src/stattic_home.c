@@ -103,7 +103,8 @@ static void stattic_footer(uint32_t page)
         static const char *const keys[3][4]={{"K1:TONE","K2:SHAPE","K3:SWEEP","K4:DECAY"},{"K1:G/SEQ","K2:G/PRM","K3:G/LFO","K4:G/FX"},{"K1:VOL","K2:PAN","K3:FLR","K4:WDT"}};
         for(uint32_t n=0;n<4;n++){
             static const char *const drk[4]={"K1:G/KICK","K2:G/SNR","K3:G/HAT","K4:G/PRC"};
-            const char *text=page==1u&&song.sel==TRK_DRUM?drk[n]:keys[page][n];
+            static const char *const drp[4]={"K1:FILTER","K2:DRIVE","K3:BEND","K4:LENGTH"};   /* (DR: what they do to the samples) */
+            const char *text=page==1u&&song.sel==TRK_DRUM?drk[n]:page==0u&&song.sel==TRK_DRUM?drp[n]:keys[page][n];
             stattic_text(n&1u?134:6,y+(2u+n/2u)*ST_HINT_PITCH,text,T_TEXT,ST_HINT_W,ST_HINT_H,9);
         }
     }
