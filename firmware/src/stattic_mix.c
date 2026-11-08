@@ -53,7 +53,7 @@ static void mix_part_run(track_t *t,uint32_t n,mixacc_t *mx,int32_t *b)
             tflt_run(&tflt[k],&qc,b,n,0);
             for(i=0;i<n;i++)b[i]=0;
         }
-        snow_fx_process(t,b,n);
+        if(!is_drum(t))snow_fx_process(t,b,n);
         asleep=!snow_fx[k].running;
     }else{
         tsvf_t fc;
@@ -72,7 +72,12 @@ static void mix_part_run(track_t *t,uint32_t n,mixacc_t *mx,int32_t *b)
                 t->tail=0;
             }
         }
-        snow_fx_process(t,b,n);
+        if(is_drum(t)){
+            /* (the owner) DR has no rack of its own: its REV is a send into the shared
+             * reverb (fx_buses, as SLOOP's drums: post level, the THROW glide too) */
+            int32_t rs=t->p[SN_FX_BYPASS]?0:send_thr(t->p[P_REV]*258,thr_rev);
+            if(rs)for(i=0;i<n;i++)mx->sr[i]+=mulq15(b[i],rs);
+        }else snow_fx_process(t,b,n);
     }
     int performance=snow_mix_begin(t);
     int32_t lvl=expr_gain(LEVEL_Q12[clamp(t->p[P_LEVEL],0,127)],k);
@@ -83,6 +88,7 @@ static void mix_part_run(track_t *t,uint32_t n,mixacc_t *mx,int32_t *b)
     int32_t l0=t->mix_on?t->lvl:lvl,p0=t->mix_on?t->gpl:gl,q0=t->mix_on?t->gpr:gr;
     t->lvl=mix_glide(l0,lvl);t->gpl=mix_glide(p0,gl);t->gpr=mix_glide(q0,gr);t->mix_on=1;
     int32_t pk=t->peak,drum=is_drum(t);
+    if(drum&&snow_fx[k].running){snow_fx[k].running=0;for(i=0;i<CTL;i++)snow_fx[k].side[i]=0;}   /* (a rack from before) */
     /* Fully muted with no performance filter: every product below is exactly
      * 0 (MULQ12R(x, 0, 4) rounds to 0), so nothing would be added. */
     if(!g0&&!g1&&!performance)asleep=1;

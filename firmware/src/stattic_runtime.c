@@ -262,7 +262,7 @@ static void stattic_parameter_locks(track_t *t,stattic_pattern_t *p,const int16_
 }
 static int stattic_prepare(uint32_t k,uint32_t knob)
 {
-    if(k>=NTRK||knob>3u)return 1;
+    if(k>=NTRK||knob>(k==TRK_DRUM?7u:3u))return 1;
     track_t candidate;stattic_snapshot_t next;uint32_t mask[ST_PARAM_WORDS]={0},what=0,f=STATTIC_GUARD_SAVE();
     stattic_change_t *q=&stattic_change[k];uint32_t prior=q->armed?q->serial:0;
     if(q->armed){next=q->value;memcpy(mask,q->mask,sizeof mask);what=q->what;}else stattic_capture(k,&next);
@@ -294,6 +294,29 @@ static int stattic_prepare(uint32_t k,uint32_t knob)
         const uint8_t ids[]={SN_G_SEED,SN_G_SEED_B,SN_G_SEED_C,SN_G_SEED_D};
         for(uint32_t i=0;i<NELEM(ids);i++){next.p[ids[i]]=candidate.p[ids[i]];mask[ids[i]/32u]|=1u<<(ids[i]%32u);}
         what|=ST_CHANGE_PATTERN|ST_CHANGE_SOUND;
+    }else if(knob>=4u&&k==TRK_DRUM){
+        /* (the owner) HOME 2 on DR: K1 kick, K2 snare, K3 hat, K4 percussion. Each
+         * makes that category's sequence anew (its lanes only, as K1 made all four)
+         * and draws that category's shots; the other categories stay as they are */
+        uint32_t cat=knob-4u,seed=snow_next_seed(snow_seed(&candidate));
+        static const uint8_t lane[4]={0,2,4,13};
+        step_t phrase[NSTEP];uint8_t shots[16];
+        for(uint32_t i=0;i<NSTEP;i++){
+            for(uint32_t l=0;l<16u;l++)if(ST_LANE_CATEGORY[l]==cat)dstep_clr(&next.pattern.drum[i],l);
+            candidate.step[i].time=ST_REST;
+        }
+        snow_phrase(&candidate,cat,seed^((cat+1u)*977u),phrase);
+        for(uint32_t i=0;i<NSTEP;i++)if(stattic_step_on(&phrase[i])){
+            uint32_t ln=lane[cat];if(cat==2u&&snow_prob(&seed,14))ln=5;
+            dstep_set(&next.pattern.drum[i],ln,vel_lvl(phrase[i].vel),0);
+            next.pattern.micro[i]=stattic_phrase_micro[i];
+        }
+        memcpy(shots,next.shots,sizeof shots);stattic_drum_random(shots,&seed);
+        for(uint32_t l=0;l<16u;l++)if(ST_LANE_CATEGORY[l]==cat)next.shots[l]=shots[l];
+        snow_seed_put(&candidate,seed);
+        const uint8_t ids[]={SN_G_SEED,SN_G_SEED_B,SN_G_SEED_C,SN_G_SEED_D};
+        for(uint32_t i=0;i<NELEM(ids);i++){next.p[ids[i]]=candidate.p[ids[i]];mask[ids[i]/32u]|=1u<<(ids[i]%32u);}
+        what|=ST_CHANGE_PATTERN|ST_CHANGE_SHOTS|ST_CHANGE_SOUND;
     }else if(knob==1u&&k==TRK_DRUM){
         uint32_t seed=snow_next_seed(snow_seed(&candidate));stattic_drum_random(next.shots,&seed);
         snow_seed_put(&candidate,seed);
@@ -324,7 +347,7 @@ static void stattic_prepare_scope(uint32_t track,uint32_t knob)
 {
     uint32_t mask=trk[track].p[SN_G_SCOPE]?15u:1u<<track,f=STATTIC_GUARD_SAVE();
     stattic_staging|=(uint8_t)mask;STATTIC_GUARD_RESTORE(f);
-    for(uint32_t k=0;k<NTRK;k++)if((mask>>k)&1u)(void)stattic_prepare(k,knob);
+    for(uint32_t k=0;k<NTRK;k++)if((mask>>k)&1u)(void)stattic_prepare(k,k==TRK_DRUM&&knob<4u?knob+4u:knob);   /* (DR: by category) */
     stattic_group_end(mask);
 }
 static void stattic_pattern_random(void)
