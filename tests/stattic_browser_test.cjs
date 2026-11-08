@@ -29,7 +29,10 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
     const download=page.waitForEvent('download');await page.locator('#export').click();await (await download).saveAs(out+'/converted.stbank');assert(fs.statSync(out+'/converted.stbank').size>512);await page.screenshot({path:out+'/samples-mobile.png',fullPage:true});
    }
    if(route==='install/')assert.match(await page.locator('#install-status').textContent(),/Local preview|verified/);
-   if(route==='install/factory.html')assert.equal(await page.locator('#factory-file').count(),1);
+   if(route==='install/factory.html'){
+    assert.equal(await page.locator('#factory-file').count(),1);
+    assert(await page.evaluate(()=>typeof document.getElementById('factory-file').onchange==='function'));
+   }
   }
   assert.deepEqual(errors,[]);console.log('Browser PASS: real AudioWorklet, five HOME pages, art bag/upward wrap, CH hold, PLAY/panic, native windows, mobile layouts, sample conversion/replacement/export, installer and console.');
  }finally{await browser.close();}
