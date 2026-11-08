@@ -2,6 +2,20 @@
 /* STATTIC's channel processors inside SLOOP's native render-unit API.
  * One scratch/accumulator per core; all effect histories remain per track. */
 static int32_t stattic_drum_tone,stattic_drum_amp=32767;
+/* (2026-11-08, the owner) the soft entry of a K2 sound (stattic_runtime.h): down in ~3 ms, up in ~150 ms */
+#define ST_FADE_DOWN 248                                 /* Q15 a sample: 132 samples */
+#define ST_FADE_UP 5                                     /* Q15 a sample: ~6550 samples */
+static ST_HOT void stattic_fade_run(uint32_t k,int32_t *b,int32_t *side,uint32_t n)
+{
+    int32_t f0=stattic_fade_gain[k],f1;
+    if(stattic_fade_stage[k]==1u){f1=f0-ST_FADE_DOWN*(int32_t)n;if(f1<=0){f1=0;stattic_fade_stage[k]=2;}}
+    else{f1=f0+ST_FADE_UP*(int32_t)n;if(f1>=32767){f1=32767;stattic_fade_stage[k]=0;}}
+    stattic_fade_gain[k]=f1;
+    for(uint32_t i=0;i<n;i++){
+        int32_t g=f0+(int32_t)(((f1-f0)*(int32_t)i)/(int32_t)n);
+        b[i]=mulq15(b[i],g);side[i]=mulq15(side[i],g);
+    }
+}
 static ST_HOT void mix_part_run(track_t *t,uint32_t n,mixacc_t *mx,int32_t *b)
 {
     uint32_t k=(uint32_t)(t-trk),i,start=STATTIC_PROFILE_TICKS(),synth_end;
@@ -31,6 +45,7 @@ static ST_HOT void mix_part_run(track_t *t,uint32_t n,mixacc_t *mx,int32_t *b)
         if(sprd)for(i=0;i<n;i++)side[i]=(stattic_spread[k][i]*2-b[i])*sprd/127;
         else for(i=0;i<n;i++)side[i]=0;
         slicer_track(t,b,n);
+        if(stattic_fade_stage[k&3u])stattic_fade_run(k&3u,b,side,n);
     }
     synth_end=STATTIC_PROFILE_TICKS();
     /* Silent channel (as native SLOOP's mix_part): no voice for ST_TAIL blocks,
@@ -75,7 +90,7 @@ static ST_HOT void mix_part_run(track_t *t,uint32_t n,mixacc_t *mx,int32_t *b)
         snow_fx_process(t,b,n);                 /* (SY, CH: their racks; BS and DR: the shared one, below) */
     }
     int performance=snow_mix_begin(t);
-    int32_t lvl=expr_gain(LEVEL_Q12[clamp(t->p[P_LEVEL],0,127)],k);
+    int32_t lvl=expr_gain(LEVEL_Q12[t->p[P_LEVEL]?clamp(t->p[P_LEVEL]+t->p[P_ED_FX],1,127):0],k);   /* (+ the sound's TRIM, 1/2 dB steps; presets 0) */
     /* The drum player already applies its channel LEVEL before the rack.
      * Synth parts apply it here; pan/width cover the rack's complete output. */
     if(is_drum(t))lvl=4096;

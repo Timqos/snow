@@ -146,6 +146,7 @@ static void stattic_runtime_tick(void)
             stattic_banks[k][stattic_current[k]]=q->value.pattern;
             stattic_origin[k]=song.playing?bar*4u:0u;
         }
+        if((q->what&ST_CHANGE_FADE)&&k<4u)stattic_fade_stage[k]=1;
         if(q->what&ST_CHANGE_SOUND){
             locks_restore(t);
             for(uint32_t id=0;id<P_COUNT;id++)if((q->mask[id/32u]>>(id%32u))&1u)t->p[id]=q->value.p[id];
@@ -323,6 +324,18 @@ static void stattic_drum_locks(track_t *t,stattic_pattern_t *p,const int16_t *ba
         made++;
     }
 }
+/* (2026-11-08, the owner) CH's K2 sounds at about one loudness. A held three-note chord of the KEYS voice,
+ * measured on the host for 300 random sounds (sustain, decay, drive and the wave explain 83 %, 1.6 dB rms):
+ * ~ 0.126 dB a SUS step, 0.029 a DEC step, 0.103 a DRIVE step, and the wave. Above the presets' middle (70 dB
+ * there) the sound's TRIM (P_ED_FX, 1/2 dB steps, applied with LEVEL) takes it down, at most 10 dB; quieter
+ * sounds are left alone. Nothing else of the sound changes; a preset sets TRIM 0. */
+static int16_t stattic_ch_trim(const int16_t *p)
+{
+    static const int16_t wave8[6]={463,451,453,445,442,439};          /* SINE TRI SAW SQUARE PULSE ORGAN, 1/8 dB */
+    int32_t est8=(16*p[P_SUS]+4*p[P_DEC]+13*p[P_E7])/16+wave8[(uint32_t)p[SN_WAVE1]%6u];
+    int32_t over=est8-70*8;
+    return (int16_t)(over>0?-clamp((over+2)/4,0,20):0);
+}
 static int stattic_prepare(uint32_t k,uint32_t knob)
 {
     if(k>=NTRK||knob>(k==TRK_DRUM?7u:3u))return 1;
@@ -383,6 +396,10 @@ static int stattic_prepare(uint32_t k,uint32_t knob)
         uint32_t own[ST_PARAM_WORDS];
         snow_design_section(&trk[k],role,knob==1u?FAM_EDIT:knob==2u?FAM_LFO:FAM_FX,own,next.p);
         for(uint32_t i=0;i<ST_PARAM_WORDS;i++)mask[i]|=own[i];what|=ST_CHANGE_SOUND;
+        if(knob==1u&&k!=TRK_DRUM)what|=ST_CHANGE_FADE;      /* (the owner) K2's new sound enters softly */
+        if(knob==1u&&k==2u){                                 /* (the owner) CH: a loud new sound is trimmed down */
+            next.p[P_ED_FX]=stattic_ch_trim(next.p);mask[P_ED_FX/32u]|=1u<<(P_ED_FX%32u);
+        }
         if(k==1u){next.p[P_VOICE]=V_POLY;next.p[SN_PLAY_MODE]=1;}
         if(k==TRK_DRUM&&knob==2u){next.p[SN_L2_DEST]=(int16_t)(1u+(uint32_t)next.p[SN_L2_DEST]%4u);if(!next.p[SN_L2_DEPTH])next.p[SN_L2_DEPTH]=24;}
     }

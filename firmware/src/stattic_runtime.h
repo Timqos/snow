@@ -1,7 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #define ST_PATTERNS 3u
 #define ST_PARAM_WORDS ((P_COUNT+31u)/32u)
-enum { ST_CHANGE_PATTERN=1,ST_CHANGE_SOUND=2,ST_CHANGE_SHOTS=4 };
+enum { ST_CHANGE_PATTERN=1,ST_CHANGE_SOUND=2,ST_CHANGE_SHOTS=4,ST_CHANGE_FADE=8 };
+/* (2026-11-08, the owner) a new sound from HOME 2 K2 enters softly at its bar: the channel's synth goes down in
+ * ~3 ms, then back up over ~150 ms (stattic_mix.c stattic_fade_run). 0 = no fade, 1 = going down, 2 = coming up */
+static volatile uint8_t stattic_fade_stage[4];
+static int32_t stattic_fade_gain[4]={32767,32767,32767,32767};
 typedef struct {
     union { step_t step[NSTEP];dstep_t drum[NSTEP]; };
     int8_t micro[NSTEP];

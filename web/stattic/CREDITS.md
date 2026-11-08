@@ -6,8 +6,9 @@ remain in the source archive. The firmware and these adaptations are GPL-3.0-onl
 
 STATTIC synthesis, presets, independent effect racks, performance functions and
 reference HOME artwork were ported from Timqos/snow b0cb3a5. The five HOME design
-references and brand mark were supplied by the project owner. Factory drum shots
-are rendered from the STATTIC presets, rather than using SLOOP's stock sample bank.
+references and brand mark were supplied by the project owner. The factory drum
+shots are the project owner's own sample set (assets/stattic-drums), rather than
+SLOOP's stock sample bank.
 Added since in this repository: the two-operator KEYS voice of SY and CH, the
 effects rack DR and BS share, the drum generator's feels, grids and bursts, and six
 more HOME pictures drawn procedurally by tools/gen_stattic_art_extra.py.
