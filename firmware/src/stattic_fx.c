@@ -50,7 +50,7 @@ static ST_HOT void snow_mix_sample(track_t *t,int32_t *l,int32_t *r)
     int32_t delta=snow_div2((v[0]-v[1])*snow_mix_fx[k].wgain,11);
     *l=v[0]+delta;*r=v[1]-delta;
 }
-static int32_t snow_fx_mul(int32_t x,int32_t gain) { return snow_div2(x*gain,15); }
+static inline int32_t snow_fx_mul(int32_t x,int32_t gain) { return snow_div2(x*gain,15); }
 static inline __attribute__((always_inline)) void snow_fx_lowpass(int32_t *state,int32_t x,int32_t gain)
 {
     int32_t delta=x-*state,step=snow_fx_mul(delta,gain);

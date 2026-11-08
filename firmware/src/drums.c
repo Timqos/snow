@@ -68,7 +68,7 @@ static int32_t ds_buf[CTL];
 /* (2.7) LEVEL and PAN glide: a knob's detent (or a new sound's trim) moves a quarter of the way each block of CTL
  * samples (0.73 ms), ~3 ms in all, instead of a step a detent (after JIANT FM 0.6.8, github.com/juanjiant-bit/JIANT:
  * "LEVEL and PAN glide (~3 ms) instead of stepping at each knob move"). The last few units: at once */
-static int32_t mix_glide(int32_t from, int32_t to)
+static inline int32_t mix_glide(int32_t from, int32_t to)
 {
     int32_t d = to - from;
     return d <= 8 && d >= -8 ? to : from + d / 4;

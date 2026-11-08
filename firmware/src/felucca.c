@@ -22,6 +22,10 @@
 #define STATTIC_PROFILE_TICKS() fm1_ticks()
 #if FELUCCA_STATTIC
 #define ST_HOT __attribute__((section(".hot_text"), noinline, used))   /* the render's hot loops: SRAM (app.ld) */
+/* (rasp fix 6) JieLi's -Os kept the one-line helpers (mulq15, clamp, sine_i, tsvf_lp, snow_div2...) as
+ * calls: the fix-5 build's SRAM render made 36 calls to clamp, 31 to mulq15... into the flash, a call
+ * and an I-cache line a sample. Every `static inline` from here on is inlined where it is used. */
+#define inline __inline__ __attribute__((always_inline))
 #endif
 #include "core.h"
 #include "cpu1.h"           /* the second core's job API (defined in cpu1.c; the host tests have their own) */
