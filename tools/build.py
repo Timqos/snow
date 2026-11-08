@@ -372,7 +372,7 @@ def main():
                 "package_bytes":len(pkg),"app_sha256":hashlib.sha256(img).hexdigest(),"app_bytes":len(img),
                 "loader_sha256":hashlib.sha256(ota).hexdigest(),"source_commit":git("rev-parse","HEAD"),
                 "source_dirty":bool(git("status","--porcelain")),"sloop_base":"bac9c05ea7627449405aa10e48da21d75b6c8c56",
-                "configuration":{"FELUCCA_STATTIC":1,"FELUCCA_CDC":1,"HALF_FRAMES":256,"sample_rate":44100,"channels":["DR","BS","SY","CH"],"steps":64,"patterns_per_channel":3,"CH_voice_cap":4},
+                "configuration":{"FELUCCA_STATTIC":1,"FELUCCA_CDC":1,"HALF_FRAMES":256,"sample_rate":44100,"channels":["DR","BS","SY","CH"],"steps":64,"patterns_per_channel":3,"CH_voice_cap":3},
                 "checks":notes,"hardware_audio_validation":"pending"}
         (OUT/"stattic-build.json").write_text(json.dumps(record,indent=2)+"\n")
     att = SRC / "assets" / "samples-cc0" / "ATTRIBUTION.txt"

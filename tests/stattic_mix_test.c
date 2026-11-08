@@ -19,7 +19,7 @@ int main(void)
         if(b%1100u==1000u)stattic_pattern_select(2,(stattic_current[2]+1u)%3u);
         if(b%1200u==300u){for(uint32_t i=0;i<4;i++)trk_note_on(&trk[2],48+i*4,100);}
         if(b%1200u==400u){for(uint32_t i=0;i<4;i++)trk_note_off(&trk[2],48+i*4);}
-        block();assert(voices_busy()<=NVOICE);uint32_t ch=0;for(uint32_t i=0;i<NVOICE;i++)ch+=!!trk[2].v[i].active;assert(ch<=4);
+        block();assert(voices_busy()<=NVOICE);uint32_t ch=0;for(uint32_t i=0;i<NVOICE;i++)ch+=!!trk[2].v[i].active;assert(ch<=STATTIC_CH_VOICES);
         for(uint32_t i=0;i<CTL*2;i++){
             int32_t x=output[i];assert(x>=-32768&&x<=32767);audible+=x!=0;uint32_t a=(uint32_t)(x<0?-x:x);if(a>peak)peak=a;
             hash=(hash^(uint32_t)x)*UINT64_C(1099511628211);
@@ -27,6 +27,6 @@ int main(void)
         assert(drum_kit()==DRUM_STATTIC);
         for(uint32_t i=0;i<NDRUM;i++)assert(!drums.synth[i]);
     }
-    assert(audible>FS&&peak>100);printf("STATTIC four-track mix %016llx peak %u: 16 s, all generators, live chords, CH <=4, sampled DR only\n",(unsigned long long)hash,peak);
+    assert(audible>FS&&peak>100);printf("STATTIC four-track mix %016llx peak %u: 16 s, all generators, live chords, CH <=%u, sampled DR only\n",(unsigned long long)hash,peak,STATTIC_CH_VOICES);
     return 0;
 }

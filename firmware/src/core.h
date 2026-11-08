@@ -11,7 +11,7 @@
 #endif
 #define STATTIC_CHANNELS 4u
 #define STATTIC_SOUND_ROLES 6u /* original KK/SD/HH/PR/BS/CH sound/vector data */
-#define STATTIC_CH_VOICES 4u
+#define STATTIC_CH_VOICES 3u   /* (rasp fix 3, the owner: 3 voices; was 4) */
 #define STATTIC_CH_RELEASE 113 /* ESYNC_NAMES[22]: 2BAR */
 #define NVOICE 8                 /* voices per part, and the budget shared by all parts */
 #define NPOLY 8

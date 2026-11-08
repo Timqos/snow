@@ -60,7 +60,15 @@ static uint32_t chord_make(const track_t *t, uint32_t root, uint8_t *out, int32_
     }
     n = chord_tones(t, mode, &r, iv);
     for (i = 0; i < n; i++)
-        mask |= (uint16_t)(1u << (iv[i] % 12));
+        mask |= (uint16_t)(1u << (iv[i] % 12));        /* (the whole harmony: FOLLOW keeps reading it) */
+#if FELUCCA_STATTIC
+    /* (rasp fix 3) CH plays three voices: a seventh drops its fifth (root, third, seventh) */
+    int ch3 = t->engine == STATTIC_CH_ENGINE && STATTIC_CH_VOICES < CHORD_MAX;
+    if (ch3 && n > STATTIC_CH_VOICES) {
+        iv[2] = iv[3];
+        n = STATTIC_CH_VOICES;
+    }
+#endif
     *rp = r;
     *maskp = mask;
     if (t->p[P_VOICE] != V_POLY && !t->p[P_AMODE]) {     /* one voice: the root (the ARP: all of it) */
@@ -82,6 +90,12 @@ static uint32_t chord_make(const track_t *t, uint32_t root, uint8_t *out, int32_
         }
         break;
     case VC_BASS:                                       /* the root an octave down; a seventh drops its fifth */
+#if FELUCCA_STATTIC
+        if (ch3 && n >= STATTIC_CH_VOICES) {            /* (three voices: the root itself goes down) */
+            iv[0] = -12;
+            break;
+        }
+#endif
         if (n == CHORD_MAX) {
             iv[2] = iv[3];
             n--;
