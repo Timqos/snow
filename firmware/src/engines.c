@@ -127,7 +127,9 @@ _Static_assert(ENGI_GRAIN == 8u && ENGI_PHYS == 10u && ENGI_NOISE == 11u && ENGI
 static int16_t preset_trim(uint32_t e, uint32_t pi)
 {
 #if FELUCCA_STATTIC
-    (void)e;(void)pi;return 0;
+    static const int8_t sy_fx[5]={22,6,14,6,4};        /* (2026-11-09) SY's 8-bit / FX presets to the keys' level, 1/2 dB */
+    if(e==STATTIC_SY_ENGINE&&pi>=15u&&pi<20u)return sy_fx[pi-15u];
+    return 0;
 #else
     return e < PT_ENGINES && pi < PT_MAX ? PRESET_TRIM[e][pi] : 0;
 #endif

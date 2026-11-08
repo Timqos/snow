@@ -397,6 +397,7 @@ static int stattic_prepare(uint32_t k,uint32_t knob)
         snow_design_section(&trk[k],role,knob==1u?FAM_EDIT:knob==2u?FAM_LFO:FAM_FX,own,next.p);
         for(uint32_t i=0;i<ST_PARAM_WORDS;i++)mask[i]|=own[i];what|=ST_CHANGE_SOUND;
         if(knob==1u&&k!=TRK_DRUM)what|=ST_CHANGE_FADE;      /* (the owner) K2's new sound enters softly */
+        if(knob==1u&&k==1u)mask[P_ED_FX/32u]|=1u<<(P_ED_FX%32u);   /* (SY: its 8-bit / FX sounds carry a TRIM) */
         if(knob==1u&&k==2u){                                 /* (the owner) CH: a loud new sound is trimmed down */
             next.p[P_ED_FX]=stattic_ch_trim(next.p);mask[P_ED_FX/32u]|=1u<<(P_ED_FX%32u);
         }

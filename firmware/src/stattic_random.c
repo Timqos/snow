@@ -51,6 +51,68 @@ static void snow_design_fx(uint32_t channel,uint32_t *r,int16_t *p)
     p[P_IA]=ss_range(r,p[P_ITYPE]==1?8:20,p[P_ITYPE]==1?26:63);
     p[P_IB]=ss_range(r,p[P_ITYPE]==1?82:12,p[P_ITYPE]==1?119:40);p[P_IC]=ss_range(r,p[P_ITYPE]==1?90:0,p[P_ITYPE]==1?108:14);
 }
+/* (2026-11-09, the owner) SY's K2: one turn in every four (its place in the four drawn at random) makes an
+ * 8-bit / FX sound instead of a keys one. Six kinds, dealt from a shuffled deck (each once before any again, never
+ * the same twice running), each with its own ranges: BLIP, ZAP (falls), LASER (rises), NOISE HIT, CHIP ARP (in the
+ * track's scale), GLITCH. Its TRIM (P_ED_FX) evens their level with the keys sounds. */
+static uint8_t st_sy_slot,st_sy_fx_at,st_sy_deck[6],st_sy_left,st_sy_last=255;
+static int stattic_sy_fx_turn(uint32_t *r)
+{
+    if(!st_sy_slot)st_sy_fx_at=(uint8_t)ss_range(r,0,3);
+    int fx=st_sy_slot==st_sy_fx_at;st_sy_slot=(uint8_t)((st_sy_slot+1u)&3u);
+    return fx;
+}
+static uint32_t stattic_sy_fx_kind(uint32_t *r)
+{
+    if(!st_sy_left){
+        for(uint32_t i=0;i<6u;i++)st_sy_deck[i]=(uint8_t)i;
+        for(uint32_t i=5u;i>0;i--){uint32_t j=ss_rand(r)%(i+1u);uint8_t x=st_sy_deck[i];st_sy_deck[i]=st_sy_deck[j];st_sy_deck[j]=x;}
+        if(st_sy_deck[5]==st_sy_last){uint32_t j=ss_rand(r)%5u;uint8_t x=st_sy_deck[5];st_sy_deck[5]=st_sy_deck[j];st_sy_deck[j]=x;}
+        st_sy_left=6;
+    }
+    return st_sy_last=st_sy_deck[--st_sy_left];
+}
+static void snow_design_sy_fx(uint32_t *r,int16_t *p)
+{
+    static const uint8_t pws[]={16,32,64,96};
+    static const int8_t trim[6]={18,10,12,20,-4,12};   /* 1/2 dB, BLIP ZAP LASER NOISE ARP GLITCH: their loudest 23 ms
+                                                         * near the keys sounds' (host, 240 turns: the keys ~70 dB) */
+    uint32_t kind=stattic_sy_fx_kind(r);
+    p[SN_ALG]=0;p[SN_PAMT]=0;p[SN_RATIO3]=8;p[SN_WAVE2]=0;p[SN_WAVE3]=0;p[SN_SUB]=0;p[SN_MIX]=0;p[SN_FB_ROUTE]=0;
+    p[SN_FILTER]=0;p[SN_RESO]=0;p[SN_MODE]=1;p[SN_FINE]=0;p[SN_NOISE]=0;p[P_E5]=0;p[SN_FMDEC]=0;
+    p[SN_WAVE1]=ss_chance(r,60)?4:ss_chance(r,70)?3:ss_chance(r,50)?1:2;   /* pulse, square, tri, saw */
+    p[SN_PW]=pws[ss_rand(r)%NELEM(pws)];p[SN_RATIO]=16;p[P_E1]=64;
+    p[SN_TUNE]=(int16_t)(ss_chance(r,70)?0:12*ss_range(r,-1,1));
+    p[P_E0]=ss_range(r,0,14);p[P_E2]=0;p[P_E4]=ss_range(r,0,50);p[P_E6]=ss_range(r,100,127);p[P_E7]=ss_range(r,0,20);
+    p[P_ATK]=0;p[P_GLIDE]=0;
+    switch(kind){
+    case 0:   /* BLIP: a short tone, a small quick jump */
+        p[SN_PAMT]=(int16_t)(ss_chance(r,50)?ss_range(r,3,12):-ss_range(r,3,12));p[SN_PDEC]=ss_range(r,3,12);
+        p[P_DEC]=ss_range(r,25,50);p[P_SUS]=0;p[P_REL]=ss_range(r,8,22);break;
+    case 1:   /* ZAP: falls from far above */
+        p[SN_PAMT]=ss_range(r,18,48);p[SN_PDEC]=ss_range(r,14,40);
+        p[P_DEC]=ss_range(r,40,62);p[P_SUS]=ss_range(r,0,30);p[P_REL]=ss_range(r,12,30);break;
+    case 2:   /* LASER: rises into the note */
+        p[SN_PAMT]=(int16_t)-ss_range(r,12,36);p[SN_PDEC]=ss_range(r,10,32);
+        p[P_DEC]=ss_range(r,40,64);p[P_SUS]=ss_range(r,0,40);p[P_REL]=ss_range(r,12,30);break;
+    case 3:{  /* NOISE HIT: hiss and an air burst over a rough FM body */
+        static const uint8_t odd[]={56,72,88,104,120};
+        p[SN_NOISE]=ss_range(r,70,127);p[P_E5]=ss_range(r,40,127);p[SN_PDEC]=ss_range(r,6,22);
+        p[P_E0]=ss_range(r,40,110);p[SN_RATIO]=odd[ss_rand(r)%NELEM(odd)];p[P_E2]=ss_range(r,30,90);p[SN_FMDEC]=ss_range(r,8,30);
+        p[SN_PAMT]=(int16_t)ss_range(r,-8,8);p[P_E6]=ss_range(r,60,120);
+        p[P_DEC]=ss_range(r,22,44);p[P_SUS]=0;p[P_REL]=ss_range(r,8,20);break;}
+    case 4:   /* CHIP ARP: the note stepped through the scale */
+        p[SN_ALG]=ss_range(r,1,5);p[SN_RATIO3]=ss_range(r,8,60);
+        p[P_DEC]=ss_range(r,60,90);p[P_SUS]=ss_range(r,50,110);p[P_REL]=ss_range(r,15,40);break;
+    default:{ /* GLITCH: heavy FM, a broken fast arp, a jump */
+        static const uint8_t odd[]={56,72,88,104,120};
+        p[P_E0]=ss_range(r,90,127);p[SN_RATIO]=odd[ss_rand(r)%NELEM(odd)];p[P_E2]=ss_range(r,60,127);p[SN_FMDEC]=ss_range(r,5,25);
+        if(ss_chance(r,60)){p[SN_ALG]=5;p[SN_RATIO3]=ss_range(r,1,15);}
+        p[SN_PAMT]=(int16_t)ss_range(r,-24,24);p[SN_PDEC]=ss_range(r,4,18);p[P_E7]=ss_range(r,10,40);
+        p[P_DEC]=ss_range(r,20,50);p[P_SUS]=ss_range(r,0,40);p[P_REL]=ss_range(r,8,24);break;}
+    }
+    p[P_ED_FX]=trim[kind];
+}
 static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t seed,const uint32_t *mask,int16_t *p)
 {
     uint32_t r=seed?seed:0x6d2b79f5u;int melodic=channel>=4u;
@@ -110,7 +172,10 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
         p[SN_PDEC]=ss_range(&r,8,22);p[SN_FMDEC]=ss_range(&r,30,75);p[SN_FILTER]=1;
         p[SN_RESO]=ss_range(&r,0,15);p[P_E6]=ss_range(&r,73,118);p[P_ATK]=ss_range(&r,0,10);
         p[P_DEC]=ss_range(&r,family==2?75:34,family==2?89:71);
+    } else if(channel==6u&&stattic_sy_fx_turn(&r)){   /* (SY: an 8-bit / FX sound, one turn in four) */
+        snow_design_sy_fx(&r,p);
     } else if(channel>=5u){ /* KEYS (SY, CH): electric pianos, organs, glassy and soft keys */
+        if(channel==6u)p[P_ED_FX]=0;                  /* (SY: a keys sound, no FX trim) */
         static const uint8_t waves[]={0,0,0,1,5,4,2};static const uint8_t ratios[]={16,16,16,32,32,48,56,64,112};
         int kind=ss_range(&r,0,6);
         p[SN_ALG]=0;p[SN_WAVE2]=0;p[SN_WAVE3]=0;p[SN_SUB]=0;p[SN_MIX]=0;p[SN_FB_ROUTE]=0;

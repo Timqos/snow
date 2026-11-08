@@ -160,6 +160,14 @@ static struct { tsvf_t coef;int32_t cut,reso;uint8_t valid; } stattic_filter_cac
  *   BRIGHT: a one-pole low-pass (CUTOFF slot, its LFO/ENV modulation too), DRIVE
  * The old three-operator algorithms, feedback, SUB, the resonant filter and the
  * pitch sweep are not part of it: about half the cost of the STATTIC voice. */
+/* (2026-11-09, the owner) SY only: 8-bit / FX sounds in the same KEYS voice, per block (no per-sample cost):
+ *   P AMOUNT  a pitch sweep in semitones, falling to the note with P DECAY (the AIR envelope: v->s[2])
+ *   CHIP ARP  (the ALG slot) the note stepped through scale degrees of the track's own scale, as a chip arpeggio;
+ *             ARP RATE (the RATIO 3 slot): 8 + RATE blocks a step (~6..98 ms). v->s[9] counts blocks, v->s[3]
+ *             holds the step's offset (1/16 semitones). 0 / 0 (every KEYS preset, every CH sound): as before. */
+static uint32_t scale_mask(const track_t *t);
+static int32_t snow_degree(const track_t *t,int32_t base,int32_t degree);
+static const int8_t ST_CHIP_ARP[5][8]={{0,2,4,-1},{0,4,7,-1},{0,2,4,7,-1},{7,4,2,0,-1},{0,4,1,6,2,7,3,5}};
 static SNOW_RENDER_RAM void keys_render(track_t *t,voice_t *v,int32_t *out,uint32_t n,const vmod_t *m)
 {
     const int16_t *p=t->p;
@@ -167,6 +175,19 @@ static SNOW_RENDER_RAM void keys_render(track_t *t,voice_t *v,int32_t *out,uint3
     int32_t tone=clamp(snow_param(t,0)+snow_div2(m->shape-(64<<8),8),0,127);
     int32_t pitch=60*16+(m->pitch16-60*16)*p[SN_KEYTRACK]/127+p[SN_TUNE]*16;
     if(p[SN_L2_DEST]==9)pitch+=snow_l2[stattic_part(t)].value*2;
+    if(t==&trk[1]&&(p[SN_PAMT]|p[SN_ALG])){                 /* (SY: sweep, chip arp) */
+        if(p[SN_PAMT])pitch+=(p[SN_PAMT]*16*(v->s[2]>>9))>>15;
+        uint32_t pat=(uint32_t)p[SN_ALG];
+        if(pat&&pat<=5u){
+            uint32_t len=8u+(uint32_t)clamp(p[SN_RATIO3],1,127),age=(uint32_t)v->s[9]++;
+            if(age%len==0u){
+                const int8_t *seq=ST_CHIP_ARP[pat-1u];uint32_t cnt=0;while(cnt<8u&&seq[cnt]>=0)cnt++;
+                int32_t deg=seq[(age/len)%cnt];
+                v->s[3]=deg?(snow_degree(t,v->note,deg)-(int32_t)v->note)*16:0;
+            }
+            pitch+=v->s[3];
+        }
+    }
     uint32_t inc=pitch_inc((uint32_t)clamp(pitch,0,2047));
     inc+=(uint32_t)((int32_t)(inc>>12)*(p[SN_FINE]*2367/1000+m->fine));
     uint32_t ratio=(uint32_t)clamp(p[SN_RATIO],1,127)*(64u+(uint32_t)snow_param(t,1))/8u;
@@ -266,10 +287,15 @@ static SNOW_RENDER_RAM void snow_render(track_t *t,voice_t *v,int32_t *out,uint3
 static void snow_fill(int16_t *p,uint32_t role,uint32_t preset)
 {
     uint32_t synth=role==STATTIC_SY_ENGINE;
-    role%=STATTIC_SOUND_ROLES;preset%=role>=4u||synth?15u:10u;
+    role%=STATTIC_SOUND_ROLES;preset%=synth?20u:role>=4u?15u:10u;
     if(synth)role=5u;
-    for(uint32_t k=0;k<20u;k++)p[SN_ALG+k]=SNOW_DETAIL[role][preset][k];
-    p[SN_CHORD]=SNOW_CHORD[role][preset];
+    if(synth&&preset>=15u){                         /* (SY's 8-bit / FX presets) */
+        for(uint32_t k=0;k<20u;k++)p[SN_ALG+k]=SNOW_SY_FX_DETAIL[preset-15u][k];
+        p[SN_CHORD]=0;
+    }else{
+        for(uint32_t k=0;k<20u;k++)p[SN_ALG+k]=SNOW_DETAIL[role][preset][k];
+        p[SN_CHORD]=SNOW_CHORD[role][preset];
+    }
     if(role==5u&&!synth)p[P_REL]=SN_CH_RELEASE;
     if(role<5u)p[P_VOICE]=V_MONO;
     if(role==3u)p[SN_KEYTRACK]=127; /* percussion follows the generated scale notes */
@@ -282,14 +308,14 @@ static void snow_fill(int16_t *p,uint32_t role,uint32_t preset)
  .presets=SNOW_PATCHES[role],.npresets=(role>=4?15:10),.macro={P_E0,P_E1,P_E2,P_E3}, \
  .poly=(role==5?SN_CH_VOICES:4),.ownenv=1,.note_on=snow_note_on,.render=snow_render, \
  .amp=snow_amp,.done=snow_done,.block=snow_block }
-#define SNOW_KEYS(nvoice,title) { .name=title,.page_title={"MACROS","KEYS"}, \
+#define SNOW_KEYS(nvoice,title,pr_,np_) { .name=title,.page_title={"MACROS","KEYS"}, \
  .edit={{.label="TONE",.fmt=F_PCT,.min=0,.max=127,.def=40},{.label="SHAPE",.fmt=F_PCT,.min=0,.max=127,.def=64}, \
  {.label="HAMMER",.fmt=F_PCT,.min=0,.max=127,.def=64},{.label="DECAY",.fmt=F_PCT,.min=0,.max=127,.def=64}, \
  {.label="VELO",.fmt=F_PCT,.min=0,.max=127,.def=48},{.label="AIR",.fmt=F_PCT,.min=0,.max=127,.def=0}, \
  {.label="BRIGHT",.fmt=F_CUTOFF,.min=0,.max=127,.def=110},{.label="DRIVE",.fmt=F_PCT,.min=0,.max=127,.def=0}}, \
- .presets=SNOW_PATCHES[5],.npresets=15,.macro={P_E0,P_E1,P_E2,P_E3}, \
+ .presets=(pr_),.npresets=(np_),.macro={P_E0,P_E1,P_E2,P_E3}, \
  .poly=(nvoice),.ownenv=1,.note_on=snow_note_on,.render=snow_render, \
  .amp=snow_amp,.done=snow_done,.block=snow_block }
-static const engine_t SNOW_ENG[7]={SNOW_MACHINE(0,"KICK"),SNOW_MACHINE(1,"SNARE"),SNOW_MACHINE(2,"HAT"),SNOW_MACHINE(3,"PERC"),SNOW_MACHINE(4,"BASS"),SNOW_KEYS(SN_CH_VOICES,"CHORD"),SNOW_KEYS(4,"SYNTH")};
+static const engine_t SNOW_ENG[7]={SNOW_MACHINE(0,"KICK"),SNOW_MACHINE(1,"SNARE"),SNOW_MACHINE(2,"HAT"),SNOW_MACHINE(3,"PERC"),SNOW_MACHINE(4,"BASS"),SNOW_KEYS(SN_CH_VOICES,"CHORD",SNOW_PATCHES[5],15),SNOW_KEYS(4,"SYNTH",SNOW_SY_PATCHES,20)};
 #undef SNOW_MACHINE
 #undef SNOW_KEYS

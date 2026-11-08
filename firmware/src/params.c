@@ -284,6 +284,15 @@ static const param_desc_t *track_desc(const track_t *t, uint32_t id)
     if(stattic_keys_track(t)){                     /* (KEYS: SY, CH) the slots it gives a meaning of its own */
         static const param_desc_t kd[2]={PD("HISS",F_PCT,0,127,0),PD("AIR DECAY",F_TIME,0,127,25)};
         if(id==SN_NOISE)return &kd[0];
+        if(t==&trk[1]){                            /* (SY, 2026-11-09: the 8-bit / FX slots) */
+            static const char *const arp[]={"OFF","1-3-5","1-5-8","1-3-5-8","8-5-3-1","BROKEN"};
+            static const param_desc_t sy[4]={PE("CHIP ARP",arp,0),PD("ARP RATE",F_INT,1,127,30),
+                                             PD("P DECAY",F_TIME,0,127,25),PD("P AMOUNT",F_SEMI,-48,48,0)};
+            if(id==SN_ALG)return &sy[0];
+            if(id==SN_RATIO3)return &sy[1];
+            if(id==SN_PDEC)return &sy[2];
+            if(id==SN_PAMT)return &sy[3];
+        }
         if(id==SN_PDEC)return &kd[1];
     }
 #endif
@@ -525,6 +534,7 @@ static int page_for_drum(const page_t *pg)
  * resonant filter or pitch sweep: those slots stay empty there, a page of only those is skipped */
 static int stattic_keys_hidden(uint32_t id)
 {
+    if(TSEL==&trk[1]&&(id==SN_ALG||id==SN_RATIO3||id==SN_PAMT))return 0;   /* (SY: CHIP ARP, ARP RATE, the sweep) */
     return id==SN_ALG||id==SN_WAVE2||id==SN_WAVE3||id==SN_RATIO3||id==SN_MIX||id==SN_FB_ROUTE||
            id==SN_SUB||id==SN_PAMT||id==SN_FILTER||id==SN_RESO;
 }
