@@ -49,6 +49,72 @@ jobs:
           name: stattic-firmware-${{ github.sha }}
           path: |
             build/*.fwsc
+            build/stattic-build.json
             build/stattic-build.log
           retention-days: 30
           if-no-files-found: error
+
+  # Every new firmware goes onto the site's install page (the owner installs from there):
+  # the package, its manifest and install/config.json on gh-pages, then the Pages deployment.
+  publish:
+    needs: build
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: write
+    concurrency:
+      group: stattic-site-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: stattic-firmware-${{ github.sha }}
+          path: fw
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: site
+      - name: Firmware onto the install page
+        env:
+          SHA: ${{ github.sha }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, shutil
+          from pathlib import Path
+          fw, site = Path('fw'), Path('site/snow')
+          trace = json.loads((fw / 'stattic-build.json').read_text())
+          pkg = fw / trace['package']
+          digest = hashlib.sha256(pkg.read_bytes()).hexdigest()
+          assert digest == trace['package_sha256'], 'package differs from its build record'
+          short = os.environ['SHA'][:7]
+          name = pkg.stem + '-' + short + pkg.suffix
+          out = site / 'firmware'
+          for old in out.glob(pkg.stem + '-*' + pkg.suffix):   # earlier builds of this line (not the original)
+              old.unlink()
+          shutil.copy(pkg, out / name)
+          trace = dict(trace, package=name, branch=os.environ['BRANCH'])
+          (out / 'manifest.json').write_text(json.dumps(trace, indent=2) + '\n')
+          label = trace['version'] + ' · ' + short
+          (site / 'install/config.json').write_text(json.dumps({
+              'version': label, 'product': trace['product'], 'sha256': digest,
+              'package': '../firmware/' + name, 'source_commit': trace['source_commit']}, indent=2) + '\n')
+          status = site / 'hardware-status.json'
+          st = json.loads(status.read_text()) if status.exists() else {}
+          st.update(version=label, source_commit=trace['source_commit'], source_dirty=trace['source_dirty'],
+                    hardware_audio_validation='pending')
+          status.write_text(json.dumps(st, indent=2) + '\n')
+          print('published', name, digest)
+          PY
+          cd site
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A snow
+          git commit -m "Install page: STATTIC firmware ${GITHUB_SHA::7} from ${GITHUB_REF_NAME}" || exit 0
+          git push origin HEAD:gh-pages
+      - name: Deploy the site
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run publish-simulator.yml --ref main -R "$GITHUB_REPOSITORY"
