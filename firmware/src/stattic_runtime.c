@@ -5,6 +5,7 @@
 static int stattic_step_on(const step_t *s) { return s->time==ST_NOTE&&s->n; }
 #include "stattic_phrase.c"
 #include "stattic_random.c"
+#include "stattic_idm.c"
 
 typedef struct { stattic_snapshot_t value;uint32_t session;uint8_t track; } stattic_undo_t;
 /* Split fixed undo storage across the two native RAM regions. No allocation
@@ -335,16 +336,8 @@ static int stattic_prepare(uint32_t k,uint32_t knob)
         uint32_t seed=snow_next_seed(snow_seed(&candidate));
         if(k==TRK_DRUM){
             memset(next.pattern.drum,0,sizeof next.pattern.drum);memset(next.pattern.micro,0,sizeof next.pattern.micro);
-            for(uint32_t cat=0;cat<4;cat++){
-                step_t phrase[NSTEP];static const uint8_t lane[4]={0,2,4,13};
-                for(uint32_t i=0;i<NSTEP;i++)candidate.step[i].time=ST_REST;
-                snow_phrase(&candidate,cat,seed^((cat+1u)*977u),phrase);
-                for(uint32_t i=0;i<NSTEP;i++)if(stattic_step_on(&phrase[i])){
-                    uint32_t ln=lane[cat];if(cat==2u&&snow_prob(&seed,14))ln=5;
-                    dstep_set(&next.pattern.drum[i],ln,vel_lvl(phrase[i].vel),0);
-                    next.pattern.micro[i]=stattic_phrase_micro[i];
-                }
-            }
+            uint32_t feel=stattic_feel_pick((uint32_t)clamp(candidate.p[SN_G_COMPLEX],0,100),&seed);
+            for(uint32_t cat=0;cat<4;cat++)stattic_dr_make(&candidate,&next.pattern,cat,seed^((cat+1u)*977u),feel,&seed);
         }else{
             snow_phrase(&candidate,role,seed,next.pattern.step);
             memcpy(next.pattern.micro,stattic_phrase_micro,sizeof next.pattern.micro);
@@ -360,20 +353,11 @@ static int stattic_prepare(uint32_t k,uint32_t knob)
          * makes that category's sequence anew (its lanes only, as K1 made all four)
          * and draws that category's shots; the other categories stay as they are */
         uint32_t cat=knob-4u,seed=snow_next_seed(snow_seed(&candidate));
-        static const uint8_t lane[4]={0,2,4,13};
-        step_t phrase[NSTEP];uint8_t shots[16];
-        uint8_t was[NSTEP];
-        for(uint32_t i=0;i<NSTEP;i++){
-            was[i]=(uint8_t)stattic_cat_hits(&next.pattern.drum[i],cat,0);
-            for(uint32_t l=0;l<16u;l++)if(ST_LANE_CATEGORY[l]==cat)dstep_clr(&next.pattern.drum[i],l);
-            candidate.step[i].time=ST_REST;
-        }
-        snow_phrase(&candidate,cat,seed^((cat+1u)*977u),phrase);
-        for(uint32_t i=0;i<NSTEP;i++)if(stattic_step_on(&phrase[i])){
-            uint32_t ln=lane[cat];if(cat==2u&&snow_prob(&seed,14))ln=5;
-            dstep_set(&next.pattern.drum[i],ln,vel_lvl(phrase[i].vel),0);
-            next.pattern.micro[i]=stattic_phrase_micro[i];
-        }
+        uint8_t shots[16],was[NSTEP];
+        for(uint32_t i=0;i<NSTEP;i++)was[i]=(uint8_t)stattic_cat_hits(&next.pattern.drum[i],cat,0);
+        uint32_t idm=(uint32_t)clamp(candidate.p[SN_G_COMPLEX],0,100);
+        uint32_t feel=cat==0u?stattic_feel_of(&next.pattern,(uint32_t)clamp(candidate.p[P_SLEN],1,NSTEP)):cat==1u?stattic_feel_pick(idm,&seed):ST_FEEL_BASE;
+        stattic_dr_make(&candidate,&next.pattern,cat,seed^((cat+1u)*977u),feel,&seed);
         stattic_drum_locks(&trk[k],&next.pattern,next.p,cat,was,&seed);
         memcpy(shots,next.shots,sizeof shots);stattic_drum_random(shots,&seed);
         for(uint32_t l=0;l<16u;l++)if(ST_LANE_CATEGORY[l]==cat)next.shots[l]=shots[l];
