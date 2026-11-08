@@ -48,8 +48,11 @@ the same firmware version, and restores the working project last. Native SLOOP
 and Skiff project/preset bytes are not interchangeable with STATTIC bytes.
 
 CDC diagnostics use `diag_schema=3`, with explicit track/FX/event/master-bus timing
-fields and a snapshot of the latest missed audio half. Enable MENU → SYSTEM →
-USB SERIAL, then replug/power-cycle to enumerate CDC. L counts missed DMA halves
+fields and a snapshot of the latest missed audio half. While stopped, enable
+MENU → AUDIO → USB SERIAL, close the menu with HOME to save, then fully power
+off the FM-1 with USB disconnected. Power on and reconnect USB to enumerate CDC.
+USB SERIAL is read only at startup; reconnecting USB while the FM-1 stays on
+does not activate it. L counts missed DMA halves
 since cold boot; a warm reset can preserve it. Use its **delta**, not only its
 absolute value. The console polls counters and cannot prove hardware stability
 from an empty or short log.
