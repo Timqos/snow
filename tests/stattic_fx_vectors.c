@@ -30,7 +30,12 @@ int main(void)
             t->p[SN_TMIX]=mask&1?127:0;t->p[SN_BMIX]=mask&2?127:0;t->p[P_CHOR]=mask&4?127:0;
             t->p[P_DLY]=mask&8?127:0;t->p[P_REV]=mask&16?127:0;t->p[SN_FX_BYPASS]=block%71==0;
             uint32_t n=size[block%6];int32_t b[CTL];for(uint32_t i=0;i<n;i++)b[i]=block%37<12?0:(int32_t)(draw()&0x3ffffu)-131072;
-            snow_fx_process(t,b,n);h=hash(h,b,n*sizeof *b);
+#ifdef STATTIC_REFERENCE_SOURCE
+            snow_fx_process(t,b,n);
+#else
+            snow_fx_core(&snow_fx[0],t->p,b,n);   /* (DR's rack is now the shared one: the same core) */
+#endif
+            h=hash(h,b,n*sizeof *b);
         }
         h=hash(h,&snow_fx[0],sizeof snow_fx[0]);printf("%u %u %016llx\n",scene,(unsigned)sizeof snow_fx[0],(unsigned long long)h);
     }return 0;

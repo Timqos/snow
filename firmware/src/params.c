@@ -277,6 +277,10 @@ static const param_desc_t *track_desc(const track_t *t, uint32_t id)
         return &d[id-P_E1];
     }
     if(t->eng_req==STATTIC_CH_ENGINE&&id==P_REL)return &ESYNC_DESC[2];
+    if(t==&trk[0]&&id==P_REV){                    /* (BS: no rack, its REV slot is its send to the shared effects) */
+        static const param_desc_t send=PD("FX SEND",F_PCT,0,127,0);
+        return &send;
+    }
     if(stattic_keys_track(t)){                     /* (KEYS: SY, CH) the slots it gives a meaning of its own */
         static const param_desc_t kd[2]={PD("HISS",F_PCT,0,127,0),PD("AIR DECAY",F_TIME,0,127,25)};
         if(id==SN_NOISE)return &kd[0];
@@ -525,9 +529,19 @@ static int stattic_keys_hidden(uint32_t id)
            id==SN_SUB||id==SN_PAMT||id==SN_FILTER||id==SN_RESO;
 }
 #endif
+/* BS has no rack (the shared effects are DR's FX pages): its rack's controls stay empty there */
+static int stattic_bs_hidden(uint32_t id)
+{
+    return id==P_CHOR||id==P_DLY||(id>=SN_DTIME&&id<=SN_DWIDTH)||(id>=SN_RTYPE&&id<=SN_RPRE)||
+           (id>=SN_CRATE&&id<=SN_CFB)||(id>=SN_TMIX&&id<=SN_TFLUT)||(id>=SN_BMIX&&id<=SN_BTONE);
+}
 static int page_shown(const page_t *pg)
 {
 #if FELUCCA_STATTIC
+    if(TSEL==&trk[0]&&pg->scope==SC_TRACK&&pg->fam==FAM_FX){
+        uint32_t c,any=0;for(c=0;c<4u;c++)any|=pg->id[c]!=0xFFu&&!stattic_bs_hidden(pg->id[c]);
+        if(!any)return 0;
+    }
     if(stattic_keys_track(TSEL)&&pg->scope==SC_TRACK){
         uint32_t c,any=0;for(c=0;c<4u;c++)any|=pg->id[c]!=0xFFu&&!stattic_keys_hidden(pg->id[c]);
         if(!any)return 0;
@@ -556,6 +570,7 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
     }
 #if FELUCCA_STATTIC
     if(pg->scope==SC_TRACK&&stattic_keys_track(TSEL)&&stattic_keys_hidden(id)){*valp=0;return 0;}
+    if(pg->scope==SC_TRACK&&TSEL==&trk[0]&&pg->fam==FAM_FX&&stattic_bs_hidden(id)){*valp=0;return 0;}
 #endif
     *valp = &TSEL->p[id];
     return track_desc(TSEL, id);

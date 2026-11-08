@@ -26,7 +26,6 @@ static struct {
 static volatile uint8_t rev_frz;         /* punch-in FREEZE (punch.c): the reverb holds, no loss, no damping */
 static int32_t rev_l[CTL], rev_r[CTL];   /* the reverb's own return of this block (FREEZE plays it) */
 #if FELUCCA_STATTIC
-static volatile uint8_t rev_unit_done;   /* DR's unit ran the reverb this block (stattic_mix.c): mix_block does not */
 static uint8_t rev_clean;                /* every line, diffuser and damper exactly zero (fx_buses skips) */
 static uint32_t rev_quiet;               /* samples since the last nonzero write or damper state */
 #endif
@@ -1312,6 +1311,9 @@ static ST_HOT void mix_block(int32_t *out, uint32_t n)
     stattic_profile.events_now+=STATTIC_PROFILE_TICKS()-event_start;
 #endif
     duck_block(n * (uint32_t)song.g[G_BPM]);
+#if FELUCCA_STATTIC
+    stattic_blk++;                                      /* (the shared effects' DR send of the block before) */
+#endif
     c1 = cpu1_on() ? units_split() : 0;                 /* core 1's units this block */
     if (c1) {
         for (i = 0; i < n; i++)
@@ -1351,11 +1353,6 @@ static ST_HOT void mix_block(int32_t *out, uint32_t n)
     texture_mix(mix_l, mix_r, n);                       /* GLO > TEXTURE (2.6): the bed, dry; after both cores' units
                                                          * (what it adds does not depend on them: the same sum) */
     punch_freeze_feed(acc[0].sr, mix_l, mix_r, n);     /* punch-in FREEZE: the whole dry mix into the held reverb */
-#if FELUCCA_STATTIC
-    if (rev_unit_done)                                  /* (the reverb ran inside DR's unit, its return added there) */
-        rev_unit_done = 0;
-    else
-#endif
     {
         fx_buses(acc[0].sc, acc[0].sd, acc[0].sr, wet_l, wet_r, n);
         for (i = 0; i < n; i++) {

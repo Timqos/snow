@@ -53,8 +53,8 @@ static ST_HOT void mix_part_run(track_t *t,uint32_t n,mixacc_t *mx,int32_t *b)
             tflt_run(&tflt[k],&qc,b,n,0);
             for(i=0;i<n;i++)b[i]=0;
         }
-        if(!is_drum(t))snow_fx_process(t,b,n);
-        asleep=is_drum(t)||!snow_fx[k%NPART].running;
+        snow_fx_process(t,b,n);
+        asleep=is_drum(t)||k==0u||!snow_fx[k%NPART].running;
     }else{
         tsvf_t fc;
         if(djf_block(&tflt[k],t->p[P_TFLT],&fc,tflt_reso()))
@@ -72,21 +72,7 @@ static ST_HOT void mix_part_run(track_t *t,uint32_t n,mixacc_t *mx,int32_t *b)
                 t->tail=0;
             }
         }
-        if(is_drum(t)){
-            /* (the owner) DR has no rack of its own: its REV is a send into the shared
-             * reverb (fx_buses, as SLOOP's drums: post level, the THROW glide too).
-             * (rasp fix) The reverb runs here, inside DR's unit on whichever core has it,
-             * not on core 0 after both cores (the late halves: +400 us there); FREEZE
-             * (punch-in) still feeds and runs it after the mix (fx.c mix_block). */
-            int32_t rs=t->p[SN_FX_BYPASS]?0:send_thr(t->p[P_REV]*258,thr_rev);
-            if(!rev_frz){
-                int32_t snd[CTL],wl[CTL],wr[CTL];
-                for(i=0;i<n;i++)snd[i]=rs?mulq15(b[i],rs):0;
-                fx_buses(snd,snd,snd,wl,wr,n);
-                for(i=0;i<n;i++){mx->l[i]+=wl[i];mx->r[i]+=wr[i];}
-                rev_unit_done=1;
-            }else if(rs)for(i=0;i<n;i++)mx->sr[i]+=mulq15(b[i],rs);
-        }else snow_fx_process(t,b,n);
+        snow_fx_process(t,b,n);                 /* (SY, CH: their racks; BS and DR: the shared one, below) */
     }
     int performance=snow_mix_begin(t);
     int32_t lvl=expr_gain(LEVEL_Q12[clamp(t->p[P_LEVEL],0,127)],k);
@@ -98,7 +84,12 @@ static ST_HOT void mix_part_run(track_t *t,uint32_t n,mixacc_t *mx,int32_t *b)
     t->lvl=mix_glide(l0,lvl);t->gpl=mix_glide(p0,gl);t->gpr=mix_glide(q0,gr);t->mix_on=1;
     int32_t pk=t->peak,drum=is_drum(t);
     static const int32_t no_side[CTL];
-    const int32_t *rack_side=drum?no_side:snow_fx[k%NPART].side;   /* (DR: no rack) */
+    const int32_t *rack_side=drum||k==0u?no_side:snow_fx[k%NPART].side;   /* (DR, BS: no rack of their own) */
+    /* (the owner) DR and BS feed the shared effects with their mix (post level, mute, pan) */
+    int32_t *snd=drum?stattic_dr_send[stattic_blk&1u]:k==0u?stattic_bs_send:0;
+    int32_t samt=drum?32767:t->p[SN_FX_BYPASS]?0:send_thr(t->p[P_REV]*258,thr_rev);
+    if(snd)for(i=0;i<n;i++)snd[i]=0;
+    if(!samt)snd=0;
     /* Fully muted with no performance filter: every product below is exactly
      * 0 (MULQ12R(x, 0, 4) rounds to 0), so nothing would be added. */
     if(!g0&&!g1&&!performance)asleep=1;
@@ -114,6 +105,7 @@ static ST_HOT void mix_part_run(track_t *t,uint32_t n,mixacc_t *mx,int32_t *b)
             if(gain<32767){l=MULQ12R(l,gk,4);r=MULQ12R(r,gk,4);}
             l=(l*pl+128)>>8;r=(r*pr+128)>>8;
             mx->l[i]+=l;mx->r[i]+=r;
+            if(snd)snd[i]=mulq15((l+r)>>1,samt);
             int32_t a=l<0?-l:l,z=r<0?-r:r;if(z>a)a=z;if(a>pk)pk=a;
         }
         asleep=1;
@@ -129,9 +121,11 @@ static ST_HOT void mix_part_run(track_t *t,uint32_t n,mixacc_t *mx,int32_t *b)
         int32_t pl=p0+(((t->gpl-p0)*(int32_t)i)>>CTL_LOG2),pr=q0+(((t->gpr-q0)*(int32_t)i)>>CTL_LOG2);
         l=(l*(pl>>4)+128)>>8;r=(r*(pr>>4)+128)>>8;
         mx->l[i]+=l;mx->r[i]+=r;
+        if(snd)snd[i]=mulq15((l+r)>>1,samt);
         int32_t a=l<0?-l:l,z=r<0?-r:r;if(z>a)a=z;if(a>pk)pk=a;
     }
     t->peak=pk;
+    if(k==0u)stattic_bus_run(mx,n);             /* (the shared effects ride in BS's unit, on its core) */
     if(mod)mod_end(t);
     uint32_t end=STATTIC_PROFILE_TICKS();
     stattic_profile.current[k][0]+=synth_end-start;

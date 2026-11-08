@@ -220,6 +220,18 @@ static void snow_design_section(track_t *t,uint32_t channel,uint32_t family,uint
             next[P_SLPAT]=ss_range(&r,1,16);next[P_SLRATE]=ss_range(&r,0,4);next[P_SLDEPTH]=ss_range(&r,12,42);
             next[P_DKSRC]=ss_chance(&r,25)?(int16_t)((channel+(uint32_t)ss_range(&r,1,5))%NTRK+1u):0;
             next[P_DKAMT]=ss_range(&r,12,48);next[P_DKREL]=ss_range(&r,40,84);
+            if(channel==4u){
+                /* (the owner) BS has no rack: HOME 2 K4 draws its colour and its place in the mix
+                 * instead: DRIVE (type, amount, tone), an INSERT now and then, how much it sends
+                 * to the shared effects, and the kick ducking it (a sidechain pump, often) */
+                static const uint8_t types[]={0,0,1,3,4};
+                next[P_REV]=ss_chance(&r,60)?ss_range(&r,0,12):ss_range(&r,12,40);   /* FX SEND: mostly dry */
+                next[P_DIST]=ss_chance(&r,70)?ss_range(&r,4,34):0;next[P_DTYPE]=types[ss_rand(&r)%NELEM(types)];
+                next[P_DTONE]=ss_range(&r,-24,16);
+                next[P_IMIX]=ss_chance(&r,25)?ss_range(&r,8,30):0;
+                next[P_DKSRC]=ss_chance(&r,45)?(int16_t)(TRK_DRUM+1u):0;next[P_DKAMT]=ss_range(&r,16,56);
+                next[P_SLCR]=0;
+            }
         }
         for(uint32_t id=0;id<P_COUNT;id++)if((mask[id/32u]>>(id%32u))&1u){
             const param_desc_t *d=id>=P_IA&&id<=P_IC?ins_desc(next[P_ITYPE],id-P_IA):track_desc(t,id);

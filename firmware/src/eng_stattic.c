@@ -266,7 +266,7 @@ static SNOW_RENDER_RAM void snow_render(track_t *t,voice_t *v,int32_t *out,uint3
 static void snow_fill(int16_t *p,uint32_t role,uint32_t preset)
 {
     uint32_t synth=role==STATTIC_SY_ENGINE;
-    role%=STATTIC_SOUND_ROLES;preset%=10u;
+    role%=STATTIC_SOUND_ROLES;preset%=role>=4u||synth?15u:10u;
     if(synth)role=5u;
     for(uint32_t k=0;k<20u;k++)p[SN_ALG+k]=SNOW_DETAIL[role][preset][k];
     p[SN_CHORD]=SNOW_CHORD[role][preset];
@@ -279,7 +279,7 @@ static void snow_fill(int16_t *p,uint32_t role,uint32_t preset)
  {.label="SWEEP",.fmt=F_PCT,.min=0,.max=127,.def=64},{.label="DECAY",.fmt=F_PCT,.min=0,.max=127,.def=64}, \
  {.label="MIX",.fmt=F_PCT,.min=0,.max=127,.def=0},{.label="FEEDBACK",.fmt=F_PCT,.min=0,.max=127,.def=0}, \
  {.label="CUTOFF",.fmt=F_CUTOFF,.min=0,.max=127,.def=110},{.label="DRIVE",.fmt=F_PCT,.min=0,.max=127,.def=0}}, \
- .presets=SNOW_PATCHES[role],.npresets=10,.macro={P_E0,P_E1,P_E2,P_E3}, \
+ .presets=SNOW_PATCHES[role],.npresets=(role>=4?15:10),.macro={P_E0,P_E1,P_E2,P_E3}, \
  .poly=(role==5?SN_CH_VOICES:4),.ownenv=1,.note_on=snow_note_on,.render=snow_render, \
  .amp=snow_amp,.done=snow_done,.block=snow_block }
 #define SNOW_KEYS(nvoice,title) { .name=title,.page_title={"MACROS","KEYS"}, \
@@ -287,7 +287,7 @@ static void snow_fill(int16_t *p,uint32_t role,uint32_t preset)
  {.label="HAMMER",.fmt=F_PCT,.min=0,.max=127,.def=64},{.label="DECAY",.fmt=F_PCT,.min=0,.max=127,.def=64}, \
  {.label="VELO",.fmt=F_PCT,.min=0,.max=127,.def=48},{.label="AIR",.fmt=F_PCT,.min=0,.max=127,.def=0}, \
  {.label="BRIGHT",.fmt=F_CUTOFF,.min=0,.max=127,.def=110},{.label="DRIVE",.fmt=F_PCT,.min=0,.max=127,.def=0}}, \
- .presets=SNOW_PATCHES[5],.npresets=10,.macro={P_E0,P_E1,P_E2,P_E3}, \
+ .presets=SNOW_PATCHES[5],.npresets=15,.macro={P_E0,P_E1,P_E2,P_E3}, \
  .poly=(nvoice),.ownenv=1,.note_on=snow_note_on,.render=snow_render, \
  .amp=snow_amp,.done=snow_done,.block=snow_block }
 static const engine_t SNOW_ENG[7]={SNOW_MACHINE(0,"KICK"),SNOW_MACHINE(1,"SNARE"),SNOW_MACHINE(2,"HAT"),SNOW_MACHINE(3,"PERC"),SNOW_MACHINE(4,"BASS"),SNOW_KEYS(SN_CH_VOICES,"CHORD"),SNOW_KEYS(4,"SYNTH")};

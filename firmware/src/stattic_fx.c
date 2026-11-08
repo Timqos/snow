@@ -125,10 +125,15 @@ static uint32_t snow_fx_quiet_span(const snow_fx_t *s,uint32_t enabled,uint32_t 
     }
     return span;
 }
+static ST_HOT void snow_fx_core(snow_fx_t *s,const int16_t *p,int32_t *b,uint32_t n);
+/* (the owner) SY and CH keep their racks; BS and DR play into the shared one (stattic_bus_run) */
 static ST_HOT void snow_fx_process(track_t *t,int32_t *b,uint32_t n)
 {
-    if(is_drum(t))return;
-    snow_fx_t *s=&snow_fx[(uint32_t)(t-trk)%NPART];const int16_t *p=t->p;
+    if(is_drum(t)||t==&trk[0])return;
+    snow_fx_core(&snow_fx[(uint32_t)(t-trk)%NPART],t->p,b,n);
+}
+static ST_HOT void snow_fx_core(snow_fx_t *s,const int16_t *p,int32_t *b,uint32_t n)
+{
     int32_t on=!p[SN_FX_BYPASS],cm=on?p[P_CHOR]:0,dm=on?p[P_DLY]:0,rm=on?p[P_REV]:0;
     if(on&&thr_rev)rm=send_thr(rm*258,thr_rev)/258;
     int32_t tm=on?p[SN_TMIX]:0,bm=on?p[SN_BMIX]:0;
@@ -274,5 +279,26 @@ static ST_HOT void snow_fx_process(track_t *t,int32_t *b,uint32_t n)
         uint32_t span=snow_fx_quiet_span(s,enabled,n,q);
         s->quiet=span?s->quiet+n:0;
         if(span&&s->quiet>=span)s->running=0;
+    }
+}
+
+/* (the owner) The shared effects of BS and DR: one rack (BS's old storage, snow_fx[0]) with DR's
+ * FX settings (its DELAY / REVERB / CHORUS / TAPE / BITCRUSH pages: their CHO / DLY / REV are the
+ * returns). BS sends its FX SEND (its REV slot) of its mix, DR all of its own (post level, mute, pan:
+ * the channel's stereo sum). It runs inside BS's unit, either core, so not on core 0's serial tail;
+ * DR's send of the block before is used (written by DR's unit then: 0.7 ms, never read while written). */
+static int32_t stattic_dr_send[2][CTL],stattic_bs_send[CTL];
+static volatile uint32_t stattic_blk;                    /* blocks rendered (mix_block, before the units) */
+static ST_HOT void stattic_bus_run(mixacc_t *mx,uint32_t n)
+{
+    const int32_t *dr=stattic_dr_send[(stattic_blk&1u)^1u];
+    int32_t b[CTL],in[CTL];uint32_t i;
+    for(i=0;i<n;i++)b[i]=in[i]=stattic_bs_send[i]+dr[i];
+    snow_fx_core(&snow_fx[0],TDRUM->p,b,n);
+    const int32_t *side=snow_fx[0].side;
+    if(!snow_fx[0].running)return;                       /* (asleep: its input came back unchanged, no side) */
+    for(i=0;i<n;i++){
+        int32_t wet=b[i]-in[i];                          /* (the rack adds its returns to its input: the returns) */
+        mx->l[i]+=wet+side[i];mx->r[i]+=wet-side[i];
     }
 }
