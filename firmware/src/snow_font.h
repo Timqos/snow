@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Glyph shapes from Skiff tools/gen_pixel_font.py; fixed cells for Snow. */
+#ifndef SNOW_FONT_H
+#define SNOW_FONT_H
 static const uint8_t SN_FONT[64][7]={
  {0,0,0,0,0,0,0},
  {4,4,4,4,4,0,4},
@@ -66,3 +68,4 @@ static const uint8_t SN_FONT[64][7]={
  {4,10,17,0,0,0,0},
  {0,0,0,0,0,0,31},
 };
+#endif

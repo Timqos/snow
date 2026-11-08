@@ -4,6 +4,50 @@
  * footer (steps + engine / preset / page). */
 static void draw_menu(void);
 static uint32_t str_hash(uint32_t h, const char *s);
+#if FELUCCA_STATTIC
+/* (2026-11-08, the owner) the windows in HOME's style: HOME's dithered pixel bars (its ST_BAR pattern, as the
+ * M/S VOLUME page draws them), dotted rules, two-pixel curves, the channel as HOME names it in a box */
+static const char *const ST_TRK_ROLE[4] = {"BS", "SY", "CH", "DR"};   /* trk[] order: BS SY CH DR */
+UI_SMALL static void st_hbar(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t c)   /* dense left, sparse right */
+{
+    int32_t xx, yy;
+    for (xx = 0; xx < w; xx++)
+        for (yy = 0; yy < h; yy++) {
+            uint32_t sx = (uint32_t)xx * 92u / (uint32_t)(w > 0 ? w : 1), sy = (uint32_t)yy * 17u / (uint32_t)h;
+            if ((ST_BAR[sy][sx / 8u] >> (7u - sx % 8u)) & 1u)
+                cv_pset(x + xx, y + yy, c);
+        }
+}
+UI_SMALL static void st_vbar(int32_t x, int32_t bot, int32_t w, int32_t h, uint16_t c)   /* dense at the bottom */
+{
+    int32_t xx, yy;
+    for (yy = 0; yy < h; yy++)
+        for (xx = 0; xx < w; xx++) {
+            uint32_t sx = (uint32_t)yy * 92u / (uint32_t)(h > 0 ? h : 1), sy = (uint32_t)xx * 17u / (uint32_t)w;
+            if ((ST_BAR[sy][sx / 8u] >> (7u - sx % 8u)) & 1u)
+                cv_pset(x + xx, bot - 1 - yy, c);
+        }
+}
+UI_SMALL static void st_dots(int32_t x, int32_t y, int32_t w, uint16_t c)   /* a dotted rule */
+{
+    int32_t i;
+    for (i = 0; i < w; i += 2)
+        cv_pset(x + i, y, c);
+}
+UI_SMALL static void st_line2(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint16_t c)   /* a curve, 2 px */
+{
+    cv_line(x0, y0, x1, y1, c);
+    cv_line(x0, y0 + 1, x1, y1 + 1, c);
+}
+UI_SMALL static void st_role_box(int32_t x, int32_t y, uint32_t trk_i)    /* "DR" etc. in a filled box, as HOME */
+{
+    cv_rect(x, y, 22, 16, TE_COL[trk_i & 3u]);
+    cv_text(x + 3, y, &FONT_S, ST_TRK_ROLE[trk_i & 3u], C_BLACK);
+}
+#define CURVE st_line2
+#else
+#define CURVE cv_line
+#endif
 
 /* --------------------------------------------------------- drawing --- */
 UI_SMALL static int is_eng_name(const char *s)                 /* one of the ENGINES[]->name strings */
@@ -78,6 +122,11 @@ UI_SMALL static void draw_head(void)
         cv_text(x + 12, 1, &FONT_S, "OCT", C_GRAY);
         cv_text(x + 40, 1, &FONT_S, b, C_HI);
     }
+#if FELUCCA_STATTIC
+    if (1) {                                          /* (the owner) the channel as HOME names it */
+        st_role_box(156, 2, song.sel);
+    } else
+#endif
     if (FELUCCA_ICONS) {                              /* the selected track: tape + number */
         cv_icon(156, 2, ICON_TAPE, C_GRAY);
         b[0] = (char)('1' + song.sel);
@@ -166,6 +215,16 @@ UI_SMALL static void draw_column(uint32_t c, const char *label, const char *val,
     cv_text(l[0] ? LABEL_X : 0, 0, &FONT_S, l, C_GRAY);
     x = cv_text(0, Y_VALUE - Y_LABEL, &FONT_S, v, vc);
     cv_text(x + 3, Y_VALUE - Y_LABEL, &FONT_S, u, C_DIM);
+#if FELUCCA_STATTIC
+    if (ratio >= 0) {                                   /* (HOME style) a dotted track, a dithered fill, a 2 px end */
+        int32_t gy = Y_GAUGE - Y_LABEL;
+        fx = ratio * gw / 1000;
+        st_dots(0, gy + 1, gw, C_DIM);
+        st_hbar(0, gy - 1, fx, 5, vc == C_DIM ? C_DIM : vc);
+        cv_rect(fx, gy - 2, 2, 7, vc == C_DIM ? C_HI : vc);
+    }
+    if (0)
+#endif
     if (ratio >= 0) {                                   /* gauge: track, fill, 1 px end line */
         int32_t gy = Y_GAUGE - Y_LABEL;
         fx = ratio * gw / 1000;
@@ -186,28 +245,32 @@ UI_SMALL static void graph_adsr(const track_t *t, uint16_t c)
     int32_t x0 = 6, x1 = x0 + a, x3 = 232 - r, i, px, py;
     int32_t e = 32768;                                                  /* exp(-4.6 u), Q15 */
 #define EGY(lvl) (bot - (lvl) * (bot - top) / 1000)
-    cv_line(x0, bot, x1, top, c);                                       /* attack: linear */
+    CURVE(x0, bot, x1, top, c);                                       /* attack: linear */
     px = x1;
     py = top;
     for (i = 1; i <= d; i++) {                                          /* decay: exponential to SUS */
         int32_t lvl;
         e = (e * (32768 - 150733 / d)) >> 15;           /* k^d = exp(-4.6) */
         lvl = sus + ((1000 - sus) * e >> 15);
-        cv_line(px, py, x1 + i, EGY(lvl), c);
+        CURVE(px, py, x1 + i, EGY(lvl), c);
         px = x1 + i;
         py = EGY(lvl);
     }
-    cv_line(px, py, x3, EGY(sus), c);                                    /* sustain */
+    CURVE(px, py, x3, EGY(sus), c);                                    /* sustain */
     px = x3;
     py = EGY(sus);
     e = 32768;
     for (i = 1; i <= r; i++) {                                          /* release: exponential to 0 */
         e = (e * (32768 - 150733 / r)) >> 15;
-        cv_line(px, py, x3 + i, EGY(sus * e >> 15), c);
+        CURVE(px, py, x3 + i, EGY(sus * e >> 15), c);
         px = x3 + i;
         py = EGY(sus * e >> 15);
     }
+#if FELUCCA_STATTIC
+    st_dots(0, bot + 2, 240, C_DIM);
+#else
     cv_line(0, bot + 1, 239, bot + 1, C_LINE);
+#endif
 #undef EGY
 }
 
@@ -220,10 +283,14 @@ UI_SMALL static void graph_lfo(const track_t *t, uint16_t c)
         if (t->p[P_LWAVE] == 4)
             y = 50 - ((int32_t)((x / 20 * 2654435761u) >> 16) - 32768) * 38 / 32768;
         if (x)
-            cv_line(x - 1, py, x, y, c);
+            CURVE(x - 1, py, x, y, c);
         py = y;
     }
+#if FELUCCA_STATTIC
+    st_dots(0, 50, 240, C_DIM);
+#else
     cv_line(0, 50, 239, 50, C_LINE);
+#endif
 }
 
 UI_SMALL static void graph_steps(const track_t *t, uint16_t c)
@@ -234,6 +301,18 @@ UI_SMALL static void graph_steps(const track_t *t, uint16_t c)
         const step_t *st = &t->step[i];
         if (i >= len)
             continue;
+#if FELUCCA_STATTIC
+        if (step_on(st))                             /* (HOME style) blocks, not hairlines */
+            cv_rect(x - 2, y, 6, 14, c);
+        else if (st->time == ST_TIE)
+            cv_rect(x - 2, y + 6, 6, 8, C_DIM);
+        else
+            st_dots(x - 2, y + 13, 6, C_DIM);
+        if (st->flags & SF_ACCENT)
+            cv_rect(x - 2, y - 3, 6, 2, C_HI);
+        if ((song.playing && i == t->seq_idx) || i == ui.cursor)
+            cv_rect(x - 2, y + 16, 6, 3, C_WHITE);
+#else
         if (step_on(st))
             cv_rect(x, y, 1, 14, c);
         else if (st->time == ST_TIE)
@@ -244,6 +323,7 @@ UI_SMALL static void graph_steps(const track_t *t, uint16_t c)
             cv_rect(x - 1, y - 2, 3, 1, c);
         if ((song.playing && i == t->seq_idx) || i == ui.cursor)
             cv_rect(x - 1, y + 16, 3, 3, C_WHITE);
+#endif
     }
 }
 /* STEP page: the cursor's 16-step bank as a little piano roll */
@@ -372,9 +452,17 @@ UI_SMALL static void graph_fx(const track_t *t, uint16_t c)
     uint32_t i;
     for (i = 0; i < 4u; i++) {
         int32_t h = t->p[P_DIST + i] * 80 / 127, x = (int32_t)i * 60 + 28;
+#if FELUCCA_STATTIC
+        int32_t y;                                       /* (HOME style) a dotted column, a dithered level, its top */
+        for (y = 10; y < 90; y += 4)
+            st_dots(x - 14, y, 30, C_LINE);
+        st_vbar(x - 14, 90, 30, h, c);
+        cv_rect(x - 14, 90 - h - 2, 30, 2, c);
+#else
         cv_rect(x, 10, 1, 80, C_LINE);
         cv_rect(x, 90 - h, 1, h, c);
         cv_rect(x - 3, 90 - h, 7, 1, c);
+#endif
     }
 }
 /* SLICER page: the pattern's 16 steps, a 'x' step a full bar; a '.' step: GATE a bar as high as
@@ -551,7 +639,11 @@ UI_SMALL static int32_t meter_px(int32_t a)                   /* |sample| (Q15) 
 
 UI_SMALL static uint32_t trk_level(uint32_t c)                /* LEVEL 0..127 (the drum track: GLO > DRUMS LEVEL) */
 {
+#if FELUCCA_STATTIC
+    return (uint32_t)trk[c % NTRK].p[P_LEVEL] & 127u;   /* (STATTIC: DR's LEVEL is its track's, drums.c drums_mix) */
+#else
     return (uint32_t)(c == TRK_DRUM ? song.g[G_DRLVL] : trk[c].p[P_LEVEL]) & 127u;
+#endif
 }
 
 UI_SMALL static void trk_short_name(uint32_t c, char *b)      /* the track's sound, b holds 13 */
@@ -889,21 +981,36 @@ UI_SMALL static void draw_foot(void)
             const step_t *st = &t->step[si];
             if (si >= (uint32_t)t->p[P_SLEN])
                 continue;
+#if FELUCCA_STATTIC
+            if (step_on(st))                          /* (HOME style) blocks */
+                cv_rect(sx - 1, 2, 5, 9, TE_COL[song.sel & 3u]);
+            else
+                st_dots(sx - 1, 10, 5, C_DIM);
+            if ((song.playing && si == t->seq_idx) || (song.seq_mode && si == ui.cursor))
+                cv_rect(sx - 1, 13, 5, 3, C_WHITE);
+#else
             if (step_on(st))
                 cv_rect(sx, 2, 2, 9, TE_COL[song.sel & 3u]);
             else
                 cv_rect(sx, 10, 1, 1, C_DIM);
             if ((song.playing && si == t->seq_idx) || (song.seq_mode && si == ui.cursor))
                 cv_rect(sx - 1, 13, 3, 3, C_WHITE);
+#endif
         }
     }
     x = 4;
+#if FELUCCA_STATTIC
+    st_role_box(4, 20, song.sel);                     /* (HOME style) the channel's box, the sound, the page */
+    x = 26;
+    (void)en;
+#else
     if (FELUCCA_ICONS) {                              /* row 2: engine icon + name, preset, page */
         cv_icon(x, 21, engine_icon(ename), C_GRAY);
         x += 14;
     }
     fit(en, ename, &FONT_S, 90 - (x - 4));
     x = cv_text(x, 20, &FONT_S, en, C_HI);
+#endif
     {
         char pf[16];
         int32_t room = 236 - text_w(&FONT_S, ti) - 10 - (x + 10);

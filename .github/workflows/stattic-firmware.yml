@@ -43,6 +43,30 @@ jobs:
           for m in 1 2; do CORES=$m build/stattic_mix; done
           python tests/stattic_engine_vectors.py
           python tests/stattic_fx_vectors.py
+      # (2026-11-08, the owner) the browser simulator from the same source, published with the firmware
+      - name: Emscripten
+        id: emsdk
+        continue-on-error: true
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.74
+      - name: Browser simulator
+        id: sim
+        if: steps.emsdk.outcome == 'success'
+        continue-on-error: true
+        run: python tools/build_stattic_web.py
+      - name: Simulator files
+        if: steps.sim.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: stattic-sim-${{ github.sha }}
+          path: |
+            build/stattic-web/stattic.wasm
+            build/stattic-web/build.json
+            web/stattic/sim/
+            web/stattic/shared/
+          retention-days: 30
+          if-no-files-found: error
       - name: Firmware package
         uses: actions/upload-artifact@v4
         with:
@@ -72,6 +96,11 @@ jobs:
         with:
           name: stattic-firmware-${{ github.sha }}
           path: fw
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: stattic-sim-${{ github.sha }}
+          path: sim
       - uses: actions/checkout@v4
         with:
           ref: gh-pages
@@ -107,6 +136,18 @@ jobs:
                     hardware_audio_validation='pending')
           status.write_text(json.dumps(st, indent=2) + '\n')
           print('published', name, digest)
+          sim = Path('sim')
+          if (sim / 'build/stattic-web/stattic.wasm').exists():     # the simulator of this very build
+              web = json.loads((sim / 'build/stattic-web/build.json').read_text())
+              shutil.copy(sim / 'build/stattic-web/stattic.wasm', site / 'sim/stattic.wasm')
+              for d in ('sim', 'shared'):
+                  for f in (sim / 'web/stattic' / d).glob('*'):
+                      if f.is_file():shutil.copy(f, site / d / f.name)
+              web.update(version=label, firmware_package=name)
+              (site / 'sim/build.json').write_text(json.dumps(web, indent=2) + '\n')
+              print('simulator', web['wasm_sha256'])
+          else:
+              print('no simulator in this run: the site keeps the previous one')
           PY
           cd site
           git config user.name "github-actions[bot]"

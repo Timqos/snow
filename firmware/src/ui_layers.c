@@ -432,8 +432,8 @@ UI_SMALL static void layer_key(uint32_t layer, uint32_t k, uint32_t down)
             ml_toggle();
         } else if (w >= 0 && w < 4) {
 #if FELUCCA_STATTIC
-            /* Route native GLO track order through the same bar queue. */
-            uint32_t logical=stattic_home_role((uint32_t)w),white=0,key=0;
+            /* (the owner) the columns in HOME order, DR BS SY CH; through the same bar queue */
+            uint32_t logical=(uint32_t)w,white=0,key=0;
             for(;;key++){if(punch_key(key)>=0){if(white++==logical)break;}}
             stattic_ms_key(key,1);
 #else
@@ -441,7 +441,7 @@ UI_SMALL static void layer_key(uint32_t layer, uint32_t k, uint32_t down)
 #endif
         } else if (w >= 4 && w < 8) {
 #if FELUCCA_STATTIC
-            uint32_t logical=stattic_home_role((uint32_t)w-4u),black=0,key=0;
+            uint32_t logical=(uint32_t)w-4u,black=0,key=0;
             for(;;key++){if(punch_key(key)<0){if(black++==logical)break;}}
             stattic_ms_key(key,1);
 #else
@@ -575,7 +575,11 @@ UI_SMALL static void layer_knobs(uint32_t layer)
             }
             break;
         case LY_MIX: {
-            int16_t *lv = FELUCCA_STATTIC?&trk[k].p[P_LEVEL]:k == TRK_DRUM ? &song.g[G_DRLVL] : &trk[k].p[P_LEVEL];
+#if FELUCCA_STATTIC
+            int16_t *lv = &trk[stattic_role_track(k)].p[P_LEVEL];   /* (K1..K4: DR BS SY CH, as HOME) */
+#else
+            int16_t *lv = k == TRK_DRUM ? &song.g[G_DRLVL] : &trk[k].p[P_LEVEL];
+#endif
             *lv = (int16_t)clamp(*lv + accel(EN_K1 + k, s, 127), 0, 127);
             break;
         }
@@ -687,7 +691,14 @@ UI_SMALL static void layer_title(const char *name, const char *sub, uint16_t col
     *cache = sig;
     cv_begin(240, 40, C_BLACK);
     cv_text(4, 2, &FONT_L, name, col);
-    cv_text(4 + text_w(&FONT_L, name) + 10, 18, &FONT_S, ui.msg_t ? ui.msg : sub, ui.msg_t ? C_WHITE : TE_G3);
+    {   /* (the sub line fits the screen, the LOCK / readout's room left free) */
+        char fs[32];
+        int32_t sx = 4 + text_w(&FONT_L, name) + 10;
+        str_cpy(fs, ui.msg_t ? ui.msg : sub, sizeof fs);
+        while (fs[0] && text_w(&FONT_S, fs) > (locked || hdr_r[0] ? 180 : 236) - sx)
+            fs[str_len(fs) - 1u] = 0;
+        cv_text(sx, 18, &FONT_S, fs, ui.msg_t ? C_WHITE : TE_G3);
+    }
     if (locked) {                                         /* locked open (HOME): any button lets it go */
         int32_t w = (int32_t)text_w(&FONT_S, "LOCK") + 8;
         cv_rect(236 - w, 4, w, 15, C_WHITE);
@@ -867,7 +878,7 @@ UI_SMALL static void layer_screen_draw(void)
             str_cpy(sub, "page ", sizeof sub);
             str_cpy(sub + 5, p, 4);
             if (is_drum(t))
-                str_cpy(sub + 8, "  oct: page", sizeof sub - 8u);   /* (2.7.1: the black keys are the sounds) */
+                str_cpy(sub + 8, FELUCCA_STATTIC ? " oct:pg" : "  oct: page", sizeof sub - 8u);   /* (2.7.1: the black keys are the sounds; STATTIC: it fits) */
         } else if (is_drum(t)) {
             str_cpy(sub, "black keys: sound", sizeof sub);
         }
@@ -973,13 +984,21 @@ UI_SMALL static void layer_screen_draw(void)
         col = C_WHITE;
         str_cpy(sub, "mute  solo  fill  tap", sizeof sub);
         for (i = 0; i < 4u; i++) {
+#if FELUCCA_STATTIC
+            static const char *const R[4] = {"dr", "bs", "sy", "ch"};   /* (the owner: HOME's order) */
+            uint32_t ch = stattic_role_track(i);
+            int m = trk[ch].p[P_MUTE] != 0, so = (song.solo >> ch) & 1u;
+            str_cpy(tl[i].lab, "m ", 8);str_cpy(tl[i].lab + 2, R[i], 3);        /* (rows: MUTE, SOLO, as the title says) */
+            str_cpy(tl[4 + i].lab, "s ", 8);str_cpy(tl[4 + i].lab + 2, R[i], 3);
+#else
             int m = trk[i].p[P_MUTE] != 0, so = (song.solo >> i) & 1u;
             str_cpy(tl[i].lab, "mute 1", 8);
             tl[i].lab[5] = (char)('1' + i);
-            tl[i].bg = m ? TE_G2 : TE_COL[i];
-            tl[i].fg = m ? TE_G3 : C_BLACK;
             str_cpy(tl[4 + i].lab, "solo 1", 8);
             tl[4 + i].lab[5] = (char)('1' + i);
+#endif
+            tl[i].bg = m ? TE_G2 : TE_COL[i];
+            tl[i].fg = m ? TE_G3 : C_BLACK;
             tl[4 + i].bg = so ? C_WHITE : TE_G1;
             tl[4 + i].fg = so ? C_BLACK : TE_G3;
             tl[4 + i].top = TE_DIM[i];
@@ -997,8 +1016,13 @@ UI_SMALL static void layer_screen_draw(void)
         str_cpy(tl[14].lab, "tap>", 8);
         tl[14].bg = C_BLACK;
         for (i = 0; i < 4u; i++) {
+#if FELUCCA_STATTIC
+            uint32_t lv = trk_level(stattic_role_track(i));
+            static const char *const L[4] = {"DR", "BS", "SY", "CH"};
+#else
             uint32_t lv = trk_level(i);
             static const char *const L[4] = {"1", "2", "3", "4"};
+#endif
             lab[i] = L[i];
             fmt_int(v[i], (int32_t)lv * 100 / 127);
             ratio[i] = (int32_t)lv * 1000 / 127;

@@ -282,6 +282,36 @@ static uint32_t glyph(const felucca_font_t *f, uint32_t ch)
     return ch - f->first;
 }
 
+#if FELUCCA_STATTIC
+/* (2026-11-08, the owner) every window in HOME's letters: the SN_FONT 5 x 7 dot shapes in the cell of the
+ * SLOOP font they stand for, so no text moves. S: 7 x 10 (its capitals' size), solid as HOME's small text;
+ * L: 14 x 20 (S twice), the dots apart as HOME's big text. Characters it has not got keep the SLOOP shape. */
+#include "snow_font.h"
+static int st_dot_text(int32_t x, int32_t y, uint32_t ch, const felucca_font_t *f, uint16_t c)
+{
+    int32_t w, h, r, b;
+    if (ch >= 'a' && ch <= 'z')
+        ch -= 32u;
+    if (ch < 32u || ch > 95u || f->bits != 1u || (f->h != 16u && f->h != 32u))
+        return 0;
+    w = f->h == 32u ? 14 : 7;
+    h = f->h == 32u ? 20 : 10;
+    y += f->h == 32u ? 4 : 2;
+    for (r = 0; r < 7; r++)
+        for (b = 0; b < 5; b++)
+            if ((SN_FONT[ch - 32u][r] >> (4 - b)) & 1u) {
+                int32_t xx = b * w / 5, yy = r * h / 7, dw = (b + 1) * w / 5 - xx, dh = (r + 1) * h / 7 - yy, i, j;
+                if (w >= 12 && dw > 2)
+                    dw--;
+                if (h >= 17 && dh > 2)
+                    dh--;
+                for (j = 0; j < dh; j++)
+                    for (i = 0; i < dw; i++)
+                        cv_pset(x + xx + i, y + yy + j, c);
+            }
+    return 1;
+}
+#endif
 /* text, alpha-blended onto the background with colour c; returns the end x */
 static int32_t cv_text(int32_t x, int32_t y, const felucca_font_t *f, const char *s, uint16_t c)
 {
@@ -292,6 +322,12 @@ static int32_t cv_text(int32_t x, int32_t y, const felucca_font_t *f, const char
     for (; *s; s++) {
         uint32_t gi = glyph(f, (uint8_t)*s), gx, gy, w, bpr;
         const uint8_t *gd;
+#if FELUCCA_STATTIC
+        if (st_dot_text(x, y, (uint8_t)*s, f, ramp[15])) {
+            x += f->adv[gi];
+            continue;
+        }
+#endif
         w = f->bw[gi];
         gd = f->data + f->off[gi];
         if (f->bits == 1u) {                           /* on / off pixels: full colour where a bit is set */
