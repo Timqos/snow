@@ -181,7 +181,7 @@ static void voice_kill(voice_t *v)                      /* fade out over the nex
  * the oldest held one that is not a part's lowest POLY note nor its MONO / LEGATO / UNISON lead, as the
  * voice budget keeps them: a dense chord on a heavy engine thins out from the top, bass and lead stay. */
 static uint32_t shed_count;
-#define SHED_BLOCKS 12u                                 /* (STATTIC) ~9 ms: a shed tail fades, no choke */
+#define SHED_BLOCKS 6u                                  /* (STATTIC) ~4.4 ms: a shed voice fades, no click; quick relief */
 
 static void shed_voice(void)
 {
@@ -201,11 +201,6 @@ static void shed_voice(void)
         shed_count++;
         return;
     }
-#if FELUCCA_STATTIC
-    /* (rasp fix 2) STATTIC never takes a held note away for load: on the FM-1 the
-     * shedding of held chord notes was heard as the synths choking each other */
-    return;
-#endif
     for (p = 0; p < NPART; p++) {
         const track_t *t = &trk[p];
         uint32_t mode = (uint32_t)t->p[P_VOICE], low = mode == V_POLY ? lowest_held(t) : 0u;
@@ -218,6 +213,9 @@ static void shed_voice(void)
     }
     if (best) {
         voice_kill(best);
+#if FELUCCA_STATTIC
+        best->kill = best->kill_n = SHED_BLOCKS;        /* (rasp fix 3) a held note, if it must go, fades: no cut */
+#endif
         shed_count++;
     }
 }
