@@ -165,8 +165,12 @@ static uint32_t voice_kills;                            /* voices given up (budg
 static void voice_kill(voice_t *v)                      /* fade out over the next blocks (env_tick stage 4) */
 {
     v->gate = 0;
-    if (v->stage != 4u)
+    if (v->stage != 4u) {
         v->kill = KILL_BLOCKS;
+#if FELUCCA_STATTIC
+        v->kill_n = KILL_BLOCKS;
+#endif
+    }
     v->stage = 4;
     voice_kills++;
 }
@@ -177,6 +181,7 @@ static void voice_kill(voice_t *v)                      /* fade out over the nex
  * the oldest held one that is not a part's lowest POLY note nor its MONO / LEGATO / UNISON lead, as the
  * voice budget keeps them: a dense chord on a heavy engine thins out from the top, bass and lead stay. */
 static uint32_t shed_count;
+#define SHED_BLOCKS 12u                                 /* (STATTIC) ~9 ms: a shed tail fades, no choke */
 
 static void shed_voice(void)
 {
@@ -190,9 +195,17 @@ static void shed_voice(void)
         }
     if (best) {
         voice_kill(best);
+#if FELUCCA_STATTIC
+        best->kill = best->kill_n = SHED_BLOCKS;        /* a released tail ends as a quick release, not a cut */
+#endif
         shed_count++;
         return;
     }
+#if FELUCCA_STATTIC
+    /* (rasp fix 2) STATTIC never takes a held note away for load: on the FM-1 the
+     * shedding of held chord notes was heard as the synths choking each other */
+    return;
+#endif
     for (p = 0; p < NPART; p++) {
         const track_t *t = &trk[p];
         uint32_t mode = (uint32_t)t->p[P_VOICE], low = mode == V_POLY ? lowest_held(t) : 0u;
@@ -341,8 +354,12 @@ static void voice_start(track_t *t, voice_t *v, uint32_t note, uint32_t vel, int
         v->pend_vel = (uint8_t)vel;
         v->pend = (uint8_t)(VP_ON | (glide ? VP_GLIDE : 0u));
         v->gate = 0;
-        if (v->stage != 4u)
+        if (v->stage != 4u) {
             v->kill = KILL_BLOCKS;
+#if FELUCCA_STATTIC
+            v->kill_n = KILL_BLOCKS;
+#endif
+        }
         v->stage = 4;
         v->age = ++vage;
         return;
@@ -982,7 +999,8 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
                 env = e->amp(t, v, env);
 #if FELUCCA_STATTIC
             if(e->ownenv && v->stage==4u){
-                env=env*(int32_t)(v->kill?v->kill-1u:0u)/(int32_t)(v->kill?v->kill:1u);
+                /* a straight line down over the whole fade (kill_n blocks): env is the engine's own each block */
+                env=env*(int32_t)(v->kill?v->kill-1u:0u)/(int32_t)(v->kill_n>v->kill?v->kill_n:(v->kill?v->kill:1u));
                 if(v->kill)v->kill--;
                 if(!v->kill){v->active=v->gate=0;v->stage=0;}
             }

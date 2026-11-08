@@ -141,6 +141,7 @@ typedef struct {
     uint32_t age;
 #if FELUCCA_STATTIC
     uint8_t mvel, side, stage2;
+    uint8_t kill_n;              /* (rasp fix 2) stage 4: the fade's whole length in blocks (in the padding) */
     int16_t mrnd;
     int32_t env2;
 #endif
