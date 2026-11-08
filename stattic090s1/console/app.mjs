@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-import {SerialConsole,CaptureLog,captureSample} from './core.mjs?v=3';
+import {SerialConsole,CaptureLog,captureSample} from './core.mjs?v=5';
 const $=id=>document.getElementById(id),names=['KK','SD','HH','PR','BS','CH'];
 let log=new CaptureLog(),link=null,timer=null,busy=false,recording=false,last=null,misses=0,rawTimer=null;
 const catalog=fetch('maps.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Diagnostic map unavailable.');return r.json();});
@@ -78,7 +78,7 @@ $('connect').addEventListener('click',async()=>{
     if(link!==current){await current.close();return;}
     log.event('connected',{usb:port.getInfo?.()||{},user_agent:navigator.userAgent});last=null;
     recording=true;text('connection','Connected · capturing');message('Connected. Reading the existing firmware console.');
-  }catch(error){message(error.name==='NotFoundError'?'USB port selection cancelled.':error.message,true);await disconnect(error.message);}
+  }catch(error){message(error.name==='NotFoundError'?'No serial port selected. If the list is empty: STOP → hold HOME → AUDIO → USB SERIAL ON; close the menu with HOME, fully power off the FM-1, disconnect USB, then power on and reconnect. USB MIDI alone does not provide a serial port.':error.message,true);await disconnect(error.message);}
   finally{busy=false;updateControls();}
   if(recording)await poll();
 });

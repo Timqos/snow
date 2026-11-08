@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // USB CDC diagnostics for the existing STATTIC console. No device writes or resets.
-export const VERSION = '3';
+export const VERSION = '5';
 export const MAX_RAW = 2 * 1024 * 1024;
 export const MAX_SAMPLES = 6000;
 const encoder = new TextEncoder();
 const PROMPT = /(?:^|\r?\n)> $/;
+// Native SLOOP and S1 omit the legacy "v" prefix; S1 also includes its
+// product name in FELUCCA_VERSION. Match a complete known-console banner.
+const CONSOLE_GREETING = /^(?:Felucca|STATTIC)[ \t]+(?:(?:SLOOP|STATTIC)[ \t]+)?v?\d+(?:\.\d+)+(?:[-+][\w.-]+)?(?:[ \t]+BETA)?[ \t]+console(?:[ \t]+-[ \t]+'help')?\r?$/im;
 export const u32 = n => Number(n) >>> 0;
 
 export function parseStatus(text) {
@@ -68,7 +71,7 @@ export class SerialConsole {
       // The FM-1 CDC handler only records DTR; it does not reset the device.
       await this.port.setSignals({dataTerminalReady:true});
       const result=await greeting;if(result.error)throw result.error;const text=result.value;
-      if (!/(?:Felucca|STATTIC)\s+v[^\r\n]+console/i.test(text))
+      if (!CONSOLE_GREETING.test(text))
         throw new Error('This port did not identify itself as the FM-1 firmware console.');
     } catch (error) { await this.close();throw error; }
   }

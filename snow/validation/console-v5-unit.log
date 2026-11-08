@@ -1,0 +1,3 @@
+USB CONSOLE PASSED: fragmented CDC prompts, allowed reads only, timeout/close races, unknown firmware, exact-map decoding, coherent snapshot checks, counter/uptime wrap, reboot, markers and bounded export
+Real C cdc_task greetings PASS: S1 without v, native SLOOP, legacy Skiff; unrelated banners rejected without commands.
+S1 schema-3 status parsing and direct four-channel capture PASS: no memory-map reads.

@@ -1,14 +1,21 @@
 {
-  "console_version": 4,
-  "web_source_commit": "9f6e2b5fd298f82f0bf0467ef0b0d7fd771954c2",
+  "console_version": 5,
+  "web_source_commit": "f913cc2aab2e87a5fd3f90bfaf0d29cb304ba775",
   "firmware_source_commit": "75f556175a9776f5a54a815635ef332801ae417f",
   "firmware_sha256": "fccb846f8cb374adddf42ba66004b1f7602908965175be34b652c3264bb6b6aa",
   "firmware_update_required": false,
-  "change": "S1 serial setup uses AUDIO; close menu to save and fully power-cycle; useful empty/cancelled chooser guidance",
+  "change": "Recognize the actual S1 and native SLOOP console banners without the legacy v prefix; retain strict known-console identification",
+  "checks": [
+    "Actual C cdc_task() banners: S1/SLOOP/legacy",
+    "Fragmented CDC and direct schema-3 status",
+    "Chromium: connect, CPU/L, four-channel timings, markers and JSON export",
+    "Unknown-device rejection and read-only command limits"
+  ],
   "files": {
-    "console/index.html": "c0a1ea97a1d97b893b9e30ef7383ec03f56e498a30230364d4b75673eba794de",
-    "console/app.mjs": "eeb5c7153e934b14ec0873eaab437866d281942c04a9761fd21fda6052811122",
-    "manual/index.html": "4349dbe2e4a343a7eebbe70ad4aa58e0b0172db22dee8f8094e1ed3cf0d8a3af",
-    "index.html": "a6ae5096503c655472ce7c018efcdd10118d0c914a8f37e1cc8b95a97b5252e2"
+    "console/index.html": "7d52df4f7c0cfd0d0bc1a80ee2e294d998b4782c647ae0183b8c56cff78b22ef",
+    "console/app.mjs": "61d3ee7136987228fee0186f48f8e58c88818283ac4ade719e5a17b11f7d55d7",
+    "console/core.mjs": "9b360d92dde1a33af31596b98afceb601d4b8b7fbe16c8e373f2e5a0b98d4fc3",
+    "manual/index.html": "301a4ad18e3011cc22f7576d7a81754d3a218885fcb133a448dc8e8eb976226a",
+    "index.html": "64bde23f3e833443c8508fed9536936160b30d623cd828e1a9f537112147aa2d"
   }
 }

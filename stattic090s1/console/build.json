@@ -1,0 +1,21 @@
+{
+  "console_version": 5,
+  "web_source_commit": "f913cc2aab2e87a5fd3f90bfaf0d29cb304ba775",
+  "firmware_source_commit": "75f556175a9776f5a54a815635ef332801ae417f",
+  "firmware_sha256": "fccb846f8cb374adddf42ba66004b1f7602908965175be34b652c3264bb6b6aa",
+  "firmware_update_required": false,
+  "change": "Recognize the actual S1 and native SLOOP console banners without the legacy v prefix; retain strict known-console identification",
+  "checks": [
+    "Actual C cdc_task() banners: S1/SLOOP/legacy",
+    "Fragmented CDC and direct schema-3 status",
+    "Chromium: connect, CPU/L, four-channel timings, markers and JSON export",
+    "Unknown-device rejection and read-only command limits"
+  ],
+  "files": {
+    "console/index.html": "7d52df4f7c0cfd0d0bc1a80ee2e294d998b4782c647ae0183b8c56cff78b22ef",
+    "console/app.mjs": "61d3ee7136987228fee0186f48f8e58c88818283ac4ade719e5a17b11f7d55d7",
+    "console/core.mjs": "9b360d92dde1a33af31596b98afceb601d4b8b7fbe16c8e373f2e5a0b98d4fc3",
+    "manual/index.html": "301a4ad18e3011cc22f7576d7a81754d3a218885fcb133a448dc8e8eb976226a",
+    "index.html": "64bde23f3e833443c8508fed9536936160b30d623cd828e1a9f537112147aa2d"
+  }
+}
