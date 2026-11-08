@@ -25,6 +25,10 @@ static struct {
 } fx;
 static volatile uint8_t rev_frz;         /* punch-in FREEZE (punch.c): the reverb holds, no loss, no damping */
 static int32_t rev_l[CTL], rev_r[CTL];   /* the reverb's own return of this block (FREEZE plays it) */
+#if FELUCCA_STATTIC
+static uint8_t rev_clean;                /* every line, diffuser and damper exactly zero (fx_buses skips) */
+static uint32_t rev_quiet;               /* samples since the last nonzero write or damper state */
+#endif
 
 /* DIST: low cut -> drive (1x..8x, exponential) -> asymmetric soft clip
  * (a little bias = even harmonics) -> tone low-pass that closes with drive ->
@@ -234,6 +238,25 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
         ma = (REV_MOD << 8) + ((m0 * REV_MOD) >> 7), mb = (REV_MOD << 8) + ((m1 * REV_MOD) >> 7);
         dca = (ca1 - ca0) >> CTL_LOG2, dcb = (cb1 - cb0) >> CTL_LOG2;
     }
+#if FELUCCA_STATTIC
+    /* STATTIC sends nothing to this reverb but FREEZE's feed. While every line,
+     * diffuser and damping state is exactly zero and the input is zero, the
+     * result is zero whatever the line positions: skip the loop (the LFO
+     * phases above keep running). Bit-exact; the serial core-0 time it saved
+     * was spent on every block computing silence. */
+    if (!rev_frz && rev_clean) {
+        for (i = 0; i < n; i++)
+            if (rev_in[i])
+                break;
+        if (i == n) {
+            for (i = 0; i < n; i++)
+                wet_l[i] = wet_r[i] = rev_l[i] = rev_r[i] = 0;
+            return;
+        }
+    }
+    rev_clean = 0;                                      /* (FREEZE or input: it holds sound from here on) */
+    int32_t rev_nz = 0;                                 /* OR of every value written this block */
+#endif
     for (i = 0; i < n; i++) {
         int32_t yl,yr,a,o0,o1,o2,o3;
 #if !FELUCCA_STATTIC
@@ -272,6 +295,9 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
             for (k = 0; k < 2u; k++) {
                 int32_t b = c[fx.ap_i[k]], v = a + (b >> 1);
                 c[fx.ap_i[k]] = (int16_t)clamp(v, -32768, 32767);
+#if FELUCCA_STATTIC
+                rev_nz |= v;
+#endif
                 a = b - (v >> 1);
                 if (++fx.ap_i[k] >= REV_AP[k])
                     fx.ap_i[k] = 0;
@@ -309,6 +335,9 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
                 c[B2 + fx.line_i[2]] = (int16_t)clamp(fx.line_lp[2] + a, -32768, 32767);
                 c[B3 + fx.line_i[3]] = (int16_t)clamp(fx.line_lp[3] - a, -32768, 32767);
             }
+#if FELUCCA_STATTIC
+            rev_nz |= c[fx.line_i[0]] | c[B1 + fx.line_i[1]] | c[B2 + fx.line_i[2]] | c[B3 + fx.line_i[3]];
+#endif
             if (++fx.line_i[0] >= L0) fx.line_i[0] = 0;
             if (++fx.line_i[1] >= REV_LINE[1]) fx.line_i[1] = 0;
             if (++fx.line_i[2] >= REV_LINE[2]) fx.line_i[2] = 0;
@@ -319,6 +348,14 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
         rev_l[i] = o0 + o2;
         rev_r[i] = o1 - o3;
     }
+#if FELUCCA_STATTIC
+    /* clean once a whole turn of the longest line was written with zeros, the
+     * dampers at zero and nothing frozen: every stored sample is zero then */
+    if (rev_frz || rev_nz || (fx.line_lp[0] | fx.line_lp[1] | fx.line_lp[2] | fx.line_lp[3]))
+        rev_quiet = 0;
+    else if ((rev_quiet += n) >= REV_LINE[3])
+        rev_clean = 1;
+#endif
 }
 
 /* one block of the whole mix (shared with tests/hostsim.c): events -> each part
@@ -968,6 +1005,36 @@ static uint32_t units_split(void)
     /* STATTIC instruments and sampled DR own their LFO random streams.
      * The native handoff need not move a whole CH render onto core 0 just
      * because an LFO wraps; RATE modulation remains safe on either core. */
+    if (cpu1_units < 0) {
+        /* (rasp fix 1) The split by measured cost (DUALCORE.md patch 7): once a
+         * half, from each channel's time in the last one, the set of channels
+         * for core 1 that best evens the two cores. Every split gives the same
+         * output (tests: CPU1_UNITS=0..15). A change must gain 1/16 of the
+         * total, so the split does not flap. Before, CH+DR stayed on core 1
+         * even while they were silent and BS+SY overran core 0. */
+        static uint32_t st_mask = (1u << (NPART - 1u)) | U_DRUMS, st_half;
+        if (stattic_profile.halves != st_half) {
+            uint32_t c[NTRK], tot = 0, k, m, best = st_mask, bc, cur = 0xFFFFFFFFu;
+            st_half = stattic_profile.halves;
+            for (k = 0; k < NTRK; k++)
+                tot += c[k] = stattic_profile.last[k][2];
+            bc = 0xFFFFFFFFu;
+            for (m = 0; m <= U_ALL; m++) {
+                uint32_t s = 0, w;
+                for (k = 0; k < NTRK; k++)
+                    if ((m >> k) & 1u)
+                        s += c[k];
+                w = s > tot - s ? s : tot - s;
+                if (m == st_mask)
+                    cur = w;
+                if (w < bc)
+                    bc = w, best = m;
+            }
+            if (bc + tot / 16u < cur)
+                st_mask = best;
+        }
+        mask = st_mask;
+    }
 #endif
     return mask;
 }

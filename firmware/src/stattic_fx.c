@@ -201,7 +201,7 @@ static void snow_fx_process(track_t *t,int32_t *b,uint32_t n)
             snow_fx_lowpass(&s->tape_dc,tape,32);
             x+=snow_div127((tape-s->tape_dc-x)*tm);dry=x*4;
         }
-        s->wow_ph+=34087u;s->flutter_ph+=594315u;
+        if(tm){s->wow_ph+=34087u;s->flutter_ph+=594315u;}
         if(bm) {
             if(!s->crush_count) {
                 s->crush=snow_div2(x,crush_shift)*quantum;s->crush_count=crush_rate;
@@ -210,13 +210,20 @@ static void snow_fx_process(track_t *t,int32_t *b,uint32_t n)
             snow_fx_lowpass(&s->crush_lp,s->crush,crush_tone);
             x+=snow_div127((s->crush_lp-x)*bm);dry=x*4;
         }
-        s->cho_ph+=ci;
         int32_t cho_l=0,cho_r=0;
         if(cm){
+            s->cho_ph+=ci;
             int32_t shift=snow_div2(osc_sine(s->cho_ph)*chorus_depth,7);
             uint32_t cl=(uint32_t)clamp(150*256+shift,256,500*256),cr=(uint32_t)clamp(150*256-shift,256,500*256);
-            cho_l=snow_tap(s->chorus,512,s->pos&511u,cl,s->chorus_fill);
-            cho_r=snow_tap(s->chorus,512,s->pos&511u,cr,s->chorus_fill);
+            if(s->chorus_fill>=512u){            /* full line: every tap (<= 500 back) is history */
+                uint32_t w=s->pos&511u,ia=(w-(cl>>8))&511u,ib=(w-(cr>>8))&511u;
+                int32_t va=s->chorus[ia],vb=s->chorus[ib];
+                cho_l=va+(((s->chorus[(ia-1u)&511u]-va)*(int32_t)(cl&255u))>>8);
+                cho_r=vb+(((s->chorus[(ib-1u)&511u]-vb)*(int32_t)(cr&255u))>>8);
+            }else{
+                cho_l=snow_tap(s->chorus,512,s->pos&511u,cl,s->chorus_fill);
+                cho_r=snow_tap(s->chorus,512,s->pos&511u,cr,s->chorus_fill);
+            }
             s->chorus[s->pos&511u]=(int16_t)clamp(x+snow_fx_mul(snow_div2(cho_l+cho_r,1),cfb),-32767,32767);
             if(s->chorus_fill<512u)s->chorus_fill++;
         }
@@ -255,10 +262,13 @@ static void snow_fx_process(track_t *t,int32_t *b,uint32_t n)
             s->from_l=s->to_l;s->from_r=s->to_r;
             s->to_l=mulq15(dl,dmix)+snow_div127(rev_l*rm);s->to_r=mulq15(dr,dmix)+snow_div127(rev_r*rm);
         }
-        int32_t wl=s->from_l+snow_div2((s->to_l-s->from_l)*(int32_t)phase,2)+snow_div127(cho_l*cm);
-        int32_t wr=s->from_r+snow_div2((s->to_r-s->from_r)*(int32_t)phase,2)+snow_div127(cho_r*cm);
+        int32_t wl=s->from_l+snow_div2((s->to_l-s->from_l)*(int32_t)phase,2);
+        int32_t wr=s->from_r+snow_div2((s->to_r-s->from_r)*(int32_t)phase,2);
+        if(cm){wl+=snow_div127(cho_l*cm);wr+=snow_div127(cho_r*cm);}
         b[i]=dry+(wl+wr)*2;s->side[i]=(wl-wr)*2;s->pos++;
     }
+    if(!tm){s->wow_ph+=34087u*n;s->flutter_ph+=594315u*n;}   /* (the clocks of the effects that are off: */
+    if(!cm)s->cho_ph+=ci*n;                                     /* once, not a sample at a time) */
     if(!input){
         uint32_t span=snow_fx_quiet_span(s,enabled,n,q);
         s->quiet=span?s->quiet+n:0;

@@ -198,6 +198,10 @@ static void con_status(void)
     __typeof__(stattic_profile) profile;
     uint32_t guard=STATTIC_GUARD_SAVE();memcpy(&profile,&stattic_profile,sizeof profile);STATTIC_GUARD_RESTORE(guard);
     con_kv("diag_schema",3);con_kv("audio_half_us",HALF_FRAMES*1000000u/FS);
+    {   /* (rasp fix 1) which channel racks run (bit 0 BS .. 3 DR; asleep = no cost) and the idle master reverb */
+        uint32_t awake=0;for(uint32_t k=0;k<NTRK;k++)awake|=(uint32_t)snow_fx[k].running<<k;
+        con_kv("rasp_fix",1);con_kv("racks_awake",(int32_t)awake);con_kv("master_rev_idle",rev_clean);
+    }
     con_kv("audio_last_us",(int32_t)felucca_dbg.last_us);con_kv("audio_late",(int32_t)felucca_dbg.late);
     con_kv("profile_halves",(int32_t)profile.halves);
     con_kv("late_snapshot_count",(int32_t)profile.bad_count);con_kv("late_wall_us",(int32_t)profile.bad_wall);

@@ -148,3 +148,41 @@ Still required on the actual device: cold boot, at least five minutes each of
 CH+BS+DR and all four channels, strong random FX/parameters, CH release tails,
 and console capture of late-buffer deltas and worst-half per-track/event times.
 Do not pronounce the reported rasp fixed until those results exist.
+
+## Rasp fix 1 (2026-11-08): CPU headroom from the first hardware log
+
+The first FM-1 USB log of 0.9.0-S1 (CH GLASS CHORD, 120 BPM, four channels)
+showed the rasp is missed DMA halves: 525 late halves in 46 s of PLAY, each
+late snapshot at 5800–6100 µs of a 5804 µs half. Core 0 ran events (~800 µs),
+BS+SY (~3500 µs), the master buses (~830 µs) and nested TIMER5 (~590 µs);
+core 1 CH+DR (~3600 µs). Stopped, the SY and DR racks still cost ~1080 and
+~845 µs: they never slept. Changes, all STATTIC-only:
+
+- **Racks sleep again.** DIST, the track filter and INSERT leave a few LSB of
+  DC in their states after a note; the rack saw it as input and ran for ever
+  (reproduced on the host). A synth or drum channel with no voice for 64 blocks
+  and those stages settled at a constant output now stops those stages (their
+  state is kept, as native SLOOP keeps it), fades the DC out over one block and
+  feeds the rack exact zeros: tails ring out, then the rack sleeps. The track
+  filter keeps running on its silence, so its glide and state are as before.
+  Output change: the removed DC, at most 43 LSB (−57.6 dBFS) in the host scenes.
+- **Silent and muted channels skip their per-sample mix**: a sleeping rack adds
+  nothing; fully muted without a performance filter every product is exactly 0.
+- **The SLOOP master reverb is skipped while it holds exact zeros.** STATTIC
+  only feeds it from FREEZE; it computed silence on core 0 every block. Exact,
+  including FREEZE and its release (host check against the unskipped build).
+- **Steady-block fast path in the channel mix**, fewer per-sample clocks in the
+  rack (wow/flutter/chorus phases of effects that are off advance once a block,
+  unchecked chorus taps once the line is full). Bit-exact: 276 engine vectors,
+  64 FX scenes with histories, the four-track mix in every core mode.
+- **Core split by measured cost** (DUALCORE.md patch 7): once a half, the set of
+  channels for core 1 that best evens both cores, with 1/16 hysteresis. Every
+  split renders the same output (CPU1_UNITS 0..15 give one hash).
+- Console: `rasp_fix 1`, `racks_awake` (bit 0 BS .. 3 DR), `master_rev_idle`.
+
+Host proxy (`tests/stattic_prof.c` under callgrind, instructions, 10 s):
+plain −16 %, all racks on −9 %, racks + DIST −10 %, racks + DIST with a stop
+half way −18 %. Instruction counts are not FM-1 time; the device log decides.
+Not changed, candidates for later: the 10 kHz panel scan nested in the render
+(~590 µs a half, bit-banged 595 shift and LED glow pulses), the device-only
+cost of `events_block` (~800 µs playing against ~3 % on the host).
