@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // USB CDC diagnostics for the existing STATTIC console. No device writes or resets.
-export const VERSION = '2';
+export const VERSION = '3';
 export const MAX_RAW = 2 * 1024 * 1024;
 export const MAX_SAMPLES = 6000;
 const encoder = new TextEncoder();
@@ -10,7 +10,7 @@ export const u32 = n => Number(n) >>> 0;
 export function parseStatus(text) {
   const result = {};
   for (const line of text.split(/\r?\n/)) {
-    const version = /^(?:felucca|stattic)\s+(\S+)\s*$/i.exec(line.trim());
+    const version = /^(?:felucca|stattic)\s+(.+?)\s*$/i.exec(line.trim());
     if (version) { result.version = version[1]; continue; }
     const match = /^([a-z][a-z0-9_]*)\s+(.+)$/.exec(line.trim());
     if (!match || match[1] === 'status') continue;
@@ -18,6 +18,7 @@ export function parseStatus(text) {
   }
   if (!result.version || !Number.isFinite(result.uptime_ms) || !Number.isFinite(result.audio_late))
     throw new Error('Incomplete firmware status. Capture paused; the raw reply is in the log.');
+  if(result.diag_schema===3)result.cpu2=result.cpu1===3?1:0;
   return result;
 }
 
@@ -143,7 +144,15 @@ export async function captureSample(link, maps, previous=null) {
   status.uptime_ms=u32(status.uptime_ms);
   const reboot=!!previous&&(status.boots!==previous.status.boots||u32(status.uptime_ms-previous.status.uptime_ms)>0x80000000);
   const sample={started,finished:null,status,reboot,raw_late:u32(status.audio_late),late_scope:'since connection',stages:null};
-  if(map){
+  if(status.diag_schema===3){
+    sample.late_base=0;sample.late_scope='since cold boot';sample.late=sample.raw_late;
+    sample.stages={consistent:true,peak_pct:status.audio_max_us/status.audio_half_us*100,last_pct:status.audio_last_us/status.audio_half_us*100,irq_us:status.late_nested_us,mode:status.late_snapshot_count?'latest missed DMA half':'last completed DMA half',half_us:status.audio_half_us,
+      ch_synth_us:status.late_snapshot_count?status.late_ch_synth_us:status.ch_synth_us,ch_fx_mix_us:status.late_snapshot_count?status.late_ch_fx_us:status.ch_fx_us,
+      pre_worker_events_us:status.late_snapshot_count?status.late_events_us:status.events_last_us,shared_mix_us:status.late_snapshot_count?status.late_buses_us:status.buses_last_us,
+      wall_us:status.late_wall_us,nested_us:status.late_nested_us,late_snapshot_count:status.late_snapshot_count,
+      worker_wait_us:status.cpu1_wait_pct*status.audio_half_us/100};
+    sample.stages.parts=['dr','bs','sy','ch'].map(role=>({role,synth_us:status[role==="dr"?'dr_player_us':role+'_synth_us'],fx_us:status[role+'_fx_us'],total_max_us:status[role+'_total_max_us']}));
+  }else if(map){
     sample.map={version:map.version,package_sha256:map.package_sha256,source_commit:map.source_commit,
       selected_by:'reported version; device does not report a package hash'};
     sample.late_base=word(await link.memory('late_base'));sample.late_scope='since boot';
@@ -178,7 +187,7 @@ export async function captureSample(link, maps, previous=null) {
     const cost=await link.memory('part_cost'),v=new DataView(cost.buffer,cost.byteOffset,cost.byteLength);
     sample.current_track_estimate_us=Array.from({length:6},(_,i)=>v.getUint16(i*2,true)/map.ticks_per_us);
     sample.late=u32(sample.raw_late-sample.late_base);
-  }else{
+  }else if(status.diag_schema!==3){
     sample.connection_late_base=reboot?sample.raw_late:previous?.connection_late_base??sample.raw_late;
     sample.late=u32(sample.raw_late-sample.connection_late_base);
   }

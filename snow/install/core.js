@@ -3,8 +3,9 @@
 import {productOf,logicalImage,sha256hex,validateStockPackage} from './fm1pkg.js';
 import {sameModel,IS_OTA} from './fm1ota.js';
 import {captureBackup,BackupConnection,readBackup} from './fm1backup.js';
+import {captureNativeBackup,validateBackup} from '../shared/midi.mjs';
 export async function verifyPackage(bytes,config){
- if(productOf(bytes)!==config.product||config.product!=='FM-1_700')throw new Error('This package is not the STATTIC FM-1 package. Nothing was written.');
+ if(productOf(bytes)!==config.product||config.product!=='FM-1_990')throw new Error('This package is not the STATTIC FM-1 package. Nothing was written.');
  if(await sha256hex(bytes)!==config.sha256)throw new Error('Firmware checksum mismatch. Reload the installer. Nothing was written.');
  return logicalImage(bytes);
 }
@@ -44,6 +45,12 @@ export class InstallSession{
     try{reply=await link.request([1,[]]);}
     catch(e){if(e.code==='timeout'&&/^FM-1_0(?:15|16)$/.test(dev.id.text)){this.mode='external';return {mode:this.mode,device:this.device};}throw e;}
     const info=archiveInfo(reply);
+    if(/STATTIC 0\.9\.0-S1/.test(info.version)){
+      const adapter={call:(cmd,args=[])=>link.request([cmd,args])};
+      const archive=await captureNativeBackup(adapter,info.version,progress);validateBackup(archive);
+      await this.download(archive);this.archive=archive;this.mode='backup';
+      return {mode:this.mode,device:this.device,archive};
+    }
     if(!info.supported){this.mode='external';return {mode:this.mode,device:this.device};}
     const archive=await this.capture((r,o)=>link.request(r,o),info.version,progress);
     readBackup(archive); // a failed/incomplete export never enables installation

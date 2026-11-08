@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-import {SerialConsole,CaptureLog,captureSample} from './core.mjs?v=2';
+import {SerialConsole,CaptureLog,captureSample} from './core.mjs?v=3';
 const $=id=>document.getElementById(id),names=['KK','SD','HH','PR','BS','CH'];
 let log=new CaptureLog(),link=null,timer=null,busy=false,recording=false,last=null,misses=0,rawTimer=null;
 const catalog=fetch('maps.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Diagnostic map unavailable.');return r.json();});
@@ -23,7 +23,7 @@ function render(sample){
   text('cpu',num(sample.status.cpu_pct));text('late',num(sample.late));text('late-scope',sample.late_scope);
   text('misses',num(misses));text('delta',`${num(sample.delta_late)} since previous sample`);
   $('miss-card').classList.toggle('detected',misses>0);
-  const clock=sample.status.cpu_mhz>0?`${sample.status.cpu_mhz} MHz`:'clock source unrecognised';
+  const clock=sample.status.cpu_mhz>0?`${sample.status.cpu_mhz} MHz`:'SLOOP clock configuration';
   text('firmware',`${sample.status.version} · ${sample.status.cpu2?'2 cores':'1 core'} · ${clock}`);
   text('shed-status',`Voice protection: ${num(sample.status.voices_shed)} forced voice fades since boot, across all channels.`);
   const p=sample.stages?.consistent?sample.stages:null;
@@ -38,7 +38,9 @@ function render(sample){
     node.textContent=`${names[i]}: ${num(us)} µs · ${owner}`;$('failure-tracks').append(node);
   });
   text('critical-path',p?.track_wall_us?`Serial events / mix / master: ${num(p.serial_us)} µs · Core 0 work: ${num(p.primary_work_us)} µs · Core 1 work: ${num(p.worker_work_us)} µs · Primary IRQ overhead model: ${num(p.primary_irq_overhead_pct,1)}%`:'');
-  $('tracks').replaceChildren();sample.current_rendered_voices?.forEach((voices,i)=>{
+  $('tracks').replaceChildren();
+  p?.parts?.forEach(part=>{const node=document.createElement('span');node.textContent=`${part.role.toUpperCase()}: synthesis/player ${num(part.synth_us)} µs · FX ${num(part.fx_us)} µs · max ${num(part.total_max_us)} µs/half`;$('tracks').append(node);});
+  sample.current_rendered_voices?.forEach((voices,i)=>{
     const node=document.createElement('span');node.textContent=`${names[i]}: ${voices} voice${voices===1?'':'s'} · ~${num(sample.current_track_estimate_us?.[i])} µs/block`;$('tracks').append(node);
   });
   $('timeline').replaceChildren();for(const s of log.samples.slice(-20).reverse()){

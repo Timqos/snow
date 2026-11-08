@@ -1,0 +1,27 @@
+PASS stattic_engine_vectors
+PASS stattic_fx_vectors
+PASS compile-runtime
+PASS runtime
+PASS compile-project
+PASS project
+PASS compile-state
+PASS state
+PASS compile-storage
+PASS storage
+PASS compile-ui
+PASS ui
+PASS compile-loader_screen
+PASS loader_screen
+PASS compile-mix
+PASS mix-one-core
+PASS mix-two-core
+PASS mix-chaos
+PASS mix-timeout
+PASS web-c-integration
+PASS compile-native-project
+PASS native-project
+PASS compile-native-storage
+PASS native-storage
+PASS compile-native-upreset
+PASS native-upreset
+All STATTIC acceptance checks passed; hardware audio qualification pending.
