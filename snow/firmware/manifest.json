@@ -1,13 +1,13 @@
 {
   "version": "STATTIC 0.9.0-S1",
   "product": "FM-1_990",
-  "package": "stattic-0.9.0-sloop-rc1-caf18bd.fwsc",
+  "package": "stattic-0.9.0-sloop-rc1-1d4ae95.fwsc",
   "package_sha256": "1b7955ceda1136034b7fb91b2e9a364b43414c8734d1bed870e57a2baf6bdd6b",
   "package_bytes": 611645,
   "app_sha256": "6cf521c80830dd884337adee9a7b9033efb978c9e63f72139409b0aff713b8f1",
   "app_bytes": 533896,
   "loader_sha256": "547a9c8d251dd71588286ae429cade84f672d8a6b6c7a9b4d3bc92f33ddb7e5b",
-  "source_commit": "caf18bdac5d4301d5b626a385c42cd63b0226da3",
+  "source_commit": "1d4ae9582f68e8c4c6578d6182438ff33a022477",
   "source_dirty": false,
   "sloop_base": "bac9c05ea7627449405aa10e48da21d75b6c8c56",
   "configuration": {
