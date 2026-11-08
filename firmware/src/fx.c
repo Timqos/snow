@@ -1005,9 +1005,39 @@ static uint32_t units_split(void)
     /* STATTIC instruments and sampled DR own their LFO random streams.
      * The native handoff need not move a whole CH render onto core 0 just
      * because an LFO wraps; RATE modulation remains safe on either core. */
-    /* (rasp fix 2) A split by the last half's measured cost was tried in fix 1:
-     * on the FM-1 it predicted note onsets badly (late halves near one core's
-     * whole load). Back to the fixed split, CH+DR on core 1, BS+SY here. */
+    if (cpu1_units < 0) {
+        /* (rasp fix 4) The split by each channel's PEAK cost, once a half. The
+         * fourth FM-1 log: in the late halves core 1 (CH+DR) ran 4450 us while
+         * core 0 (BS+SY) had 1817 and waited 2638. Fix 1 balanced on the last
+         * half alone and mispredicted note onsets; here each channel's cost is
+         * held at its peak and decays by 1/16 a half (~0.1 s), so an onset is
+         * remembered. A change must gain 1/16 of the total (no flapping).
+         * Every split renders the same output (tests: CPU1_UNITS=0..15). */
+        static uint32_t st_mask = (1u << (NPART - 1u)) | U_DRUMS, st_half, st_peak[NTRK];
+        if (stattic_profile.halves != st_half) {
+            uint32_t tot = 0, k, m, best = st_mask, bc = 0xFFFFFFFFu, cur = 0xFFFFFFFFu;
+            st_half = stattic_profile.halves;
+            for (k = 0; k < NTRK; k++) {
+                uint32_t c = stattic_profile.last[k][2], d = st_peak[k] - (st_peak[k] >> 4);
+                st_peak[k] = c > d ? c : d;
+                tot += st_peak[k];
+            }
+            for (m = 0; m <= U_ALL; m++) {
+                uint32_t sum = 0, w;
+                for (k = 0; k < NTRK; k++)
+                    if ((m >> k) & 1u)
+                        sum += st_peak[k];
+                w = sum > tot - sum ? sum : tot - sum;
+                if (m == st_mask)
+                    cur = w;
+                if (w < bc)
+                    bc = w, best = m;
+            }
+            if (bc + tot / 16u < cur)
+                st_mask = best;
+        }
+        mask = st_mask;
+    }
 #endif
     return mask;
 }
