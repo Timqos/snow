@@ -27,6 +27,7 @@ for name,env in [('one-core',{'CORES':'1'}),('two-core',{'CORES':'2'}),('chaos',
     data=run('mix-'+name,[exe],env);hashes.append(re.search(r'mix ([0-9a-f]+)',data)[1])
 assert len(set(hashes))==1,hashes
 run('web-c-integration',['node','tests/stattic_web_test.mjs'])
+run('usb-console',['node','tests/stattic_console_test.mjs'])
 for name in ['project','storage','upreset']:
     exe=compile_test('native-'+name,'tests/'+name+'_test.c',native=True)
     run('native-'+name,[exe])

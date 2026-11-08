@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-import {SerialConsole,CaptureLog,captureSample} from './core.mjs?v=3';
+import {SerialConsole,CaptureLog,captureSample} from './core.mjs?v=5';
 const $=id=>document.getElementById(id),names=['KK','SD','HH','PR','BS','CH'];
 let log=new CaptureLog(),link=null,timer=null,busy=false,recording=false,last=null,misses=0,rawTimer=null;
 const catalog=fetch('maps.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Diagnostic map unavailable.');return r.json();});
