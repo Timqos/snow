@@ -8,6 +8,9 @@ STATTIC synthesis, presets, independent effect racks, performance functions and
 reference HOME artwork were ported from Timqos/snow b0cb3a5. The five HOME design
 references and brand mark were supplied by the project owner. Factory drum shots
 are rendered from the STATTIC presets, rather than using SLOOP's stock sample bank.
+Added since in this repository: the two-operator KEYS voice of SY and CH, the
+effects rack DR and BS share, the drum generator's feels, grids and bursts, and six
+more HOME pictures drawn procedurally by tools/gen_stattic_art_extra.py.
 
 The installer/package/legacy-backup modules retain their Felucca/Skiff copyright
 notices. The sample conversion code is adapted from the SLOOP web editor. The

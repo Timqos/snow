@@ -210,14 +210,15 @@ static uint32_t stattic_art_random(void)
 static uint8_t stattic_art_next(void)
 {
     if(!stattic_art_shuffle.left){
-        for(uint32_t i=0;i<3;i++)stattic_art_shuffle.bag[i]=(uint8_t)i;
-        for(uint32_t i=2;i>0;i--){uint32_t j=stattic_art_random()%(i+1u);
+        const uint32_t n=ST_ART_COUNT;
+        for(uint32_t i=0;i<n;i++)stattic_art_shuffle.bag[i]=(uint8_t)i;
+        for(uint32_t i=n-1u;i>0;i--){uint32_t j=stattic_art_random()%(i+1u);
             uint8_t v=stattic_art_shuffle.bag[i];stattic_art_shuffle.bag[i]=stattic_art_shuffle.bag[j];stattic_art_shuffle.bag[j]=v;}
-        if(stattic_art_shuffle.bag[2]==stattic_art_shuffle.last){
-            uint32_t j=stattic_art_random()%2u;uint8_t v=stattic_art_shuffle.bag[2];
-            stattic_art_shuffle.bag[2]=stattic_art_shuffle.bag[j];stattic_art_shuffle.bag[j]=v;
+        if(stattic_art_shuffle.bag[n-1u]==stattic_art_shuffle.last){   /* (the bag is drawn from its end: never the last one twice) */
+            uint32_t j=stattic_art_random()%(n-1u);uint8_t v=stattic_art_shuffle.bag[n-1u];
+            stattic_art_shuffle.bag[n-1u]=stattic_art_shuffle.bag[j];stattic_art_shuffle.bag[j]=v;
         }
-        stattic_art_shuffle.left=3;
+        stattic_art_shuffle.left=(uint8_t)n;
     }
     uint8_t next=stattic_art_shuffle.bag[--stattic_art_shuffle.left];stattic_art_shuffle.last=next;return next;
 }
@@ -228,7 +229,7 @@ static void stattic_turn(uint32_t knob,int32_t detents)
         if(stattic_art_shuffle.page!=page||stattic_art_shuffle.knob!=(knob&3u)){
             stattic_art_pick[page]=stattic_art_next();stattic_art_shuffle.page=(uint8_t)page;stattic_art_shuffle.knob=(uint8_t)(knob&3u);
         }
-        uint32_t h=stattic_art_height[stattic_art_pick[page]],steps=(uint32_t)(detents<0?-(int64_t)detents:detents);
+        uint32_t h=ST_ART_PERIOD[stattic_art_pick[page]],steps=(uint32_t)(detents<0?-(int64_t)detents:detents);
         stattic_scroll[page]=(stattic_scroll[page]+steps*6u)%h;
     }
     stattic_ui_dirty=1;

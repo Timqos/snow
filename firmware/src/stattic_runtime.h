@@ -27,9 +27,11 @@ static stattic_pattern_t stattic_banks[NTRK][ST_PATTERNS] __attribute__((section
 static stattic_change_t stattic_change[NTRK] __attribute__((section(".noinit")));
 static uint8_t stattic_current[NTRK],stattic_home_page,stattic_focus[3];
 static uint32_t stattic_origin[NTRK],stattic_scroll[3],stattic_revision;
+#include "stattic_art.h"
 static uint8_t stattic_art_pick[3]={0,1,2};
-static struct { uint32_t random;uint8_t bag[3],left,last,page,knob; } stattic_art_shuffle;
-static const uint8_t stattic_art_height[3]={84,78,78};
+/* (2026-11-08) ST_ART_COUNT pictures in a shuffled bag; each page shows 84 / 78 / 78 rows of one */
+static struct { uint32_t random;uint8_t bag[ST_ART_COUNT],left,last,page,knob; } stattic_art_shuffle;
+static const uint8_t stattic_art_rows[3]={84,78,78};
 static volatile uint8_t stattic_home_ms,stattic_home_ms_reset,stattic_ms_pending;
 static uint8_t stattic_ms_mute,stattic_ms_solo;
 static uint32_t stattic_ms_bar;

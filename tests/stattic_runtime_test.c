@@ -117,15 +117,15 @@ static void shuffled_art(void)
     for(uint32_t gesture=0;gesture<300;gesture++){
         stattic_home_page=(uint8_t)(gesture/4u%3u);uint32_t knob=gesture%4u;
         stattic_turn(knob,1);uint32_t image=stattic_art_pick[stattic_home_page];
-        assert(image<3u&&image!=prior);prior=image;
-        if(gesture%3u==0)seen=0;
+        assert(image<ST_ART_COUNT&&image!=prior);prior=image;
+        if(gesture%ST_ART_COUNT==0)seen=0;
         assert(!(seen&(1u<<image)));seen|=1u<<image;
-        uint32_t old=stattic_scroll[stattic_home_page],height=stattic_art_height[image];
+        uint32_t old=stattic_scroll[stattic_home_page],height=ST_ART_PERIOD[image];
         stattic_turn(knob,-2);assert(stattic_art_pick[stattic_home_page]==image);
         assert(stattic_scroll[stattic_home_page]==(old+12u)%height);
-        assert(gesture%3u!=2||seen==7u);
+        assert(gesture%ST_ART_COUNT!=ST_ART_COUNT-1u||seen==(1u<<ST_ART_COUNT)-1u);
     }
-    puts("HOME 1-3 art: shuffled bag of three, no repeats, stable during one knob gesture, upward seamless wrap");
+    puts("HOME 1-3 art: shuffled bag of all pictures, no repeats, stable during one knob gesture, upward seamless wrap");
 }
 #ifndef STATTIC_RUNTIME_HARNESS_ONLY
 int main(void)

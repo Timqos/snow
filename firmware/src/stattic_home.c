@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * STATTIC HOME: user reference pages on the native 240x240 pixel grid.
  * Dirty strips, <=20Hz, no audio-thread drawing or additional framebuffer. */
-#include "stattic_art.h"
 static uint8_t snow_home_active;
 static uint8_t stattic_overview;
 static struct { uint32_t body,head,scope_ms,body_ms,card_blits,scope_blits; } snow_home_state;
@@ -52,7 +51,7 @@ static void snow_pixel_bar(int32_t x,int32_t y,int32_t w,int32_t h,uint32_t pct,
 static void stattic_graph(uint32_t page)
 {
     int32_t top=page==0u?92:99;
-    uint32_t art=stattic_art_pick[page],height=stattic_art_height[page],period=stattic_art_height[art];
+    uint32_t art=stattic_art_pick[page]%ST_ART_COUNT,height=stattic_art_rows[page],period=ST_ART_PERIOD[art];
     for(uint32_t yy=0;yy<height;yy++){
         int32_t py=top+(int32_t)yy;if((uint32_t)(py+cv_oy)>=cv_h)continue;
         const uint8_t *row=ST_STATIC_ROWS[ST_STATIC_INDEX[art][(yy+stattic_scroll[page])%period]];
@@ -76,38 +75,36 @@ static void stattic_small_icon(uint32_t kind,int32_t x,int32_t y)
         }
     }
 }
-/* Preserve the helper glyph size. Two clear rows between lines instead
- * of one; four complete lines fit through screen row 239. */
-#define ST_HINT_W 8
+/* (2026-11-08, the owner's schemes) The helper under the picture: two lines in
+ * the 10x14 dot font (each dot 2x2), the page number on the right of the second.
+ * What the keys do there; the knobs are named by the picture's title row. */
+#define ST_HINT_W 10
 #define ST_HINT_H 14
-#define ST_HINT_PITCH 16
+#define ST_HINT_Y 190
+#define ST_HINT_PITCH 24
+/* the helper's text: a space and a colon take half a letter, so a line holds more */
+static int32_t stattic_hint_text(int32_t x,int32_t y,const char *s,uint16_t ink)
+{
+    for(;*s;s++){
+        char c[2]={*s,0};
+        if(*s==' ')x+=(ST_HINT_W+2)/2;
+        else if(*s==':'){stattic_text(x-ST_HINT_W*2/5,y,c,ink,ST_HINT_W,ST_HINT_H,1);x+=(ST_HINT_W+2)/2;}
+        else x=stattic_text(x,y,c,ink,ST_HINT_W,ST_HINT_H,1);
+    }
+    return x;
+}
 static void stattic_footer(uint32_t page)
 {
-    int32_t y=178;const char *a="OCT +/-:OCTAVE",*b="";
-    if(page==0u&&song.sel==2u){a="OCT+ HLD N/CHO";b="OCT +/-:OCTAVE";}
-    if(page==1u){a="OCT- CLEAR PT";b="OCT+ CLEAR ALL";}
-    if(page==3u){a="OCT +/-";b="RANDOM PATT";}
-    if(page==4u){a="M/S: KEY";b="W:MUTE B:SOLO";}
-    char label[9]="PAGE 1/5";label[5]=(char)('1'+page);
-    stattic_text(6,y,a,T_TEXT,ST_HINT_W,ST_HINT_H,14);
-    stattic_text(6,y+ST_HINT_PITCH,b,T_TEXT,ST_HINT_W,ST_HINT_H,14);
-    stattic_text(156,y,label,T_THEME,ST_HINT_W,ST_HINT_H,8);
-    stattic_text(166,y+ST_HINT_PITCH,"SELECT",T_MID,ST_HINT_W,ST_HINT_H,6);
-    if(page==3u){
-        static const char *const keys[]={"K1:DR","K2:BS","K3:SY","K4:CH"};
-        for(uint32_t n=0;n<4;n++)stattic_text(n&1u?134:6,y+(2u+n/2u)*ST_HINT_PITCH,keys[n],T_TEXT,ST_HINT_W,ST_HINT_H,5);
-    }else if(page==4u){
-        stattic_text(6,y+ST_HINT_PITCH*2,"K1:SLT CH",T_TEXT,ST_HINT_W,ST_HINT_H,9);
-        stattic_text(134,y+ST_HINT_PITCH*2,"K2:VOL",T_TEXT,ST_HINT_W,ST_HINT_H,6);
-    }else{
-        static const char *const keys[3][4]={{"K1:TONE","K2:SHAPE","K3:SWEEP","K4:DECAY"},{"K1:G/SEQ","K2:G/PRM","K3:G/LFO","K4:G/FX"},{"K1:VOL","K2:PAN","K3:FLR","K4:WDT"}};
-        for(uint32_t n=0;n<4;n++){
-            static const char *const drk[4]={"K1:G/KICK","K2:G/SNR","K3:G/HAT","K4:G/PRC"};
-            static const char *const drp[4]={"K1:FILTER","K2:DRIVE","K3:BEND","K4:LENGTH"};   /* (DR: what they do to the samples) */
-            const char *text=page==1u&&song.sel==0u&&n==3u?"K4:G/LCK":page==1u&&song.sel==TRK_DRUM?drk[n]:page==0u&&song.sel==TRK_DRUM?drp[n]:keys[page][n];
-            stattic_text(n&1u?134:6,y+(2u+n/2u)*ST_HINT_PITCH,text,T_TEXT,ST_HINT_W,ST_HINT_H,9);
-        }
-    }
+    const char *a="OCT+/-:OCTAVE",*b="";uint16_t bink=T_TEXT;
+    if(page==0u&&song.sel==2u){a="OCT+ HLD N/CHO";b="OCT+/-:OCTAVE";bink=T_MID;}
+    if(page==1u){a="OCT-/ CLR PT";b="OCT+/ CLR ALL";}
+    if(page==2u){a="VOL  PAN";b="FLR  WDT";}
+    if(page==3u){a="OCT+/-";b="RAND PTN";}
+    if(page==4u){a="W:MUTE B:SOLO";b="K1:CH K2:VOL";}
+    char label[7]="PG 1/5";label[3]=(char)('1'+page);
+    stattic_hint_text(6,ST_HINT_Y,a,T_TEXT);
+    stattic_hint_text(6,ST_HINT_Y+ST_HINT_PITCH,b,bink);
+    stattic_hint_text(172,ST_HINT_Y+ST_HINT_PITCH,label,T_THEME);
 }
 static void stattic_page_body(uint32_t page)
 {

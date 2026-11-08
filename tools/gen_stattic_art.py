@@ -27,10 +27,20 @@ def main():
             if row not in lookup:lookup[row]=len(rows);rows.append(row)
             frame.append(lookup[row])
         indices.append(frame+frame[:84-height])
-    assert len(rows)<256
-    out=['/* SPDX-License-Identifier: GPL-3.0-only */','/* Generated from the user HOME mockups, assets/stattic-home/. */',
+    periods=list(HEIGHTS)
+    # (2026-11-08) the extra pictures, drawn by gen_stattic_art_extra.py: 84 rows, wrapping
+    for path in sorted((ROOT/'assets/stattic-home/extra').glob('*.png')):
+        frame=[]
+        for row in mono(Image.open(path).convert('L')):
+            if row not in lookup:lookup[row]=len(rows);rows.append(row)
+            frame.append(lookup[row])
+        assert len(frame)==84;indices.append(frame);periods.append(84)
+    out=['/* SPDX-License-Identifier: GPL-3.0-only */','/* Generated from the user HOME mockups, assets/stattic-home/ (and extra/). */',
+         '#ifndef STATTIC_ART_H','#define STATTIC_ART_H',
          '#define ST_STATIC_W 208u','#define ST_STATIC_H 84u',f'static const uint8_t ST_STATIC_ROWS[{len(rows)}][26]={{',crows(rows),'};',
-         'static const uint8_t ST_STATIC_INDEX[3][84]={',crows(indices),'};']
+         f'#define ST_ART_COUNT {len(indices)}u',
+         f'static const {"uint16_t" if len(rows)>255 else "uint8_t"} ST_STATIC_INDEX[{len(indices)}][84]={{',crows(indices),'};',
+         'static const uint8_t ST_ART_PERIOD[ST_ART_COUNT]={'+','.join(map(str,periods))+'};']
     for i,(n,box,size) in enumerate(BADGES):
         im=images[n-1].crop(box).resize(size,Image.Resampling.NEAREST)
         white=Image.new('L',size);accent=Image.new('L',size)
@@ -43,6 +53,7 @@ def main():
             packed=mono(mask);out += [f'static const uint8_t ST_BADGE_{i}_{label}[{len(packed)}][{len(packed[0])}]={{',crows(packed),'};']
     bar=images[4].crop((395,502,760,568)).resize((92,17),Image.Resampling.NEAREST)
     out += ['static const uint8_t ST_BAR[17][12]={',crows(mono(bar)),'};']
+    out.append('#endif')
     (ROOT/'firmware/src/stattic_art.h').write_text('\n'.join(out)+'\n')
-    print(f'STATTIC static: {len(rows)} unique rows, {len(rows)*26+252} flash bytes + small icon/bar masks')
+    print(f'STATTIC static: {len(indices)} pictures, {len(rows)} unique rows, {len(rows)*26+len(indices)*84*(2 if len(rows)>255 else 1)} flash bytes + small icon/bar masks')
 if __name__=='__main__':main()

@@ -6,15 +6,15 @@ const send=data=>{if(ready)node.port.postMessage(data);};
 function draw(buffer,state){const image=new Uint16Array(buffer);for(let i=0;i<image.length;i++){const raw=image[i],v=(raw>>8|raw<<8)&65535,j=i*4;pixels.data[j]=(v>>11)*255/31;pixels.data[j+1]=(v>>5&63)*255/63;pixels.data[j+2]=(v&31)*255/31;pixels.data[j+3]=255;}ctx2.putImageData(pixels,0,0);window.statticSim.state=state;}
 window.statticSim={state:null,send};
 $('start').onclick=async()=>{
-  $('start').disabled=true;status('Завантаження інтерфейсу та аудіо…');
+  $('start').disabled=true;status('Loading the interface and audio…');
   try{
     audio=new AudioContext({sampleRate:44100,latencyHint:'interactive'});await audio.resume();
-    const response=await fetch('./stattic.wasm');if(!response.ok)throw new Error('Не вдалося завантажити симулятор');const module=await WebAssembly.compile(await response.arrayBuffer());
+    const response=await fetch('./stattic.wasm');if(!response.ok)throw new Error('The simulator could not be loaded');const module=await WebAssembly.compile(await response.arrayBuffer());
     if(WebAssembly.Module.imports(module).length)throw new Error('Unexpected firmware imports');
     await audio.audioWorklet.addModule('./processor.mjs');node=new AudioWorkletNode(audio,'stattic',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2],processorOptions:{module}});
     gain=audio.createGain();gain.gain.value=$('volume').value/100;node.connect(gain).connect(audio.destination);
     node.port.onmessage=({data})=>{if(data.type==='screen')draw(data.screen,data.state);if(data.type==='error')status(data.message);};
-    ready=true;$('silence').disabled=false;$('start').textContent='Симулятор працює';status('HOME: SELECT — сторінки; ALGORITHM — канал. PLAY запускає секвенцію.');
+    ready=true;$('silence').disabled=false;$('start').textContent='Simulator running';status('HOME: SELECT changes pages; ALGORITHM changes channel. PLAY starts the sequence.');
   }catch(error){status(error.message);$('start').disabled=false;await audio?.close();}
 };
 $('volume').oninput=()=>{if(gain)gain.gain.setTargetAtTime($('volume').value/100,audio.currentTime,.02);};
