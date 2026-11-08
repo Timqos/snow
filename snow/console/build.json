@@ -1,0 +1,14 @@
+{
+  "console_version": 4,
+  "web_source_commit": "9f6e2b5fd298f82f0bf0467ef0b0d7fd771954c2",
+  "firmware_source_commit": "75f556175a9776f5a54a815635ef332801ae417f",
+  "firmware_sha256": "fccb846f8cb374adddf42ba66004b1f7602908965175be34b652c3264bb6b6aa",
+  "firmware_update_required": false,
+  "change": "S1 serial setup uses AUDIO; close menu to save and fully power-cycle; useful empty/cancelled chooser guidance",
+  "files": {
+    "console/index.html": "c0a1ea97a1d97b893b9e30ef7383ec03f56e498a30230364d4b75673eba794de",
+    "console/app.mjs": "eeb5c7153e934b14ec0873eaab437866d281942c04a9761fd21fda6052811122",
+    "manual/index.html": "4349dbe2e4a343a7eebbe70ad4aa58e0b0172db22dee8f8094e1ed3cf0d8a3af",
+    "index.html": "a6ae5096503c655472ce7c018efcdd10118d0c914a8f37e1cc8b95a97b5252e2"
+  }
+}
