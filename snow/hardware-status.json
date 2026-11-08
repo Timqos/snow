@@ -1,7 +1,7 @@
 {
-  "version": "STATTIC 0.9.0-S1 \u00b7 55d9754",
+  "version": "STATTIC 0.9.0-S1 \u00b7 98d3a76",
   "base": "SLOOP 2.8.5",
-  "source_commit": "55d975427aadd8946eeff695c143e8b761ee83d4",
+  "source_commit": "98d3a765333b8afa26be6df08f22cee72d554641",
   "source_dirty": false,
   "hardware_audio_validation": "pending",
   "browser_performance_is_not_device_performance": true
