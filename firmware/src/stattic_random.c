@@ -110,6 +110,22 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
         p[SN_PDEC]=ss_range(&r,8,22);p[SN_FMDEC]=ss_range(&r,30,75);p[SN_FILTER]=1;
         p[SN_RESO]=ss_range(&r,0,15);p[P_E6]=ss_range(&r,73,118);p[P_ATK]=ss_range(&r,0,10);
         p[P_DEC]=ss_range(&r,family==2?75:34,family==2?89:71);
+    } else if(channel>=5u){ /* KEYS (SY, CH): electric pianos, organs, glassy and soft keys */
+        static const uint8_t waves[]={0,0,0,1,5,4,2};static const uint8_t ratios[]={16,16,16,32,32,48,56,64,112};
+        int kind=ss_range(&r,0,6);
+        p[SN_ALG]=0;p[SN_WAVE2]=0;p[SN_WAVE3]=0;p[SN_SUB]=0;p[SN_MIX]=0;p[SN_FB_ROUTE]=0;
+        p[SN_FILTER]=0;p[SN_RESO]=0;p[SN_PAMT]=0;p[SN_RATIO3]=8;
+        p[SN_WAVE1]=waves[kind];p[SN_RATIO]=ratios[ss_rand(&r)%NELEM(ratios)];p[P_E1]=64;
+        p[SN_TUNE]=(int16_t)(ss_chance(&r,80)?0:12*ss_range(&r,-1,1));p[SN_FINE]=ss_range(&r,-4,4);
+        p[P_E0]=ss_range(&r,kind==4?4:18,kind==4?24:72);           /* TONE: FM depth */
+        p[P_E2]=ss_range(&r,kind==4?0:40,kind==4?20:120);          /* HAMMER */
+        p[P_E4]=ss_range(&r,20,100);p[P_E5]=ss_range(&r,0,28);       /* VELO, AIR */
+        p[P_E6]=ss_range(&r,72,124);p[P_E7]=ss_range(&r,0,24);       /* BRIGHT, DRIVE */
+        p[SN_NOISE]=ss_chance(&r,25)?ss_range(&r,1,8):0;p[SN_PDEC]=ss_range(&r,30,65);
+        p[SN_FMDEC]=kind==4?0:ss_range(&r,70,100);p[SN_PW]=ss_range(&r,30,64);p[SN_MODE]=1;
+        p[P_ATK]=ss_range(&r,0,ss_chance(&r,20)?60:6);p[P_DEC]=ss_range(&r,60,95);
+        p[P_SUS]=ss_range(&r,kind==4?110:20,kind==4?127:100);p[P_REL]=ss_range(&r,30,80);
+        p[P_GLIDE]=ss_range(&r,0,4);
     } else { /* Bass/chord: stable note tracking, harmonic ratios, gated envelopes. */
         static const uint8_t waves[]={0,1,2,4,5};int voice=ss_range(&r,0,4);
         p[SN_ALG]=ss_chance(&r,30)?4:ss_range(&r,0,2);

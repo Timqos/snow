@@ -422,6 +422,12 @@ static inline int32_t send_thr(int32_t s, int32_t g) { return g ? s + (((127 * 2
 #define TSEL (&trk[song.sel])    /* the selected track */
 #define TDRUM (&trk[TRK_DRUM])
 static int is_drum(const track_t *t) { return t == TDRUM; }
+#if FELUCCA_STATTIC
+static int stattic_keys_track(const track_t *t)   /* SY or CH: the KEYS voice (eng_stattic.c keys_render) */
+{
+    return !is_drum(t) && (t->eng_req == STATTIC_CH_ENGINE || t->eng_req == STATTIC_SY_ENGINE);
+}
+#endif
 /* silent: MUTE, or another track is soloed */
 static int trk_silent(const track_t *t)
 {

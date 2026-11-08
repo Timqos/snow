@@ -45,10 +45,19 @@ def main():
     exe=out/'sloop-adapter'
     run([*cc,str(source),'-lm','-lpthread','-o',str(exe)])
     actual=run([str(exe)]).splitlines()
-    diffs=[(x,y) for x,y in zip(expected,actual) if x!=y]
-    if len(expected)!=len(actual) or diffs:
+    # Role 5 (SY and CH) plays the KEYS voice since the owner's 2026-11-08 decision: the old
+    # three-operator chord voice is no longer the reference there. Roles 0..4 stay frozen.
+    keys=lambda line:line.split()[0]=='5'
+    if len(expected)!=len(actual) or [keys(x) for x in expected]!=[keys(y) for y in actual]:
+        raise SystemExit(f'vector lists differ: lengths {len(expected)}/{len(actual)}')
+    diffs=[(x,y) for x,y in zip(expected,actual) if x!=y and not keys(x)]
+    if diffs:
         for x,y in diffs[:12]:print('old:',x,'\nnew:',y)
-        raise SystemExit(f'{len(diffs)} different vectors; lengths {len(expected)}/{len(actual)}')
-    print(f'{len(expected)} exact STATTIC oscillator/envelope renders and terminal states on the SLOOP API')
+        raise SystemExit(f'{len(diffs)} different vectors outside KEYS')
+    k=[y.split() for y in actual if keys(y)]
+    silent=[y for y in k if not 0<int(y[4])<=32767]
+    if silent:raise SystemExit(f'KEYS renders silent or out of range: {silent[:3]}')
+    print(f'{len(expected)-len(k)} exact STATTIC renders and terminal states (KICK..BASS) on the SLOOP API; '
+          f'{len(k)} KEYS renders sounding, peak {min(int(y[4]) for y in k)}..{max(int(y[4]) for y in k)}')
 
 if __name__=='__main__':main()

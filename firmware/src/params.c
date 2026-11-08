@@ -277,6 +277,11 @@ static const param_desc_t *track_desc(const track_t *t, uint32_t id)
         return &d[id-P_E1];
     }
     if(t->eng_req==STATTIC_CH_ENGINE&&id==P_REL)return &ESYNC_DESC[2];
+    if(stattic_keys_track(t)){                     /* (KEYS: SY, CH) the slots it gives a meaning of its own */
+        static const param_desc_t kd[2]={PD("HISS",F_PCT,0,127,0),PD("AIR DECAY",F_TIME,0,127,25)};
+        if(id==SN_NOISE)return &kd[0];
+        if(id==SN_PDEC)return &kd[1];
+    }
 #endif
 
     if (id >= P_IA && id <= P_IC)                     /* the INSERT's values as its TYPE names them */
@@ -511,8 +516,23 @@ static int page_for_drum(const page_t *pg)
                                                        * greyed "DRUM TRACK") */
 }
 /* a page the buttons and SELECT reach on the selected track: EDIT > FILTER (TYPE) on ANALOG only */
+#if FELUCCA_STATTIC
+/* KEYS (SY, CH: eng_stattic.c keys_render) has no algorithm, third operator, feedback, SUB,
+ * resonant filter or pitch sweep: those slots stay empty there, a page of only those is skipped */
+static int stattic_keys_hidden(uint32_t id)
+{
+    return id==SN_ALG||id==SN_WAVE2||id==SN_WAVE3||id==SN_RATIO3||id==SN_MIX||id==SN_FB_ROUTE||
+           id==SN_SUB||id==SN_PAMT||id==SN_FILTER||id==SN_RESO;
+}
+#endif
 static int page_shown(const page_t *pg)
 {
+#if FELUCCA_STATTIC
+    if(stattic_keys_track(TSEL)&&pg->scope==SC_TRACK){
+        uint32_t c,any=0;for(c=0;c<4u;c++)any|=pg->id[c]!=0xFFu&&!stattic_keys_hidden(pg->id[c]);
+        if(!any)return 0;
+    }
+#endif
     return pg->id[0] != P_FTYPE || (!is_drum(TSEL) && TSEL->eng_req % NENGINES == 0u);
 }
 
@@ -534,6 +554,9 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
         *valp = &song.g[id];
         return &GP[id];
     }
+#if FELUCCA_STATTIC
+    if(pg->scope==SC_TRACK&&stattic_keys_track(TSEL)&&stattic_keys_hidden(id)){*valp=0;return 0;}
+#endif
     *valp = &TSEL->p[id];
     return track_desc(TSEL, id);
 }

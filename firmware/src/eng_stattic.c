@@ -150,8 +150,52 @@ static inline __attribute__((always_inline)) int32_t snow_wave_fast(uint32_t ph,
     return snow_wave(ph,inc,wave,pw);
 }
 static struct { tsvf_t coef;int32_t cut,reso;uint8_t valid; } stattic_filter_cache[NTRK];
+/* KEYS (SY and CH, the owner's choice, after Elektron Model:Cycles' TONE/CHORD):
+ * a two-operator FM voice for electric pianos, organs and glassy keys.
+ *   carrier: WAVE 1 (SINE TRI SAW SQUARE PULSE ORGAN), PW for PULSE
+ *   modulator: a sine at RATIO x (64 + SHAPE) / 2048 of the note (RATIO 16, SHAPE 64: 1:1)
+ *   index: TONE's depth, x velocity (VELO: how much a soft note darkens), and
+ *          the hammer: SWEEP sets how much of it falls with HAMMER (the FM DECAY time)
+ *   hiss: NOISE (steady) + AIR (a burst falling with N.DECAY, the P DECAY slot)
+ *   BRIGHT: a one-pole low-pass (CUTOFF slot, its LFO/ENV modulation too), DRIVE
+ * The old three-operator algorithms, feedback, SUB, the resonant filter and the
+ * pitch sweep are not part of it: about half the cost of the STATTIC voice. */
+static SNOW_RENDER_RAM void keys_render(track_t *t,voice_t *v,int32_t *out,uint32_t n,const vmod_t *m)
+{
+    const int16_t *p=t->p;
+    uint32_t a=v->ph[0],b=v->ph[1],wave=(uint32_t)p[SN_WAVE1]%6u;
+    int32_t tone=clamp(snow_param(t,0)+snow_div2(m->shape-(64<<8),8),0,127);
+    int32_t pitch=60*16+(m->pitch16-60*16)*p[SN_KEYTRACK]/127+p[SN_TUNE]*16;
+    if(p[SN_L2_DEST]==9)pitch+=snow_l2[stattic_part(t)].value*2;
+    uint32_t inc=pitch_inc((uint32_t)clamp(pitch,0,2047));
+    inc+=(uint32_t)((int32_t)(inc>>12)*(p[SN_FINE]*2367/1000+m->fine));
+    uint32_t ratio=(uint32_t)clamp(p[SN_RATIO],1,127)*(64u+(uint32_t)snow_param(t,1))/8u;
+    uint32_t incm=(uint32_t)(((uint64_t)inc*ratio)>>8);
+    incm=incm>0x70000000u?0x70000000u:incm;
+    int32_t depth=tone<=64?tone*128:8192+(tone-64)*(tone-64)*32;
+    int32_t velo=snow_param(t,4),hit=snow_param(t,2)*258;                /* Q15 */
+    depth=mulq15(depth,32767-velo*(127-(int32_t)v->vel)*13/8);           /* (VELO 127, velocity 1: a fifth of it) */
+    int32_t index=mulq15(depth,(32767-hit)+mulq15(hit,v->s[8]>>9)),index0=v->s[7];
+    int32_t noise_amt=p[SN_NOISE]*128+mulq15(snow_param(t,5)*258,v->s[2]>>9);   /* Q15 */
+    int32_t rng=v->s[4],lp=v->s[5];
+    int32_t cut=clamp((snow_param(t,6)<<8)+m->cutoff,0,127<<8)>>8;
+    int32_t k=cut>=127?32767:400+cut*cut*2;                              /* one pole, Q15 (~490 Hz at 30, ~2 kHz at 64) */
+    int32_t drive_gain=128+snow_param(t,7)*3;
+    uint32_t pw=(uint32_t)clamp(p[SN_PW],1,126)<<25;
+    for(uint32_t i=0;i<n;i++){
+        int32_t idx=index0+(((index-index0)*(int32_t)(i+1u))>>CTL_LOG2);
+        int32_t x=snow_wave_fast(a+(uint32_t)sine_i(b)*(uint32_t)idx*6u,inc,wave,pw);   /* (x6: TONE 64 ~ index 2.4) */
+        if(noise_amt)x+=(((int32_t)(noise32(&rng)>>16)-32768)*noise_amt)>>15;
+        if(k<32767){lp+=((x-lp)*k)>>15;x=lp;}
+        x=soft_knee(snow_div2(x*drive_gain,7),22000);
+        out[i]+=voice_amp(x,m,i);
+        a+=inc;b+=incm;
+    }
+    v->ph[0]=a;v->ph[1]=b;v->s[4]=rng;v->s[5]=lp;v->s[7]=index;
+}
 static SNOW_RENDER_RAM void snow_render(track_t *t,voice_t *v,int32_t *out,uint32_t n,const vmod_t *m)
 {
+    if(snow_role(t)>=5u){keys_render(t,v,out,n,m);return;}   /* SY, CH */
     const int16_t *p=t->p;
     uint32_t a=v->ph[0],b=v->ph[1],c=v->ph[2],alg=(uint32_t)p[SN_ALG]%6u;
     int32_t tone=clamp(snow_param(t,0)+snow_div2(m->shape-(64<<8),8),0,127);
@@ -238,5 +282,14 @@ static void snow_fill(int16_t *p,uint32_t role,uint32_t preset)
  .presets=SNOW_PATCHES[role],.npresets=10,.macro={P_E0,P_E1,P_E2,P_E3}, \
  .poly=(role==5?SN_CH_VOICES:4),.ownenv=1,.note_on=snow_note_on,.render=snow_render, \
  .amp=snow_amp,.done=snow_done,.block=snow_block }
-static const engine_t SNOW_ENG[7]={SNOW_MACHINE(0,"KICK"),SNOW_MACHINE(1,"SNARE"),SNOW_MACHINE(2,"HAT"),SNOW_MACHINE(3,"PERC"),SNOW_MACHINE(4,"BASS"),SNOW_MACHINE(5,"CHORD"),SNOW_MACHINE(5,"SYNTH")};
+#define SNOW_KEYS(nvoice,title) { .name=title,.page_title={"MACROS","KEYS"}, \
+ .edit={{.label="TONE",.fmt=F_PCT,.min=0,.max=127,.def=40},{.label="SHAPE",.fmt=F_PCT,.min=0,.max=127,.def=64}, \
+ {.label="HAMMER",.fmt=F_PCT,.min=0,.max=127,.def=64},{.label="DECAY",.fmt=F_PCT,.min=0,.max=127,.def=64}, \
+ {.label="VELO",.fmt=F_PCT,.min=0,.max=127,.def=48},{.label="AIR",.fmt=F_PCT,.min=0,.max=127,.def=0}, \
+ {.label="BRIGHT",.fmt=F_CUTOFF,.min=0,.max=127,.def=110},{.label="DRIVE",.fmt=F_PCT,.min=0,.max=127,.def=0}}, \
+ .presets=SNOW_PATCHES[5],.npresets=10,.macro={P_E0,P_E1,P_E2,P_E3}, \
+ .poly=(nvoice),.ownenv=1,.note_on=snow_note_on,.render=snow_render, \
+ .amp=snow_amp,.done=snow_done,.block=snow_block }
+static const engine_t SNOW_ENG[7]={SNOW_MACHINE(0,"KICK"),SNOW_MACHINE(1,"SNARE"),SNOW_MACHINE(2,"HAT"),SNOW_MACHINE(3,"PERC"),SNOW_MACHINE(4,"BASS"),SNOW_KEYS(SN_CH_VOICES,"CHORD"),SNOW_KEYS(4,"SYNTH")};
 #undef SNOW_MACHINE
+#undef SNOW_KEYS
