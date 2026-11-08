@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// The STATTIC simulator page: the FM-1 drawn as the unit (panel.js, window.PANEL), its controls sent to the firmware
+// running in the audio worklet (processor.mjs: buttons by panel.c id, encoders 0 SELECT 1 ALGORITHM 2 PRESETS 3..6 K1..K4,
+// keys 0..26 = semitones from F3).
 const $=id=>document.getElementById(id),ctx2=$('screen').getContext('2d'),pixels=ctx2.createImageData(240,240);
-let audio,node,gain,ready=false;const active=new Set();
+let audio,node,gain,ready=false,layout=null;
 const status=text=>$('status').textContent=text;
 const send=data=>{if(ready)node.port.postMessage(data);};
 function draw(buffer,state){const image=new Uint16Array(buffer);for(let i=0;i<image.length;i++){const raw=image[i],v=(raw>>8|raw<<8)&65535,j=i*4;pixels.data[j]=(v>>11)*255/31;pixels.data[j+1]=(v>>5&63)*255/63;pixels.data[j+2]=(v&31)*255/31;pixels.data[j+3]=255;}ctx2.putImageData(pixels,0,0);window.statticSim.state=state;}
 window.statticSim={state:null,send};
+
 $('start').onclick=async()=>{
   $('start').disabled=true;status('Loading the interface and audio…');
   try{
@@ -17,19 +21,74 @@ $('start').onclick=async()=>{
     ready=true;$('silence').disabled=false;$('start').textContent='Simulator running';status('HOME: SELECT changes pages; ALGORITHM changes channel. PLAY starts the sequence.');
   }catch(error){status(error.message);$('start').disabled=false;await audio?.close();}
 };
-$('volume').oninput=()=>{if(gain)gain.gain.setTargetAtTime($('volume').value/100,audio.currentTime,.02);};
-function releaseAll(){for(const item of document.querySelectorAll('.on'))item.classList.remove('on');active.clear();if(ready)send({type:'panic'});}
+const setVolume=v=>{$('volume').value=v;if(gain)gain.gain.setTargetAtTime(v/100,audio.currentTime,.02);};
+$('volume').oninput=()=>setVolume(+$('volume').value);
+
+/* ---------------------------------------------------------------- the panel */
+const device=$('device'),svg=$('panel'),canvas=$('screen');
+const held=new Map();                                  // pointer / keyboard id -> {kind, id, g}
+function press(tag,kind,id,g){
+  if(held.has(tag))return;held.set(tag,{kind,id,g});g?.classList.add('held');
+  send({type:kind,id,down:true});
+}
+function lift(tag){
+  const h=held.get(tag);if(!h)return;held.delete(tag);
+  if(![...held.values()].some(o=>o.kind===h.kind&&o.id===h.id)){h.g?.classList.remove('held');send({type:h.kind,id:h.id,down:false});}
+}
+function releaseAll(){for(const tag of [...held.keys()])lift(tag);if(ready)send({type:'panic'});}
 $('silence').onclick=releaseAll;window.addEventListener('blur',releaseAll);document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseAll();});
-const labels=['FX','SEL','ENV','LFO','EDIT','GLO','HOME','SAVE','ARP','SEQ','PLAY','REC','OCT−','OCT+'];
-function held(element,down,up){element.onpointerdown=e=>{e.preventDefault();element.setPointerCapture(e.pointerId);element.classList.add('on');down();};const end=e=>{if(!element.classList.contains('on'))return;element.classList.remove('on');up();};element.onpointerup=end;element.onpointercancel=end;element.onlostpointercapture=end;}
-labels.forEach((name,id)=>{const button=document.createElement('button');button.textContent=name;button.dataset.id=id;button.setAttribute('aria-label',name);$('buttons').append(button);held(button,()=>send({type:'button',id,down:true}),()=>send({type:'button',id,down:false}));});
-['SELECT','ALGORITHM','PRESETS','K1','K2','K3','K4'].forEach((name,id)=>{
-  const div=document.createElement('div');div.className='knob';div.dataset.id=id;div.innerHTML=`<span>${name}</span><div class="dial" role="spinbutton" tabindex="0" aria-label="${name}"></div><div class="nudge"><button aria-label="${name} minus">−</button><button aria-label="${name} plus">+</button></div>`;
-  (id<3?$('nav-knobs'):$('macros')).append(div);const move=value=>send({type:'encoder',id,value});
-  div.onwheel=e=>{e.preventDefault();move(e.deltaY<0?1:-1);};div.querySelectorAll('button').forEach((b,i)=>b.onclick=()=>move(i?1:-1));
-  const dial=div.querySelector('.dial');let y=null;dial.onpointerdown=e=>{y=e.clientY;dial.setPointerCapture(e.pointerId);};dial.onpointermove=e=>{if(y===null)return;const n=Math.trunc((y-e.clientY)/7);if(n){move(n);y-=n*7;}};dial.onpointerup=dial.onpointercancel=()=>y=null;dial.onkeydown=e=>{if(['ArrowUp','ArrowRight','ArrowDown','ArrowLeft'].includes(e.key)){e.preventDefault();move(['ArrowUp','ArrowRight'].includes(e.key)?1:-1);}};
-});
-for(let id=0;id<27;id++){const button=document.createElement('button');button.className='key'+([1,3,5,8,10].includes(id%12)?' black':'');button.setAttribute('aria-label',`Note ${id+1}`);button.dataset.note=id;$('keys').append(button);held(button,()=>send({type:'key',id,down:true}),()=>send({type:'key',id,down:false}));}
+
+function build(name){
+  layout=name;for(const d of device.querySelectorAll('.hit'))d.remove();
+  const P=window.PANEL.draw(svg,name,{}),L=P.L;
+  device.style.aspectRatio=`${L.w} / ${L.h}`;device.style.maxWidth=name==='tall'?'560px':'1000px';
+  const [sx,sy,ss]=P.screen;
+  Object.assign(canvas.style,{left:`${sx/L.w*100}%`,top:`${sy/L.h*100}%`,width:`${ss/L.w*100}%`,height:`${ss/L.h*100}%`});
+  const hit=(c,cls,role)=>{
+    const b=c.g.getBBox(),d=document.createElement('div');d.className='hit'+(cls?' '+cls:'');
+    Object.assign(d.style,{left:`${b.x/L.w*100}%`,top:`${b.y/L.h*100}%`,width:`${b.width/L.w*100}%`,height:`${b.height/L.h*100}%`});
+    d.setAttribute('role',role);d.setAttribute('aria-label',c.name);d.title=c.name;d.tabIndex=0;
+    d.addEventListener('touchstart',e=>e.preventDefault(),{passive:false});d.addEventListener('contextmenu',e=>e.preventDefault());
+    device.append(d);return d;
+  };
+  for(const b of P.buttons){
+    const d=hit(b,'','button');
+    d.onpointerdown=e=>{e.preventDefault();d.setPointerCapture(e.pointerId);press('p'+e.pointerId,'button',b.bit,b.g);};
+    d.onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&!e.repeat){e.preventDefault();e.stopPropagation();press('f'+b.bit,'button',b.bit,b.g);}};
+    d.onkeyup=()=>lift('f'+b.bit);
+  }
+  P.keys.forEach((k,i)=>{
+    const d=hit(k,'','button');
+    d.onpointerdown=e=>{e.preventDefault();d.setPointerCapture(e.pointerId);press('p'+e.pointerId,'key',i,k.g);};
+  });
+  for(const k of P.knobs){
+    const d=hit(k,'knob','slider');let drag=null,wheel=0,angle=0;
+    const turn=n=>{
+      if(!n)return;
+      if(k.role==='master'){setVolume(Math.max(0,Math.min(100,+$('volume').value+n*2)));angle=-135+270*$('volume').value/100;}
+      else{send({type:'encoder',id:k.role,value:n});angle=(angle+n*18)%360;}
+      if(k.ind)k.ind.setAttribute('transform',`rotate(${angle} ${k.x} ${k.y})`);
+    };
+    if(k.role==='master'){angle=-135+270*$('volume').value/100;k.ind?.setAttribute('transform',`rotate(${angle} ${k.x} ${k.y})`);}
+    d.onpointerdown=e=>{e.preventDefault();d.setPointerCapture(e.pointerId);drag={y:e.clientY,acc:0};};
+    d.onpointermove=e=>{if(!drag)return;drag.acc+=drag.y-e.clientY;drag.y=e.clientY;const step=k.role==='master'?3:8,n=Math.trunc(drag.acc/step);if(n){drag.acc-=n*step;turn(n);}};
+    d.onpointerup=d.onpointercancel=()=>{drag=null;};
+    d.addEventListener('wheel',e=>{e.preventDefault();const dy=e.deltaMode===1?e.deltaY*33:e.deltaY;
+      if(Math.abs(dy)>=50){turn(dy<0?1:-1);wheel=0;return;}wheel-=dy;const n=Math.trunc(wheel/25);if(n){wheel-=n*25;turn(n);}},{passive:false});
+    d.onkeydown=e=>{const v={ArrowUp:1,ArrowRight:1,ArrowDown:-1,ArrowLeft:-1}[e.key];if(v){e.preventDefault();e.stopPropagation();turn(v);}};
+  }
+}
+for(const t of ['pointerup','pointercancel','lostpointercapture'])device.addEventListener(t,e=>lift('p'+e.pointerId));
+const tall=matchMedia('(orientation: portrait) and (max-width: 700px)');
+build(tall.matches?'tall':'wide');tall.addEventListener('change',()=>build(tall.matches?'tall':'wide'));
+
+/* ---------------------------------------------------------------- the computer keyboard */
 const codes=['KeyZ','KeyS','KeyX','KeyD','KeyC','KeyV','KeyG','KeyB','KeyH','KeyN','KeyJ','KeyM','Comma','KeyL','Period','Semicolon','Slash','KeyQ','Digit2','KeyW','Digit3','KeyE','KeyR','Digit5','KeyT','Digit6','KeyY'];
-window.addEventListener('keydown',e=>{if(e.repeat||e.target.matches('input,select,textarea'))return;const id=codes.indexOf(e.code);if(id>=0){e.preventDefault();active.add(id);send({type:'key',id,down:true});}if(e.code==='Space'){e.preventDefault();send({type:'button',id:10,down:true});}});
-window.addEventListener('keyup',e=>{const id=codes.indexOf(e.code);if(active.delete(id))send({type:'key',id,down:false});if(e.code==='Space')send({type:'button',id:10,down:false});});
+const keyG=i=>svg.querySelector(`[data-ctrl="KEY${i}"]`),btnG=name=>svg.querySelector(`[data-ctrl="${name}"]`);
+window.addEventListener('keydown',e=>{
+  if(e.repeat||e.metaKey||e.ctrlKey||e.altKey||e.target.matches('input,select,textarea')||e.target.closest?.('.hit'))return;
+  const id=codes.indexOf(e.code);
+  if(id>=0){e.preventDefault();press('k'+e.code,'key',id,keyG(id));}
+  if(e.code==='Space'){e.preventDefault();press('kSpace','button',window.PANEL.B.PLAY,btnG('PLAY'));}
+});
+window.addEventListener('keyup',e=>lift('k'+e.code));
