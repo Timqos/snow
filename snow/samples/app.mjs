@@ -1,102 +1,79 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// STATTIC sample manager: connect, see all four user banks at once, add / replace / delete sounds, save a bank.
+// STATTIC samples: connect, four banks, "+ Add sounds" and "✕" write to the FM-1 at once. No separate save step.
 import {SMP,readSlot,buildEncodedSlot,convertShot} from '../shared/samples.mjs';
 import {MidiLink,capabilities,listObjects,readObject,download,uploadSlot,captureNativeBackup,restoreBackup} from '../shared/midi.mjs';
 
 const $=id=>document.getElementById(id);
-const CAT=['KK','SD','HH','PR'],CAT_NAME=['kick','snare','hat','percussion'],BANKS=4;
+const CAT=['KK','SD','HH','PR'],CAT_LONG=['kick','snare','hat','percussion'],BANKS=4,LENGTH=1;   // longest sound, s
 const FM1_PORT=/stattic|fm.?1|sloop|felucca/i;
-let midi=null,link=null,version='',busy=false,replacing=null;
-const device=Array.from({length:BANKS},()=>null);       // what the FM-1 holds (null: not read)
-const work=Array.from({length:BANKS},()=>[]);           // what this page shows and would save
-const dirty=Array(BANKS).fill(false);
+let midi=null,link=null,version='',busy=false;
+const banks=Array.from({length:BANKS},()=>null);        // the zones on the FM-1 (null: not read)
+const choice=Array(BANKS).fill('auto');                 // the category a bank's next files get
 
 let toastTimer=0;
-const status=(text,error=false)=>{          /* (shown where the person is looking: at the top, under "Add sounds" and as a toast) */
-  for(const id of ['status','add-status']){$(id).textContent=text;$(id).classList.toggle('error',error);}
+const status=(text,error=false)=>{
+  $('status').textContent=text;$('status').classList.toggle('error',error);
   const t=$('toast');t.textContent=text;t.classList.toggle('error',error);t.classList.add('show');
-  clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),error?12000:7000);
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),error?12000:6000);
 };
-const isFull=zones=>zones.length>=16&&!zones.some(z=>z.deleted)||SMP.MAX_DATA-bytesOf(zones)<1500;
-const clone=zones=>zones.map(z=>({...z}));
 const bytesOf=zones=>zones.reduce((n,z)=>n+z.data.length,0);
 const live=zones=>zones.filter(z=>!z.deleted);
+const places=zones=>16-zones.length+zones.filter(z=>z.deleted).length;
+/* the category from the file's name: kick / bd / kk, snare / sd / sn / clap, hat / hh / cymbal; anything else percussion */
+function guess(name){
+  const n=name.toLowerCase();
+  if(/kick|(^|[^a-z])(bd|kk)|bassdrum/.test(n))return 0;
+  if(/snare|clap|rim|(^|[^a-z])(sd|sn|cp)/.test(n))return 1;
+  if(/hat|(^|[^a-z])(hh|oh|ch)|cymb|ride|crash/.test(n))return 2;
+  return 3;
+}
 
 async function action(fn){
-  if(busy)return;busy=true;update();
+  if(busy)return;busy=true;render();
   try{await fn();}catch(e){status(e.message,true);}
-  finally{busy=false;$('progress').value=0;update();}
+  finally{busy=false;$('progress').value=0;render();}
 }
-function update(){
-  $('connect').disabled=busy||!!link;$('reload').disabled=busy||!link;$('disconnect').disabled=busy||!link;
-  $('open').disabled=busy||!!link||!midi;$('backup').disabled=busy||!link;$('restore').disabled=busy||!link;
-  $('files').disabled=busy||!link;$('pick-label').classList.toggle('disabled',busy||!link);$('pick-label').style.opacity=busy||!link?.4:1;
-  $('target').disabled=busy||!link||!!replacing;$('category').disabled=busy||!link||!!replacing;
-  render();
-}
-
-/* ---------------------------------------------------------------- the four banks */
 function render(){
+  for(const id of ['backup','restore','disconnect'])$(id).disabled=busy||!link;
+  $('connect').disabled=busy||!!link;$('open').disabled=busy||!!link||!midi;
   const box=$('banks');box.replaceChildren();
+  if(!link)return;
   for(let s=0;s<BANKS;s++){
-    const zones=work[s],used=zones.length?512+bytesOf(zones):0,count=zones.length,card=document.createElement('div');
-    card.className='bank'+(dirty[s]?' changed':'')+(+$('target').value===s&&link?' target':'');
+    const zones=banks[s]||[],free=SMP.MAX_DATA-bytesOf(zones),card=document.createElement('div');card.className='bank';
     const top=document.createElement('div');top.className='bank-top';
-    const name=document.createElement('span');name.className='bank-name';name.textContent=`USR ${s+1}`;
-    const chips=document.createElement('span');chips.className='chips';
-    if(link&&+$('target').value===s){const h=document.createElement('span');h.className='tag here';h.textContent='adding here';chips.append(h);}
-    if(link&&isFull(zones)){const f=document.createElement('span');f.className='tag full';f.textContent='full';chips.append(f);}
-    const tag=document.createElement('span');tag.className='tag'+(dirty[s]?' dirty':device[s]?' ok':'');
-    tag.textContent=!link&&!device[s]?'not read':dirty[s]?'changed · not saved':live(zones).length?'on the FM-1':'empty';
-    chips.append(tag);top.append(name,chips);card.append(top);
-    const meter=document.createElement('div');meter.className='meter'+(used>SMP.SLOT_SIZE||count>16?' full':'');
-    const fill=document.createElement('i');fill.style.width=`${Math.min(100,used/SMP.SLOT_SIZE*100)}%`;meter.append(fill);card.append(meter);
-    const counts=document.createElement('div');counts.className='counts';
-    const per=CAT.map((c,i)=>live(zones).filter(z=>z.category===i).length);
-    counts.innerHTML=`<span><b>${(used/1024).toFixed(1)}</b> / ${(SMP.SLOT_SIZE/1024).toFixed(0)} KiB</span><span><b>${live(zones).length}</b> / 16 sounds</span>`+
-      CAT.map((c,i)=>`<span>${c} <b>${per[i]}</b></span>`).join('');
-    card.append(counts);
+    top.innerHTML=`<span class="bank-name">USR ${s+1}</span><span class="bank-info">${live(zones).length} / 16 sounds · ${(Math.max(0,free)/1024).toFixed(1)} KiB free</span>`;
+    const meter=document.createElement('div');meter.className='meter';meter.innerHTML=`<i style="width:${Math.min(100,(SMP.MAX_DATA-free)/SMP.MAX_DATA*100)}%"></i>`;
     const list=document.createElement('div');list.className='shots';
-    if(!live(zones).length){const e=document.createElement('div');e.className='empty';e.textContent=device[s]||!link?'Empty.':'';list.append(e);}
+    if(!live(zones).length)list.innerHTML='<div class="empty">Empty</div>';
     zones.forEach((z,i)=>{
       if(z.deleted)return;
-      const row=document.createElement('div');row.className='shot'+(z.isNew?' new':'');
-      const cat=document.createElement('span');cat.className=`cat c${z.category}`;cat.textContent=CAT[z.category];cat.title=CAT_NAME[z.category];
-      const label=document.createElement('span');label.className='name';label.textContent=`${z.name} · ${(z.n/SMP.RATE).toFixed(2)} s`;
+      const row=document.createElement('div');row.className='shot';
+      row.innerHTML=`<span class="cat c${z.category}" title="${CAT_LONG[z.category]}">${CAT[z.category]}</span><span>${z.name} · ${(z.n/SMP.RATE).toFixed(2)} s</span>`;
       const play=document.createElement('button');play.textContent='▶';play.title='Listen';play.onclick=()=>preview(z);
-      const rep=document.createElement('button');rep.textContent='Replace';rep.disabled=busy;rep.onclick=()=>startReplace(s,i);
-      const del=document.createElement('button');del.textContent='✕';del.title='Delete';del.disabled=busy;del.onclick=()=>remove(s,i);
-      row.append(cat,label,play,rep,del);list.append(row);
+      const del=document.createElement('button');del.textContent='✕';del.title='Delete from the FM-1';del.disabled=busy;
+      del.onclick=()=>action(()=>removeShot(s,i));
+      row.append(play,del);list.append(row);
     });
-    card.append(list);
-    const acts=document.createElement('div');acts.className='bank-actions';
-    const add=document.createElement('button');add.textContent=isFull(zones)?'Full':'Add sounds here';add.disabled=busy||!link||isFull(zones);
-    add.onclick=()=>{$('target').value=s;cancelReplace();render();$('add-step').scrollIntoView({behavior:'smooth'});};
-    const save=document.createElement('button');save.className=dirty[s]?'primary':'';save.textContent=dirty[s]?'Save to FM-1':device[s]?'Saved ✓':'Save to FM-1';
-    save.title=dirty[s]?'Write this bank to the FM-1':'Nothing to save: this bank is the same as on the FM-1';save.disabled=busy||!link||!dirty[s];save.onclick=()=>action(()=>saveBank(s));
-    const clear=document.createElement('button');clear.textContent='Clear bank';clear.disabled=busy||!link||!live(zones).length;
-    clear.onclick=()=>{if(!confirm(`Remove all ${live(work[s]).length} sounds from USR ${s+1}? (Nothing changes on the FM-1 until you press “Save to FM-1”.)`))return;
-      work[s]=[];dirty[s]=true;cancelReplace();render();status(`USR ${s+1} cleared here. Press “Save to FM-1” on USR ${s+1} to empty it on the device.`);};
-    const undo=document.createElement('button');undo.textContent='Undo changes';undo.disabled=busy||!dirty[s];
-    undo.onclick=()=>{work[s]=clone(device[s]||[]);dirty[s]=false;cancelReplace();render();status(`USR ${s+1}: changes undone.`);};
-    acts.append(add,save,undo,clear);card.append(acts);
-    const file=document.createElement('div');file.className='bank-file';
-    const dl=document.createElement('a');dl.textContent='Download as a bank file';
-    dl.onclick=()=>{if(live(work[s]).length)download(`STATTIC-USR${s+1}.stbank`,buildEncodedSlot('STATTIC',work[s]));else status(`USR ${s+1} is empty.`,true);};
-    const open=document.createElement('label');open.textContent='Open a bank file';const input=document.createElement('input');input.type='file';input.accept='.stbank';
-    input.onchange=()=>action(async()=>{const zones=readSlot(new Uint8Array(await input.files[0].arrayBuffer()));work[s]=zones.map(z=>({...z,isNew:true}));dirty[s]=true;
-      status(`USR ${s+1}: bank file opened (${live(zones).length} sounds). Press “Save to FM-1” to put it on the device.`);});
-    open.append(input);file.append(dl,open);card.append(file);
-    box.append(card);
+    const add=document.createElement('div');add.className='add-row';
+    const full=places(zones)<=0||free<1500;
+    const pick=document.createElement('label');pick.className='button primary';pick.textContent=full?'Bank full':'+ Add sounds';
+    if(full||busy){pick.style.opacity=.4;pick.style.pointerEvents='none';}
+    const input=document.createElement('input');input.type='file';input.multiple=true;input.accept='audio/*,.wav,.aif,.aiff,.flac,.mp3';
+    input.onchange=()=>{const files=[...input.files];input.value='';if(files.length)action(()=>addShots(s,files));};
+    pick.append(input);
+    const as=document.createElement('select');as.title='The category the added sounds get';
+    as.innerHTML='<option value="auto">category from the file name</option>'+CAT.map((c,i)=>`<option value="${i}">all as ${c} (${CAT_LONG[i]})</option>`).join('');
+    as.value=choice[s];as.onchange=()=>{choice[s]=as.value;};as.disabled=busy||full;
+    add.append(pick,as);
+    card.append(top,meter,list,add);box.append(card);
   }
 }
 
-/* ---------------------------------------------------------------- connect and read */
-function pickPorts(){
+/* ---------------------------------------------------------------- connect */
+function fillPorts(){
   const ins=[...midi.inputs.values()],outs=[...midi.outputs.values()];
   for(const [id,ports] of [['input',ins],['output',outs]]){
-    $(id).replaceChildren();
-    for(const p of ports){const o=document.createElement('option');o.value=p.id;o.textContent=p.name;$(id).append(o);}
+    $(id).replaceChildren();for(const p of ports){const o=document.createElement('option');o.value=p.id;o.textContent=p.name;$(id).append(o);}
   }
   const pairs=[];
   for(const i of ins.filter(p=>FM1_PORT.test(p.name)))for(const o of outs.filter(p=>FM1_PORT.test(p.name)))
@@ -110,23 +87,22 @@ async function openLink(input,output){
   try{const c=await capabilities(next);if(!c.flash)throw new Error('The FM-1 memory is not available');link=next;version=c.version;}
   catch(e){next.close();throw e;}
 }
+async function stopped(){const c=await capabilities(link);if(c.playing)throw new Error('Press STOP on the FM-1 first.');}
+async function readBank(s,list){
+  const entry=(list||await listObjects(link)).find(e=>e.id===32+s);
+  banks[s]=readSlot(entry&&entry.length?await readObject(link,entry):new Uint8Array());
+}
 async function readAll(){
-  const c=await capabilities(link);if(c.playing)throw new Error('Press STOP on the FM-1, then “Read again from the FM-1”.');
-  const list=await listObjects(link);
-  for(let s=0;s<BANKS;s++){
-    status(`Reading USR ${s+1}…`);
-    const entry=list.find(e=>e.id===32+s),bytes=entry&&entry.length?await readObject(link,entry,(n,t)=>$('progress').value=(s+n/t)/BANKS*100):new Uint8Array();
-    device[s]=readSlot(bytes);work[s]=clone(device[s]);dirty[s]=false;
-  }
-  cancelReplace();
-  status(`Connected: ${version}. All four banks read from the FM-1.`);
+  await stopped();const list=await listObjects(link);
+  for(let s=0;s<BANKS;s++){status(`Reading USR ${s+1}…`);await readBank(s,list);$('progress').value=(s+1)/BANKS*100;}
+  status(`Connected (${version}).`);
 }
 $('connect').onclick=()=>action(async()=>{
   if(!navigator.requestMIDIAccess)throw new Error('This browser has no Web MIDI. Use desktop Chrome or Edge.');
   midi=await navigator.requestMIDIAccess({sysex:true});
-  const pairs=pickPorts();let last=null;
-  for(const [i,o] of pairs){try{status(`Trying ${i.name}…`);await openLink(i,o);break;}catch(e){last=e;}}
-  if(!link){$('ports').open=true;throw new Error(pairs.length?`The FM-1 did not answer (${last?.message||'no reply'}). Check that STATTIC is installed, or choose its ports below.`:'No FM-1 found. Connect it by USB, or choose its ports below.');}
+  const pairs=fillPorts();let last=null;
+  for(const [i,o] of pairs){try{await openLink(i,o);break;}catch(e){last=e;}}
+  if(!link){$('ports').open=true;throw new Error(pairs.length?`The FM-1 did not answer (${last?.message||'no reply'}). Is STATTIC installed? Or choose its ports under “FM-1 not found?”.`:'No FM-1 found. Connect it by USB, or choose its ports under “FM-1 not found?”.');}
   await readAll();
 });
 $('open').onclick=()=>action(async()=>{
@@ -134,67 +110,40 @@ $('open').onclick=()=>action(async()=>{
   if(!i||!o)throw new Error('Choose an input and an output.');
   await openLink(i,o);$('ports').open=false;await readAll();
 });
-$('reload').onclick=()=>action(async()=>{
-  if(dirty.some(Boolean)&&!confirm('Reading again drops the changes you have not saved. Continue?'))return;
-  await readAll();
-});
-$('disconnect').onclick=()=>{link?.close();link=null;device.fill(null);for(let s=0;s<BANKS;s++){work[s]=[];dirty[s]=false;}cancelReplace();status('Disconnected.');update();};
+$('disconnect').onclick=()=>{link?.close();link=null;banks.fill(null);status('Disconnected.');render();};
 
-/* ---------------------------------------------------------------- add, replace, delete */
-function startReplace(s,i){
-  replacing={s,i};const z=work[s][i];
-  $('target').value=s;$('category').value=z.category;$('files').multiple=false;
-  $('replacing-text').textContent=`Replacing ${z.name} in USR ${s+1}: choose one file (it stays a ${CAT_NAME[z.category]}, in the same place).`;
-  $('replacing').classList.remove('hidden');update();$('add-step').scrollIntoView({behavior:'smooth'});
+/* ---------------------------------------------------------------- add / delete: written at once */
+async function write(s,zones,what){
+  await stopped();
+  status(`${what} Writing USR ${s+1} to the FM-1, keep USB connected…`);
+  await uploadSlot(link,s,live(zones).length?buildEncodedSlot('STATTIC',zones):new Uint8Array(),(n,t)=>$('progress').value=t?n/t*100:100);
+  await readBank(s);
 }
-function cancelReplace(){replacing=null;$('files').multiple=true;$('replacing').classList.add('hidden');}
-$('cancel-replace').onclick=()=>{cancelReplace();update();};
-$('target').onchange=()=>render();
-function remove(s,i){
-  const z=work[s][i];
-  work[s][i]={category:z.category,n:2,data:Uint8Array.of(0),deleted:true,name:'Empty'};   // (the place stays: later sounds keep theirs)
-  while(work[s].at(-1)?.deleted)work[s].pop();
-  dirty[s]=true;cancelReplace();render();status(`USR ${s+1}: ${z.name} deleted here. Press “Save to FM-1” to delete it on the device.`);
-}
-$('files').onchange=()=>action(async()=>{
-  const files=[...$('files').files];$('files').value='';if(!files.length)return;
-  const s=+$('target').value,duration=+$('duration').value;
-  if(replacing){
-    if(files.length!==1)throw new Error('Choose one file to replace a sound.');
-    const {s:rs,i}=replacing,old=work[rs][i],z=await convertShot(files[0],old.category,duration),next=clone(work[rs]);
-    next[i]={...z,isNew:true,name:short(files[0].name)};
-    if(bytesOf(next)>SMP.MAX_DATA)throw new Error(`That file does not fit in USR ${rs+1}. Choose a shorter one, or “Longest sound” 0.5 s.`);
-    work[rs]=next;dirty[rs]=true;cancelReplace();
-    status(`USR ${rs+1}: ${old.name} replaced by ${short(files[0].name)} here. Press “Save to FM-1” to put it on the device.`);return;
-  }
-  const cat=+$('category').value,next=clone(work[s]),skipped=[];let added=0;
+async function addShots(s,files){
+  await stopped();await readBank(s);                     // (what is on the FM-1 now)
+  const next=banks[s].map(z=>({...z})),skipped=[];let added=0;
   for(const [k,f] of files.entries()){
-    $('progress').value=k/files.length*100;status(`Converting ${f.name}…`);
-    let z;try{z={...await convertShot(f,cat,duration),isNew:true,name:short(f.name)};}catch(e){skipped.push(`${f.name} (${e.message})`);continue;}
-    const at=next.findIndex(o=>o.deleted&&o.category===cat),trial=clone(next);
+    status(`Converting ${f.name} (${k+1} of ${files.length})…`);$('progress').value=k/files.length*100;
+    const cat=choice[s]==='auto'?guess(f.name):+choice[s];
+    let z;try{z=await convertShot(f,cat,LENGTH);}catch(e){skipped.push(`${f.name}: ${e.message}`);continue;}
+    const at=next.findIndex(o=>o.deleted),trial=next.map(x=>x);
     if(at<0)trial.push(z);else trial[at]=z;
-    if(trial.length>16||bytesOf(trial)>SMP.MAX_DATA){skipped.push(`${f.name} (USR ${s+1} is full)`);continue;}
+    if(trial.length>16||bytesOf(trial)>SMP.MAX_DATA){skipped.push(`${f.name}: no room left in USR ${s+1}`);continue;}
     next.splice(0,next.length,...trial);added++;
   }
-  if(added){work[s]=next;dirty[s]=true;}
-  const left=SMP.MAX_DATA-bytesOf(work[s]);
-  status((added?`USR ${s+1}: ${added} ${CAT[cat]} sound${added>1?'s':''} added here, ${(left/1024).toFixed(1)} KiB and ${16-work[s].length} places left. Press “Save to FM-1” on USR ${s+1} to put ${added>1?'them':'it'} on the device.`:
-    `Nothing was added: USR ${s+1} is full (${live(work[s]).length} of 16 sounds, ${(left/1024).toFixed(1)} KiB free). Choose another bank in “Into bank”, or delete sounds (✕ or “Clear bank”) and save.`)+
-    (skipped.length&&(added||skipped.some(x=>!x.includes('is full')))?` Not added: ${skipped.join('; ')}.`:''),!added);
-});
-const short=name=>name.replace(/\.[^.]+$/,'').slice(0,24);
-
-/* ---------------------------------------------------------------- save */
-async function saveBank(s){
-  const c=await capabilities(link);if(c.playing)throw new Error('Press STOP on the FM-1 before saving.');
-  const zones=work[s],bytes=live(zones).length?buildEncodedSlot('STATTIC',zones):new Uint8Array();
-  const list=await listObjects(link),entry=list.find(e=>e.id===32+s);
-  const had=!!(entry&&entry.length);
-  if(had){const old=await readObject(link,entry);download(`STATTIC-USR${s+1}-before-${Date.now()}.stbank`,old);}
-  status(`Saving USR ${s+1}. Keep USB connected…`);
-  await uploadSlot(link,s,bytes,(n,t)=>$('progress').value=t?n/t*100:100);
-  device[s]=readSlot(bytes);work[s]=clone(device[s]);dirty[s]=false;
-  status(`USR ${s+1} saved on the FM-1 and checked by reading it back.${had?' A copy of the old bank was downloaded first (STATTIC-USR'+(s+1)+'-before-….stbank).':''}`);
+  if(added)await write(s,next,'');
+  const counts=CAT.map((c,i)=>live(banks[s]).filter(z=>z.category===i).length);
+  status(added?`Done: ${added} sound${added>1?'s':''} added to USR ${s+1} on the FM-1 (now ${CAT.map((c,i)=>counts[i]?`${counts[i]} ${c}`:'').filter(Boolean).join(', ')}).`+
+      (skipped.length?` Not added: ${skipped.join('; ')}.`:''):`Nothing added. ${skipped.join('; ')}.`,!added);
+}
+async function removeShot(s,i){
+  await stopped();await readBank(s);
+  const z=banks[s][i];if(!z||z.deleted)return;
+  const next=banks[s].map(x=>({...x}));
+  next[i]={category:z.category,n:2,data:Uint8Array.of(0),deleted:true,name:'Empty'};   // (the place stays: the others keep theirs)
+  while(next.at(-1)?.deleted)next.pop();
+  await write(s,next,'');
+  status(`Done: ${z.name} deleted from USR ${s+1} on the FM-1.`);
 }
 
 /* ---------------------------------------------------------------- listen (IMA ADPCM, as the FM-1 plays it) */
@@ -214,9 +163,8 @@ function preview(z){
 
 /* ---------------------------------------------------------------- full backup */
 $('backup').onclick=()=>action(async()=>{
-  const c=await capabilities(link);if(c.playing)throw new Error('Press STOP before the backup.');
-  status('Reading the backup…');
-  const backup=await captureNativeBackup(link,c.version,(n,t)=>$('progress').value=n/Math.max(1,t)*100);
+  await stopped();status('Reading the backup…');
+  const backup=await captureNativeBackup(link,version,(n,t)=>$('progress').value=n/Math.max(1,t)*100);
   download(`STATTIC-backup-${Date.now()}.json`,JSON.stringify(backup,null,2),'application/json');
   status('Full backup downloaded. Keep the JSON file.');
 });
@@ -227,4 +175,4 @@ $('restore').onchange=()=>action(async()=>{
   await readAll();status('Backup restored. Check the patterns and samples on the FM-1.');
 });
 
-update();
+render();
