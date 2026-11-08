@@ -13,6 +13,7 @@ macOS (or with JIELI_DOCKER=1) each tool runs in a linux/amd64 container.
 """
 import argparse
 import hashlib
+import json
 import os
 import platform
 import re
@@ -113,6 +114,9 @@ def generate():
             failed.append(c[0].name)
     if failed:
         raise SystemExit(f"build: {', '.join(failed)} failed")
+    if os.environ.get("FELUCCA_STATTIC")=="1":
+        subprocess.run([sys.executable,str(tools/"gen_stattic_drums.py"),str(GEN/"felucca_samples.h")],check=True)
+
 
 
 # ---- update loader
@@ -150,6 +154,7 @@ def build_loader():
     LDR.mkdir(parents=True, exist_ok=True)
     src = FW / "loader"
     flags = [*CFLAGS, "-Ifirmware/hal", "-Ifirmware/src"]
+    if os.environ.get("FELUCCA_STATTIC")=="1":flags.append("-DFELUCCA_STATTIC=1")
     tc_all(("cc", "-c", src / "crt0_ldr.S", "-o", LDR / "crt0_ldr.o"),
            ("cc", *flags, "-c", src / "loader.c", "-o", LDR / "loader.o"))
     elf = LDR / "loader.elf"
@@ -180,7 +185,7 @@ def build_loader():
 def build_app():
     flags = [*CFLAGS, "-Ifirmware/hal", "-Ifirmware/src", "-Ibuild/gen"]
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_CDC", "FELUCCA_UART",
-                 "FELUCCA_ICONS", "FELUCCA_SLICE", "FELUCCA_CPU1", "FELUCCA_LOGO_TEXT"):
+                 "FELUCCA_ICONS", "FELUCCA_SLICE", "FELUCCA_CPU1", "FELUCCA_LOGO_TEXT", "FELUCCA_STATTIC"):
         v = os.environ.get(flag)    # unset: the default in firmware/src/felucca.c
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")
@@ -316,8 +321,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--release", metavar="X.Y", help="release build: identity FM-1_9XY, version string X.Y")
     ap.add_argument("--sdk", type=Path, help="JieLi AC79 SDK checkout (default: $AC79_SDK)")
+    ap.add_argument("--stattic",action="store_true",help="STATTIC on SLOOP candidate, four channels and USB diagnostics")
     a = ap.parse_args()
     name = "felucca.fwsc"
+    if a.stattic:
+        if a.release:ap.error("--stattic has a distinct candidate version; do not combine --release")
+        os.environ["FELUCCA_STATTIC"]="1";os.environ["FELUCCA_CDC"]="1"
+        PRODUCT="FM-1_990";VERSION="STATTIC 0.9.0-S1";name="stattic-0.9.0-sloop-rc1.fwsc"
     if a.release:                   # one digit each: the identity has room for two
         m = re.fullmatch(r"(\d)\.(\d)(-[A-Za-z0-9]+)?", a.release)
         if not m:
@@ -356,6 +366,15 @@ def main():
         raise SystemExit("build: checks failed")
     pkg = fm1pkg_make.ufw(fm1pkg_make.flash_image(img, fm1pkg_make.KEY), ota, PRODUCT)
     (OUT / name).write_bytes(pkg)
+    if a.stattic:
+        def git(*args):return subprocess.check_output(["git",*args],cwd=SRC,text=True).strip()
+        record={"version":VERSION,"product":PRODUCT,"package":name,"package_sha256":hashlib.sha256(pkg).hexdigest(),
+                "package_bytes":len(pkg),"app_sha256":hashlib.sha256(img).hexdigest(),"app_bytes":len(img),
+                "loader_sha256":hashlib.sha256(ota).hexdigest(),"source_commit":git("rev-parse","HEAD"),
+                "source_dirty":bool(git("status","--porcelain")),"sloop_base":"bac9c05ea7627449405aa10e48da21d75b6c8c56",
+                "configuration":{"FELUCCA_STATTIC":1,"FELUCCA_CDC":1,"HALF_FRAMES":256,"sample_rate":44100,"channels":["DR","BS","SY","CH"],"steps":64,"patterns_per_channel":3,"CH_voice_cap":4},
+                "checks":notes,"hardware_audio_validation":"pending"}
+        (OUT/"stattic-build.json").write_text(json.dumps(record,indent=2)+"\n")
     att = SRC / "assets" / "samples-cc0" / "ATTRIBUTION.txt"
     if att.exists():
         shutil.copy(att, OUT / "ATTRIBUTION.txt")

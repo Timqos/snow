@@ -36,6 +36,7 @@ static int32_t cv_oy;            /* y offset for graph drawing */
 static uint16_t pal_bg;                  /* SLOOP 2.7: the background, black unless a theme says (palette_set) */
 #define C_BLACK pal_bg                   /* the background (and dark text on a light tile) */
 static uint16_t pal_hi = 0xFFFFu;        /* the accent: white unless a theme says (palette_set) */
+static uint32_t stattic_palette_revision;
 #define C_WHITE pal_hi               /* accent only: what is being touched / where we are */
 /* The screen is five steps of one colour, darkest to brightest, plus white.
  * Palettes are picked in the HOME-hold menu (COLOR). */
@@ -44,11 +45,24 @@ typedef struct {
     uint16_t c[5];
 } palette_t;
 static const palette_t PALETTES[] = {
+#if FELUCCA_STATTIC
+    {"CYAN",{0x18e3,0x738e,0xce59,0x07ff,0xffff}},
+    {"BLUE",{0x18e3,0x738e,0xce59,0x3c9f,0xffff}},
+    {"ORANGE",{0x18e3,0x738e,0xce59,0xfbc0,0xffff}},
+    {"GREEN",{0x18e3,0x738e,0xce59,0x47e8,0xffff}},
+    {"WHITE",{0x18e3,0x738e,0xce59,0xffff,0xffff}},
+    {"AMBER",{0x18e3,0x738e,0xce59,0xfdc0,0xffff}},
+    {"PINK",{0x18e3,0x738e,0xce59,0xfb96,0xffff}},
+    {"VIOLET",{0x18e3,0x738e,0xce59,0xb39f,0xffff}},
+    {"RED",{0x18e3,0x738e,0xce59,0xf9c7,0xffff}},
+    {"MINT",{0x18e3,0x738e,0xce59,0x57f6,0xffff}},
+#else
     {"GREEN", {RGB(0, 40, 12), RGB(0, 84, 30), RGB(16, 140, 54), RGB(56, 200, 92), RGB(120, 255, 146)}},
     {"AMBER", {RGB(60, 26, 0), RGB(110, 50, 0), RGB(170, 82, 0), RGB(225, 120, 8), RGB(255, 166, 40)}},
     {"CYAN", {RGB(0, 30, 50), RGB(0, 62, 96), RGB(16, 112, 160), RGB(56, 172, 222), RGB(140, 222, 255)}},
     {"RED", {RGB(52, 8, 8), RGB(100, 18, 14), RGB(170, 36, 26), RGB(226, 64, 48), RGB(255, 112, 92)}},
     {"MONO", {RGB(40, 40, 40), RGB(80, 80, 80), RGB(130, 130, 130), RGB(186, 186, 186), RGB(226, 226, 226)}},
+#endif
 };
 #define NPALETTES (sizeof(PALETTES) / sizeof(PALETTES[0]))
 static uint16_t pal[5];
@@ -177,6 +191,13 @@ static void palette_set(uint32_t i)              /* built-in palette i, or the t
         TE_MID[k] = cu ? rgb565_scale(theme.trk[k], 2u, 3u) : TE_MID_DEF[k];
         TE_DIM[k] = cu ? rgb565_scale(theme.trk[k], 1u, 3u) : TE_DIM_DEF[k];
     }
+#if FELUCCA_STATTIC
+    uint16_t accent=cu?theme.hi:PALETTES[i%NPALETTES].c[3];
+    pal_bg=0;pal_hi=accent;
+    pal[0]=RGB(28,28,28);pal[1]=RGB(112,108,104);pal[2]=RGB(208,204,200);pal[3]=accent;pal[4]=0xffffu;
+    for(k=0;k<4;k++){TE_COL[k]=accent;TE_MID[k]=rgb565_scale(accent,2,3);TE_DIM[k]=rgb565_scale(accent,1,3);}
+    stattic_palette_revision++;
+#endif
 }
 
 static inline uint16_t swap16(uint32_t c) { return (uint16_t)(((c >> 8) & 0xFFu) | ((c & 0xFFu) << 8)); }

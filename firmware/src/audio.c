@@ -67,8 +67,14 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
         uac_render_start();
         usb_full_now = (uint8_t)(usb_full && uac.feed);  /* menu USB AUDIO = FULL, while the computer records */
 #endif
+#if FELUCCA_STATTIC
+        stattic_profile_begin();
+#endif
         for (b = 0; b < HALF_FRAMES; b += CTL)
             audio_block(o + 2u * b, CTL);
+#if FELUCCA_STATTIC
+        stattic_profile_end();
+#endif
         fm1_audio_ack_half();
         audio_halves++;
 #if FELUCCA_CPU1
@@ -85,8 +91,17 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
         if ((shed_over & 3u) == 3u)
             shed_req = 1;                               /* two in a row */
         song.cpu_q8 = (song.cpu_q8 * 15u + (us * 256u) / (HALF_FRAMES * 1000000u / FS)) / 16u;
-        if (fm1_audio_free_half() != half)
-            felucca_dbg.late++;                         /* the DMA moved on while we rendered */
+        if (fm1_audio_free_half() != half) {
+            felucca_dbg.late++;
+#if FELUCCA_STATTIC
+            memcpy(stattic_profile.bad,stattic_profile.last,sizeof stattic_profile.bad);
+            stattic_profile.bad_count=felucca_dbg.late;
+            stattic_profile.bad_wall=(fm1_ticks()-t0)/FM1_TICKS_PER_US;
+            stattic_profile.bad_nested=t5_nested_ticks/FM1_TICKS_PER_US;
+            stattic_profile.bad_events=stattic_profile.events_last/FM1_TICKS_PER_US;
+            stattic_profile.bad_buses=stattic_profile.buses_last/FM1_TICKS_PER_US;
+#endif
+        }                         /* the DMA moved on while we rendered */
         felucca_dbg.halves++;
         felucca_dbg.last_us = us;
         if (us > felucca_dbg.max_us)

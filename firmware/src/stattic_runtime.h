@@ -1,0 +1,73 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+#define ST_PATTERNS 3u
+#define ST_PARAM_WORDS ((P_COUNT+31u)/32u)
+enum { ST_CHANGE_PATTERN=1,ST_CHANGE_SOUND=2,ST_CHANGE_SHOTS=4 };
+typedef struct {
+    union { step_t step[NSTEP];dstep_t drum[NSTEP]; };
+    int8_t micro[NSTEP];
+    uint8_t fill[NSTEP/4];
+    plock_t lock[NLOCK];
+} stattic_pattern_t;
+typedef struct {
+    int16_t p[P_COUNT];
+    stattic_pattern_t pattern;
+    uint8_t shots[16];
+    int16_t offset[4];
+    uint8_t slot;
+} stattic_snapshot_t;
+typedef struct {
+    stattic_snapshot_t value;
+    uint32_t mask[ST_PARAM_WORDS],bar,serial;
+    uint8_t what,slot;
+    volatile uint8_t armed;
+} stattic_change_t;
+/* Explicitly initialized before audio starts; native SLOOP's noinit project
+ * mirrors moved to the pool, leaving this area for banks and queued copies. */
+static stattic_pattern_t stattic_banks[NTRK][ST_PATTERNS] __attribute__((section(".noinit")));
+static stattic_change_t stattic_change[NTRK] __attribute__((section(".noinit")));
+static uint8_t stattic_current[NTRK],stattic_home_page,stattic_focus[3];
+static uint32_t stattic_origin[NTRK],stattic_scroll[3],stattic_revision;
+static uint8_t stattic_art_pick[3]={0,1,2};
+static struct { uint32_t random;uint8_t bag[3],left,last,page,knob; } stattic_art_shuffle;
+static const uint8_t stattic_art_height[3]={84,78,78};
+static volatile uint8_t stattic_home_ms,stattic_home_ms_reset,stattic_ms_pending;
+static uint8_t stattic_ms_mute,stattic_ms_solo;
+static uint32_t stattic_ms_bar;
+static uint8_t stattic_ready,stattic_ui_dirty;
+static volatile uint8_t stattic_staging;
+static uint8_t stattic_macro[NTRK];
+static uint32_t stattic_role_track(uint32_t home) { static const uint8_t map[4]={3,0,1,2};return map[home%4u]; }
+static uint32_t stattic_home_role(uint32_t track) { return (track+1u)%4u; }
+static int16_t stattic_base_value(const track_t *t,uint32_t id)
+{
+    for(uint32_t i=0;i<t->lk_n;i++)if(t->lk_param[i]==id&&t->p[id]==t->lk_set[i])return t->lk_base[i];
+    return t->p[id];
+}
+static void stattic_runtime_init(void);
+static void stattic_runtime_tick(void);
+static void stattic_runtime_poll(void);
+static void stattic_runtime_start(void);
+static void stattic_undo_mark(const track_t *t,uint32_t session);
+static int stattic_undo(int redo);
+static void stattic_ms_key(uint32_t key,int down);
+static void stattic_mute_set(uint32_t track,uint32_t value);
+static void stattic_solo_set(uint32_t bits);
+static int stattic_prepare(uint32_t track,uint32_t knob);
+static void stattic_prepare_scope(uint32_t track,uint32_t knob);
+static void stattic_pattern_random(void);
+static int stattic_pattern_select(uint32_t track,uint32_t slot);
+static void stattic_clear(int all);
+static void stattic_temp_save(void);
+static int stattic_temp_load(uint32_t mask);
+static void stattic_control_all(uint32_t knob,int32_t delta);
+static void stattic_touch(track_t *t,uint32_t id);
+#ifndef STATTIC_GUARD_SAVE
+#define STATTIC_GUARD_SAVE() 0u
+#define STATTIC_GUARD_RESTORE(f) ((void)(f))
+#endif
+
+static uint32_t fol_on(track_t *t,uint32_t note);
+static uint32_t fol_off(track_t *t,uint32_t note);
+static void fol_drop(const track_t *t);
+static void stattic_duck_note(const track_t *t,uint32_t note);
+static void stattic_midi_drop(const track_t *t);

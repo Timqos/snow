@@ -354,6 +354,9 @@ UI_SMALL static void graph_roll(const track_t *t, uint16_t c)
 UI_SMALL static void graph_scale(const track_t *t, uint16_t c)
 {
     static const uint8_t BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
+#if FELUCCA_STATTIC
+    cv_text(6,82,&FONT_S,N_SCALE[clamp(t->p[P_SCALE],0,NSCALES-1)],C_WHITE);
+#endif
     uint32_t i, mask = scale_mask(t);
     for (i = 0; i < 12u; i++) {
         uint32_t deg = (i + 12u - (uint32_t)t->p[P_ROOT]) % 12u;
@@ -1049,6 +1052,10 @@ UI_SMALL static void ui_timers(void)
 static void vis_draw(void);                     /* ui_vis.c */
 static int vis_shown(void);
 static uint8_t vis_on, vis_shown_last, vis_name_t;   /* the visualiser (ui_vis.c): on, drawn last frame, its name's time */
+#if FELUCCA_STATTIC
+#include "stattic_ui_support.c"
+#include "stattic_home.c"
+#endif
 UI_SMALL static void ui_draw(void)
 {
     ui.frame++;
@@ -1114,6 +1121,10 @@ UI_SMALL static void ui_draw(void)
         ui.force = 0;
         return;
     }
+#if FELUCCA_STATTIC
+    if(ui.home){snow_home_draw();return;}
+    snow_home_active=0;
+#endif
     if (vis_shown()) {                                  /* the visualiser over the TRACKS screen */
         vis_draw();
         ui_timers();

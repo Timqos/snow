@@ -6,7 +6,7 @@
  */
 #define SN_CH_VOICES STATTIC_CH_VOICES
 #define SN_CH_RELEASE STATTIC_CH_RELEASE
-#define SNOW_RENDER_RAM
+#define SNOW_RENDER_RAM __attribute__((flatten))
 #define SNOW_WAVE_RAM
 static uint32_t stattic_env_coef(const track_t *t, uint32_t i);
 /* Exact division by 2^bits, including C's truncation of negative samples.
@@ -32,13 +32,13 @@ static const char *const SN_MODES[] = {"HIT","GATED"};
 static const char *const SN_FILTERS[] = {"OFF","LP","HP","BP"};
 static const char *const SN_FB_NAMES[] = {"MOD","CARRIER","CROSS"};
 static const char *const SN_L2_DST[] = {"OFF","TONE","SHAPE","SWEEP","DECAY","MIX","FEEDBACK","CUTOFF","DRIVE","PITCH","AMP"};
-static struct { uint32_t phase; int32_t value, fade, rng; } snow_l2[NPART];
-static int16_t snow_offset[NPART][4];
+static struct { uint32_t phase; int32_t value, fade, rng; } snow_l2[NTRK];
+static int16_t snow_offset[NTRK][4];
 static uint32_t snow_role(const track_t *t)
 {
-    return (uint32_t)(t->engine - ENGI_STATTIC) % STATTIC_CHANNELS;
+    return (uint32_t)(t->engine - ENGI_STATTIC) % 7u;
 }
-static uint32_t stattic_part(const track_t *t) { return (uint32_t)(t-trk) % NPART; }
+static uint32_t stattic_part(const track_t *t) { return (uint32_t)(t-trk) % NTRK; }
 /* The old LFO division order includes four bars; SLOOP's native step order
  * differs. Convert the sync selection explicitly rather than reusing an ID. */
 static uint32_t stattic_sync_samples(uint32_t sync)
@@ -50,7 +50,7 @@ static uint32_t stattic_sync_samples(uint32_t sync)
 /* A synchronized LFO's period changes only with its tempo/division. Reuse
  * the exact increment between changes instead of dividing for every block.
  * The two clocks have independent cache entries, never shared phase/state. */
-static struct { uint32_t period,inc; } snow_lfo_clock[NPART][2];
+static struct { uint32_t period,inc; } snow_lfo_clock[NTRK][2];
 static __attribute__((noinline)) uint32_t snow_sync_inc(const track_t *t,uint32_t clock,uint32_t period)
 {
     period=period?period:1u;
@@ -66,6 +66,12 @@ static int32_t snow_param(const track_t *t,uint32_t k)
 {
     int32_t v=t->p[P_E0+k]+(k<4u?snow_offset[stattic_part(t)][k]:0);
     if(t->p[SN_L2_DEST]==(int16_t)(k+1u))v+=snow_l2[stattic_part(t)].value;
+    return clamp(v,0,127);
+}
+static int32_t stattic_drum_macro(const track_t *t,uint32_t knob)
+{
+    uint32_t k=stattic_part(t);int32_t v=t->p[P_E1+(knob&3u)]+snow_offset[k][knob&3u];
+    if(t->p[SN_L2_DEST]==(int16_t)(knob+1u))v+=snow_l2[k].value;
     return clamp(v,0,127);
 }
 static void snow_block(track_t *t)
@@ -143,6 +149,7 @@ static inline __attribute__((always_inline)) int32_t snow_wave_fast(uint32_t ph,
     if(wave<2u)return wave?osc_tri(ph):sine_i(ph);
     return snow_wave(ph,inc,wave,pw);
 }
+static struct { tsvf_t coef;int32_t cut,reso;uint8_t valid; } stattic_filter_cache[NTRK];
 static SNOW_RENDER_RAM void snow_render(track_t *t,voice_t *v,int32_t *out,uint32_t n,const vmod_t *m)
 {
     const int16_t *p=t->p;
@@ -162,7 +169,15 @@ static SNOW_RENDER_RAM void snow_render(track_t *t,voice_t *v,int32_t *out,uint3
     int32_t depth=tone<=64?tone*128:8192+(tone-64)*(tone-64)*32;
     int32_t index=mulq15(depth,v->s[8]>>9),index0=v->s[7],prev=v->s[3],rng=v->s[4];
     int32_t lo=v->s[5],bp=v->s[6],cut=clamp((snow_param(t,6)<<8)+m->cutoff,0,127<<8);
-    tsvf_t filter;if(p[SN_FILTER])tsvf_coef(&filter,cut,p[SN_RESO]);
+    tsvf_t filter;
+    if(p[SN_FILTER]){
+        uint32_t part=stattic_part(t);
+        if(!stattic_filter_cache[part].valid||stattic_filter_cache[part].cut!=cut||stattic_filter_cache[part].reso!=p[SN_RESO]){
+            tsvf_coef(&stattic_filter_cache[part].coef,cut,p[SN_RESO]);
+            stattic_filter_cache[part].cut=cut;stattic_filter_cache[part].reso=p[SN_RESO];stattic_filter_cache[part].valid=1;
+        }
+        filter=stattic_filter_cache[part].coef;
+    }
     uint32_t pw=(uint32_t)clamp(p[SN_PW],1,126)<<25;
     int32_t mix=clamp(p[SN_MIX]+snow_param(t,4),0,127);
     /* A control block keeps these values fixed. Resolving the track index,
@@ -206,10 +221,12 @@ static SNOW_RENDER_RAM void snow_render(track_t *t,voice_t *v,int32_t *out,uint3
 #include "stattic_presets.h"
 static void snow_fill(int16_t *p,uint32_t role,uint32_t preset)
 {
-    role%=STATTIC_CHANNELS;preset%=10u;
+    uint32_t synth=role==STATTIC_SY_ENGINE;
+    role%=STATTIC_SOUND_ROLES;preset%=10u;
+    if(synth)role=5u;
     for(uint32_t k=0;k<20u;k++)p[SN_ALG+k]=SNOW_DETAIL[role][preset][k];
     p[SN_CHORD]=SNOW_CHORD[role][preset];
-    if(role==5u)p[P_REL]=SN_CH_RELEASE;
+    if(role==5u&&!synth)p[P_REL]=SN_CH_RELEASE;
     if(role<5u)p[P_VOICE]=V_MONO;
     if(role==3u)p[SN_KEYTRACK]=127; /* percussion follows the generated scale notes */
 }
@@ -221,5 +238,5 @@ static void snow_fill(int16_t *p,uint32_t role,uint32_t preset)
  .presets=SNOW_PATCHES[role],.npresets=10,.macro={P_E0,P_E1,P_E2,P_E3}, \
  .poly=(role==5?SN_CH_VOICES:4),.ownenv=1,.note_on=snow_note_on,.render=snow_render, \
  .amp=snow_amp,.done=snow_done,.block=snow_block }
-static const engine_t SNOW_ENG[STATTIC_CHANNELS]={SNOW_MACHINE(0,"KICK"),SNOW_MACHINE(1,"SNARE"),SNOW_MACHINE(2,"HAT"),SNOW_MACHINE(3,"PERC"),SNOW_MACHINE(4,"BASS"),SNOW_MACHINE(5,"CHORD")};
+static const engine_t SNOW_ENG[7]={SNOW_MACHINE(0,"KICK"),SNOW_MACHINE(1,"SNARE"),SNOW_MACHINE(2,"HAT"),SNOW_MACHINE(3,"PERC"),SNOW_MACHINE(4,"BASS"),SNOW_MACHINE(5,"CHORD"),SNOW_MACHINE(5,"SYNTH")};
 #undef SNOW_MACHINE

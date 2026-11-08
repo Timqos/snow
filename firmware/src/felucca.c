@@ -17,11 +17,17 @@
 #include "libc.c"
 #include "lcd.c"
 #include "gfx.c"
+#define STATTIC_GUARD_SAVE() fm1_irq_guard_save()
+#define STATTIC_GUARD_RESTORE(f) fm1_irq_guard_restore(f)
+#define STATTIC_PROFILE_TICKS() fm1_ticks()
 #include "core.h"
 #include "cpu1.h"           /* the second core's job API (defined in cpu1.c; the host tests have their own) */
 #include "engines.c"
 #include "drums.c"
 #include "params.c"
+#if FELUCCA_STATTIC
+#include "stattic_mod.c"
+#endif
 #include "voice.c"
 #include "slicer.c"          /* per-track SLICER insert, used by fx.c */
 #include "fx.c"
@@ -57,6 +63,9 @@
 #define FELUCCA_ARRANGER 1
 #include "arranger.c"
 #include "seq.c"
+#if FELUCCA_STATTIC
+#include "stattic_runtime.c"
+#endif
 #include "audio.c"
 #include "cpu1.c"           /* the second core: boot, self-test, state (ABOUT, console) */
 #include "panel.c"
@@ -161,7 +170,7 @@ static void ota_show(uint32_t step, int32_t code)
     char b[24];
     if (recovery_active) return;             /* keep polled USB alive during OTA */
     lcd_fill(0, 0, 240, 240, C_BLACK);
-    draw_text_box(0, 92, 240, &FONT_S, "UPDATE", C_WHITE, 1);
+    draw_text_box(0, 92, 240, &FONT_S, FELUCCA_STATTIC?"STATTIC UPDATE":"UPDATE", C_WHITE, 1);
     if (step < 9u) {
         draw_text_box(0, 124, 240, &FONT_S, STEP[step < 6u ? step : 0], C_HI, 1);
         return;

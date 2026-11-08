@@ -44,8 +44,19 @@ static const char *const N_DIV[] = {"1/4", "1/8", "1/16", "1/32", "8T", "16T"};
 static const char *const N_SDIV[] = {"1/4", "1/8", "1/16", "1/32", "8T", "16T", "1/2", "1BAR", "2BAR"};   /* core.h div_units */
 static const char *const N_DLY[] = {"1/4", "1/8", "1/16", "1/32", "8T", "16T", "1/8D", "1/16D", "1/4D"};   /* core.h dly_units
                                                                           * (2.6: 1/4D, after Felucca 1.5.1) */
+#if FELUCCA_STATTIC
+#include "stattic_scales.h"
+static const char *const N_SCALE[] = {
+    "CHROMATIC", "MAJOR", "MINOR", "DORIAN MODE", "MIXOLYDIAN", "MAJOR PENTATONIC", "MINOR PENTATONIC", "MINOR HARMONIC",
+    "PHRYGIAN", "LYDIAN MODE", "LOCRIAN MODE", "MINOR MELODIC UP", "MINOR BLUES", "WHOLE TONE", "HALF-WHOLE DIMINISHED", "WHOLE-HALF DIMINISHED",
+#define SN_SCALE_NAME(name,mask) name,
+    SN_EXTRA_SCALES(SN_SCALE_NAME)
+#undef SN_SCALE_NAME
+};
+#else
 static const char *const N_SCALE[] = {"CHR", "MAJ", "MIN", "DOR", "MIX", "PEN", "MPEN", "HARM",
                                     "PHRY", "LYD", "LOC", "MEL", "BLUES", "WHOLE", "DIMHW", "DIMWH"};
+#endif
 static const char *const N_ONOFF[] = {"OFF", "ON"};
 static const char *const N_CLKOUT[] = {"OFF", "OUT"};   /* 2.7, GLO > MIDI 3 > CLOCK: OUT, the MIDI clock out */
 static const char *const N_DRMAP[] = {"GM", "1-16"};   /* (2.7) GLO > MIDI 3: DR MAP */
@@ -64,6 +75,9 @@ static const char *const N_SLCR[] = {"OFF", "GATE", "STUT"};             /* SL_O
 static const char *const N_SLDIV[] = {"1/8", "1/16", "1/32", "8T", "16T", "32T"};   /* SL_DEN */
 static const char *const N_CHORD[] = {"OFF", "TRIAD", "7TH", "9TH", "SUS4", "POWER"};   /* seq.c CHORD_DEG */
 static const char *const N_ROLL[] = {"1/8", "1/16", "1/32", "32T", "1/64"};   /* seq.c ROLL_DEN */
+#if FELUCCA_STATTIC
+static const char *const N_ENGNAME[] = {"KICK","SNARE","HAT","PERC","BASS","CHORD","SYNTH"};
+#else
 static const char *const N_ENGNAME[] = {"ANALOG", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN",
                                         "FM6", "PHYS", "NOISE",
 #if FELUCCA_SLICE
@@ -74,6 +88,22 @@ static const char *const N_ENGNAME[] = {"ANALOG", "DIGITAL", "PHASE", "LOFI", "S
 #endif
 };
 
+#endif
+
+#if FELUCCA_STATTIC
+static const char *const N_MSRC[] = {"OFF", "LFO", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR", "ENV2",
+                                    "S&H", "SLEW"};   /* ((phase 9) ENV2; (1.3) S&H SLEW) */
+static const char *const N_MDST[] = {"OFF", "PITCH", "CUT", "SHP", "AMP", "PAN", "DIST", "CHO", "DLY", "REV", "RATE",
+                                     "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8",
+                                     "DEPTH", "VEL", "TIME"};   /* ((1.3) the LFO's depth; at a note: VEL, TIME) */
+static const char *const ST_CHORD_NAMES[]={"OFF","DIA3","DIA7","MAJ","MIN","DOM7","MAJ7","MIN7","SUS4","POWER"};
+static const char *const ST_VOICING_NAMES[]={"CLOSE","OPEN","INV1","INV2","BASS"};
+static const char *const ST_DIR_NAMES[]={"FWD","RVRS","PING","RAND"};
+static const char *const ST_DUCK_NAMES[]={"OFF","BS","SY","CH","DR"};
+static const char *const ST_DTYPE_NAMES[]={"SOFT","HARD","FOLD","CRUSH","FUZZ"};
+static const char *const ST_FMODE_NAMES[]={"KEY","SCALE","FIT"};
+static const char *const ST_FNOTE_NAMES[]={"ROOT","LOW","HIGH","LAST"};
+#endif
 #define PD(l, f, mn, mx, df) {l, f, mn, mx, df, 0, 0}
 #define PE(l, n, df) {l, F_ENUM, 0, (int16_t)(sizeof(n) / sizeof(n[0]) - 1), df, n, 0}
 
@@ -107,7 +137,7 @@ static const param_desc_t TP[P_COUNT] = {
     [P_SCALE] = PE("SCL", N_SCALE, 0),
     [P_QUANT] = PE("QNT", N_QUANT, 0),
     [P_TRANS] = PD("TRN", F_SEMI, -24, 24, 0),
-    [P_SLEN] = PD("LEN", F_STEPS, 1, NSTEP, 16),
+    [P_SLEN] = PD("LEN", F_STEPS, 1, NSTEP, FELUCCA_STATTIC?64:16),
     [P_SDIV] = PE("DIV", N_SDIV, 2),
     [P_SSWING] = PD("SWG", F_SWING, 0, 100, 0),
     [P_SGATE] = PD("GATE", F_PCT, 1, 127, 64),
@@ -160,7 +190,7 @@ static void preset_extras(int16_t *p, const preset_t *pr)
 
 
 static const param_desc_t GP[G_COUNT] = {
-    [G_BPM] = PD("BPM", F_BPM, 40, 240, 90),
+    [G_BPM] = PD("BPM", F_BPM, 40, 240, FELUCCA_STATTIC?120:90),
     [G_SWING] = PD("SWING", F_SWING, 0, 100, 0),
     [G_CLOCK] = PE("CLICK", N_CLICK, 0),            /* (the old CLK slot: projects keep their format) */
     [G_TUNE] = PD("TUNE", F_INT, -50, 50, 0),
@@ -212,7 +242,11 @@ static const param_desc_t GP[G_COUNT] = {
     [G_FXFADE] = PD("FADE", F_INT, 0, 15, 0),     /* 2.7.2: the punch-in FX fade (FX layer SELECT), 0 off .. 15 (punch.c) */
 };
 
+#if FELUCCA_STATTIC
+static const param_desc_t DRUM_KIT_DESC={.label="KIT",.fmt=F_ENUM,.min=DRUM_STATTIC,.max=DRUM_STATTIC,.def=DRUM_STATTIC,.names=DRUM_KIT_NAMES};
+#else
 static const param_desc_t DRUM_KIT_DESC = PE("KIT", DRUM_KIT_NAMES, 0);
+#endif
 /* the INSERT's A B C as its TYPE means them (TP's ranges and defaults): the drives DRIVE TONE LEVEL, CRUSH BITS RATE
  * LPF, the swept ones RATE DEPTH FDBK; OFF TP's own */
 #define PU(l, f, df, n, u) {l, f, 0, 127, df, n, u}
@@ -237,6 +271,14 @@ static const param_desc_t ESYNC_DESC[3] = {   /* ATK DEC REL with ENV SYNC on: t
 static const param_desc_t *track_desc(const track_t *t, uint32_t id)
 {
     if(is_drum(t) && id==P_E0) return &DRUM_KIT_DESC;
+#if FELUCCA_STATTIC
+    if(is_drum(t)&&id>=P_E1&&id<=P_E4){
+        static const param_desc_t d[4]={PD("TONE",F_PCT,0,127,127),PD("SHAPE",F_PCT,0,127,0),PD("SWEEP",F_PCT,0,127,64),PD("DECAY",F_PCT,0,127,64)};
+        return &d[id-P_E1];
+    }
+    if(t->eng_req==STATTIC_CH_ENGINE&&id==P_REL)return &ESYNC_DESC[2];
+#endif
+
     if (id >= P_IA && id <= P_IC)                     /* the INSERT's values as its TYPE names them */
         return ins_desc(t->p[P_ITYPE], id - P_IA);
     if (t->p[P_ESYNC] && (id == P_ATK || id == P_DEC || id == P_REL))   /* ENV SYNC: note values */
@@ -411,8 +453,12 @@ static const page_t PAGES[] = {
     {"SLICER", FAM_FX, SC_TRACK, GR_SLCR, {P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH}},   /* drum track too */
     {"INSERT", FAM_FX, SC_TRACK, GR_INS, {P_ITYPE, P_IA, P_IB, P_IC}},   /* 2.6 (Felucca 1.5): the track's INSERT (fx.c), */
     {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IMIX, 0xFF, 0xFF, 0xFF}},  /* .. its dry / wet; the drum track too */
+#if FELUCCA_STATTIC
+#include "stattic_pages.h"
+#else
     {"DLY", FAM_FX, SC_GLOBAL, GR_NONE, {G_DTIME, G_DFDBK, G_DCOLOR, G_DMIX}},
     {"REV/CHO", FAM_FX, SC_GLOBAL, GR_NONE, {G_RSIZE, G_RDAMP, G_CRATE, G_CDEPTH}},
+#endif
     {"SEL", FAM_SCL, SC_TRACK, GR_SCALE, {P_ROOT, P_SCALE, P_QUANT, P_CHORD}},
     {"SEL 2", FAM_SCL, SC_TRACK, GR_SCALE, {P_TRANS, P_STRUM, P_VLEAD, 0xFF}},   /* (2.4: the chords played) */
     {"EDIT 1", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E0, P_E1, P_E2, P_E3}},
@@ -452,6 +498,9 @@ static const page_t PAGES[] = {
  * shows "DRUM TRACK" */
 static int page_for_drum(const page_t *pg)
 {
+#if FELUCCA_STATTIC
+    if(pg->scope==SC_TRACK&&(pg->fam==FAM_FX||pg->fam==FAM_LFO||pg->fam==FAM_SCL||pg->id[0]==P_E1))return 1;
+#endif
     if (pg->scope == SC_STEP)                       /* (2.4) the synth steps' roll: the drums have their grid. Reached */
         return 0;                                   /* by ALGO from a synth track, it drew the drum steps as notes */
     if (pg->scope == SC_GLOBAL)
@@ -479,6 +528,9 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
         return 0;
     }
     if (pg->scope == SC_GLOBAL) {
+#if FELUCCA_STATTIC
+        if(id==G_DRLVL||id==G_DRREV||id==G_DRDLY){uint32_t p=id==G_DRLVL?P_LEVEL:id==G_DRREV?P_REV:P_DLY;*valp=&TDRUM->p[p];return track_desc(TDRUM,p);}
+#endif
         *valp = &song.g[id];
         return &GP[id];
     }

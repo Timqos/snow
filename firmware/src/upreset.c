@@ -21,14 +21,18 @@
 #define UI_SMALL
 #endif
 #define UP_PER_BANK 16u
-#define UP_PMAX 72u                              /* room for P_COUNT to grow */
+#define UP_PMAX (FELUCCA_STATTIC ? 184u : 72u)                              /* room for P_COUNT to grow */
 #define UP_USED 0xA5u
-#define UP_VER 1u
-#define UP_BANK_MAGIC 0x31425055u                /* "UPB1" */
+#define UP_VER (FELUCCA_STATTIC ? 2u : 1u)
+#define UP_BANK_MAGIC (FELUCCA_STATTIC ? 0x32555053u : 0x31425055u)                /* "UPB1" */
 typedef struct {
     uint8_t used, ver, engine, np;               /* UP_USED, UP_VER, engine, P_COUNT when stored */
     char name[12];                               /* ASCII 32..126, 0-padded (no 0 when 12 long) */
+#if FELUCCA_STATTIC
+    int8_t p[UP_PMAX];
+#else
     int16_t p[UP_PMAX];
+#endif
     uint8_t note[16], flags[16];                 /* note 0 = rest; flags 1 accent, 2 slide, 4 tie */
 } up_rec_t;
 typedef struct {
@@ -36,8 +40,8 @@ typedef struct {
     uint16_t rsize, nslot;
     up_rec_t r[UP_PER_BANK];
 } up_bank_t;
-_Static_assert(sizeof(up_rec_t) == 192, "user preset record layout");
-_Static_assert(P_COUNT <= UP_PMAX && P_COUNT < 128, "user preset record: P_COUNT");
+_Static_assert(sizeof(up_rec_t) == (FELUCCA_STATTIC?232u:192u), "user preset record layout");
+_Static_assert(P_COUNT <= UP_PMAX && P_COUNT < (FELUCCA_STATTIC?256:128), "user preset record: P_COUNT");
 #ifdef UP_HOST
 static up_bank_t up_bank[UP_SLOTS / UP_PER_BANK];
 UI_SMALL static up_rec_t *up_rec(uint32_t k) { return &up_bank[k / UP_PER_BANK].r[k % UP_PER_BANK]; }
@@ -299,6 +303,9 @@ UI_SMALL static int up_load_to(track_t *t, uint32_t k)       /* user preset k in
         return 1;
     keep_arp = t->p[P_AMODE] && !arp_is_sounds(t);     /* (2.7.1: not the arp the old sound brought) */
     r = up_rec(k);
+#if FELUCCA_STATTIC
+    if(r->engine!=trk_def_engine(trk_index(t)))return 1;
+#endif
     up_values(r, v);
     for (i = 0; i < P_COUNT; i++)                       /* (LEN etc. of a kept pattern changed too, and */
         if (param_kept(i) || (keep_arp && i >= P_AMODE && i <= P_AORDER) ||   /* a preset pattern then counted as */

@@ -38,6 +38,9 @@ static void fm1_irq_on(void) {}
 #include "../firmware/src/engines.c"
 #include "../firmware/src/drums.c"
 #include "../firmware/src/params.c"
+#if FELUCCA_STATTIC
+#include "../firmware/src/stattic_mod.c"
+#endif
 #include "../firmware/src/voice.c"
 #include "../firmware/src/slicer.c"
 #include "../firmware/src/fx.c"
@@ -48,6 +51,9 @@ static void fm1_delay_ms(uint32_t ms) { (void)ms; }
 #include "../firmware/src/arranger.c"
 #endif
 #include "../firmware/src/seq.c"
+#if FELUCCA_STATTIC
+#include "../firmware/src/stattic_runtime.c"
+#endif
 #define inst (trk[0])                   /* the single-part renders below: part 1 */
 
 static void wav_hdr(FILE *f, uint32_t frames)
@@ -113,6 +119,9 @@ static void host_preset_req(track_t *t, uint32_t e, uint32_t pi)
         t->p[P_AMODE + i] = (int16_t)(p->arp[i] ? p->arp[i] - 1 : TP[P_AMODE + i].def);
     }
     preset_extras(t->p, p);
+#if FELUCCA_STATTIC
+    snow_fill(t->p,e,pi);t->p[SN_MODE]=1;
+#endif
     fm6_track_loaded(t);                          /* FM6: the preset's patch (ui.c apply_preset_to) */
 }
 static void host_preset(track_t *t, uint32_t e, uint32_t pi)

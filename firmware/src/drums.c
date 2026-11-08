@@ -25,16 +25,25 @@
 #define DRUM_USR (DRUM_SAMPLED + DS_NKITS)
 #define DRUM_PAIR (DRUM_USR + SMP_USER_SLOTS)   /* USR3+4: one kit in two slots (the editor splits it), ~15 s */
 #define DRUM_SYN (DRUM_PAIR + 1u)                /* SLOOP 2.5: SYN1..SYN4, your synthesised kits (drum_synth.c dsu) */
-#define DRUM_KITS (DRUM_SYN + DSU_N)
+#define DRUM_STATTIC (DRUM_SYN + DSU_N)
+#define DRUM_KITS (DRUM_SYN + DSU_N + (FELUCCA_STATTIC?1u:0u))
 static const char *const DRUM_KIT_NAMES[] = {"ACOUSTIC", "DEEP", "TIGHT", "BRIGHT", "DUST", DS_KIT_NAME_LIST,
                                              "USR1", "USR2", "USR3", "USR4", "USR3+4",
-                                             "SYN1", "SYN2", "SYN3", "SYN4"};
+                                             "SYN1", "SYN2", "SYN3", "SYN4"
+#if FELUCCA_STATTIC
+                                             ,"STATTIC"
+#endif
+};
 static const char *const DRUM_KIT_STYLES[] = {"STUDIO", "SOFT", "PUNCHY", "BRIGHT", "DUSTY", DS_KIT_STYLE_LIST,
                                               "YOUR KIT", "YOUR KIT", "YOUR KIT", "YOUR KIT", "BIG KIT",
-                                              "YOUR SYNTH", "YOUR SYNTH", "YOUR SYNTH", "YOUR SYNTH"};
+                                              "YOUR SYNTH", "YOUR SYNTH", "YOUR SYNTH", "YOUR SYNTH"
+#if FELUCCA_STATTIC
+                                              ,"YOUR SHOTS"
+#endif
+};
 _Static_assert(sizeof(DRUM_KIT_NAMES) / sizeof(DRUM_KIT_NAMES[0]) == DRUM_KITS, "a name per kit");
-static uint32_t drum_kit(void) { return (uint32_t)clamp(TDRUM->p[P_E0], 0, DRUM_KITS - 1); }
-#define DRUM_DEFAULT_KIT DRUM_SAMPLED   /* power-on: 808 */
+static uint32_t drum_kit(void) { return FELUCCA_STATTIC?DRUM_STATTIC:(uint32_t)clamp(TDRUM->p[P_E0], 0, DRUM_KITS - 1); }
+#define DRUM_DEFAULT_KIT (FELUCCA_STATTIC?DRUM_STATTIC:DRUM_SAMPLED)
 
 static struct {
     voice_t v[NDRUM];
@@ -157,6 +166,9 @@ static void dstep_clr(dstep_t *s, uint32_t l)                                /* 
 
 /* the zone a sampled drum voice plays (drum_on: v->s[4]): SMP_ZONES[i], or a user kit's, DZ_USR + slot * 16 + zone */
 #define DZ_USR (1 << 16)                 /* (above every SMP_ZONES index) */
+#if FELUCCA_STATTIC
+#include "stattic_drum_select.c"
+#endif
 static const smp_zone_t *drum_zone_of(const voice_t *v)
 {
     int32_t z = v->s[4];
@@ -293,16 +305,28 @@ static void drum_on(uint32_t note, uint32_t vel)
     voice_t *v = &drums.v[0];
     uint32_t i, zi = 0xFFFFu, kit = drum_kit();
     int32_t zid = -1;
+#if FELUCCA_STATTIC
+    if(!trk_silent(TDRUM))stattic_duck_note(TDRUM,note);
+#endif
     if (note != 76u && note != 77u)                 /* the pads and key LEDs (not the click's wood block) */
         drums.hits |= (uint16_t)(1u << lane_of_note(note));
     if (note == 35u || note == 36u)
         drums.kick = 1;                             /* (DUCK) */
+#if FELUCCA_STATTIC
+    if(kit==DRUM_STATTIC){
+        uint32_t lane=lane_of_note(note);
+        if(note==76u||note==77u)return;
+        note=LANE_NOTE[lane];
+        zid=stattic_shot_zone(stattic_drum_pick[lane],ST_LANE_CATEGORY[lane]);
+        if(zid<0)zid=(int32_t)ST_LANE_CATEGORY[lane]*10;
+    }else
+#endif
     if (kit >= DRUM_SYN) {                          /* SYN1..SYN4: your synthesised kit */
         const dsu_kit_t *u = dsu_kit(kit - DRUM_SYN);
         drum_synth_on(note, vel, kit, u->s, u->crush, 1);
         return;
     }
-    if (kit >= DRUM_USR) {                          /* a user kit: the lane's sound, as its note (the hat choke) */
+    if (zid<0 && kit >= DRUM_USR) {                          /* a user kit: the lane's sound, as its note (the hat choke) */
         if (note == 76u || note == 77u)
             return;                                 /* (the click's wood block: not a lane) */
         note = LANE_NOTE[lane_of_note(note)];
@@ -315,7 +339,7 @@ static void drum_on(uint32_t note, uint32_t vel)
         }
         if (zid < 0)
             return;                                 /* (an empty slot, or no sound on this lane) */
-    } else if (kit >= DRUM_SAMPLED) {               /* synthesised kit */
+    } else if (zid<0 && kit >= DRUM_SAMPLED) {               /* synthesised kit */
         drum_synth_on(note, vel, kit, DS_KITS[kit - DRUM_SAMPLED].s, DS_KITS[kit - DRUM_SAMPLED].crush, 1);
         return;
     }
@@ -351,7 +375,8 @@ static void drum_on(uint32_t note, uint32_t vel)
         const smp_zone_t *z = drum_zone_of(v);
         v->s[3] = sample_next(z, v, 0);
         /* (after 2.8.3) clamped: a user kit zone's root is not checked (a typed root of 300 shifted by 2^20) */
-        v->s[5] = (int32_t)((pow2_q16(clamp((int32_t)note * 16 - z->root16, -1536, 2047)) >> 8) * (z->rate >> 8));
+        int32_t pitch=FELUCCA_STATTIC&&kit==DRUM_STATTIC?0:(int32_t)note*16-z->root16;
+        v->s[5] = (int32_t)((pow2_q16(clamp(pitch, -1536, 2047)) >> 8) * (z->rate >> 8));
     }
     {
         uint32_t vi = (uint32_t)(v - drums.v);
@@ -363,12 +388,19 @@ static void drum_on(uint32_t note, uint32_t vel)
         drums.env[vi] = 32767;
         drums.denv[vi] = 32767;                     /* (2.7) DECAY below 0: a fade to -60 dB in 60 .. 500 ms (DK_SMP) */
         drums.dk[vi] = tw && drum_dec[ln] < 0 ? DECAY_K[DK_SMP[drum_dec[ln] + 4]] : 0u;
+#if FELUCCA_STATTIC
+        if(kit==DRUM_STATTIC)drums.dk[vi]=DECAY_K[clamp(stattic_drum_macro(TDRUM,3)+drum_dec[ln]*12,0,127)];
+#endif
         shift = shift * 16 + (tw ? drum_tune[ln] * 16 : 0);    /* (2.7) TUNE: the sound's semitones */
         if (shift) {
             const smp_zone_t *z = drum_zone_of(v);
-            v->s[5] = (int32_t)((pow2_q16(clamp((int32_t)note * 16 + shift - z->root16, -1536, 2047)) >> 8) * (z->rate >> 8));
+            int32_t pitch=FELUCCA_STATTIC&&kit==DRUM_STATTIC?shift:(int32_t)note*16+shift-z->root16;
+            v->s[5] = (int32_t)((pow2_q16(clamp(pitch, -1536, 2047)) >> 8) * (z->rate >> 8));
         }
     }
+#if FELUCCA_STATTIC
+    v->s[8]=32767;v->s[9]=v->s[5];
+#endif
 }
 
 /* adds the drums into the dry mix and the reverb and delay sends; mono != 0: into mono instead, before
@@ -378,7 +410,11 @@ static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dl
     uint32_t k, i;
     int32_t lvl = expr_gain(song.g[G_DRLVL] * 200, TRK_DRUM), send = send_thr(song.g[G_DRREV] * 258, thr_rev),
             dsend = send_thr(song.g[G_DRDLY] * 258, thr_dly), pk = drums.peak;   /* (2.6: the THROWs) */
-    int32_t pan = trk[TRK_DRUM].p[P_PAN], gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
+#if FELUCCA_STATTIC
+    lvl=expr_gain(LEVEL_Q12[clamp(TDRUM->p[P_LEVEL],0,127)]*4,TRK_DRUM);
+    send=dsend=0;
+#endif
+    int32_t pan = FELUCCA_STATTIC?0:trk[TRK_DRUM].p[P_PAN], gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
     if (!drums.gon)                                 /* (2.7) LEVEL and PAN glide, block by block (mix_glide) */
         drums.glv = lvl, drums.ggl = gl, drums.ggr = gr, drums.gon = 1;
     lvl = drums.glv = mix_glide(drums.glv, lvl);
@@ -430,6 +466,13 @@ static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dl
         z = drum_zone_of(v);
         uint32_t frac = v->ph[1], stepq = (uint32_t)v->s[5];   /* Q16 source samples per output (drum_on) */
         int32_t g;
+#if FELUCCA_STATTIC
+        if(v->active&&drums.kit[k]==DRUM_STATTIC){
+            int32_t sweep=stattic_drum_macro(TDRUM,2)-64;
+            if(sweep)stepq=(uint32_t)(((uint64_t)(uint32_t)v->s[9]*pow2_q16(sweep*v->s[8]/8192))>>16);
+            v->s[8]-=(v->s[8]+31)>>5;
+        }
+#endif
         if (!v->active)
             continue;
         g = mulq15(lvl, v->vel * 258);

@@ -21,6 +21,13 @@
 #include "fm1_flash.h"
 #include "../src/libc.c"
 #include "../src/usb.c"
+#if FELUCCA_STATTIC
+#define fm1_irq_off() ((void)0)
+#define fm1_irq_on() ((void)0)
+#include "fm1_lcd_hw.h"
+#include "../src/lcd.c"
+#include "stattic_screen.c"
+#endif
 
 static uint32_t ldr_ms(void)   /* monotonic ms; survives the TIMER4 wrap (178.9 s) */
 {
@@ -72,7 +79,14 @@ static void ldr_record_clear(void)
     fm1_updata_parm_clear();                        /* CRC 0: the SPL ignores it on a warm reset */
 }
 static int ldr_flash_known(void) { return FL_JEDEC_OK(fl_jedec_ram()); }   /* as the app (project.c) */
-static void ldr_progress(uint32_t done, uint32_t total) { (void)done; (void)total; ldr_poll(); }
+static void ldr_progress(uint32_t done, uint32_t total) {
+#if FELUCCA_STATTIC
+    ldr_bar(done,total);
+#else
+    (void)done;(void)total;
+#endif
+    ldr_poll();
+}
 #include "ldr_core.c"
 
 extern uint32_t _bss_start[], _bss_end[];
@@ -81,6 +95,9 @@ void ldr_main(void)
 {
     fm1_wdt_arm(0x0D);                              /* ~8 s, fed by ldr_poll */
     fm1_time_init();
+    #if FELUCCA_STATTIC
+    ldr_screen();
+    #endif
     usb_start();
     for (;;) {
         ldr_poll();
@@ -95,6 +112,9 @@ void ldr_main(void)
             int rc;
             usb.ota_req = 0;
             rc = ldr_session();
+#if FELUCCA_STATTIC
+            if(rc<0)ldr_failed();
+#endif
             if (rc == 0 || rc == LDR_EFLASH) {      /* done, or another flash chip: the old firmware again */
                 fm1_delay_ms(200);                  /* the "success" reply leaves */
                 usb_detach();

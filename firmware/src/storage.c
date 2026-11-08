@@ -14,10 +14,13 @@
 #ifndef UI_SMALL                 /* (2.7) compiled for size: not the audio path (gfx.c UI_SMALL); the host tests and the loader: nothing */
 #define UI_SMALL
 #endif
-#define ST_MAGIC 0x554C4546u                   /* "FELU" */
+#ifndef FELUCCA_STATTIC
+#define FELUCCA_STATTIC 0
+#endif
+#define ST_MAGIC (FELUCCA_STATTIC ? 0x32545453u : 0x554C4546u) /* STT2 / FELU: distinct formats */
 #define ST_SECTOR 4096u
 #define ST_PAYLOAD_OFF 256u
-#define ST_PAYLOAD_MAX (ST_SECTOR - ST_PAYLOAD_OFF)
+#define ST_PAYLOAD_MAX ((FELUCCA_STATTIC ? 12288u : ST_SECTOR) - ST_PAYLOAD_OFF)
 
 /* flash map (FL_DATA 0x97000..0xDFFFF, FL_GLOB 0xFC000..): settings 0xFC000 / 0xFD000, projects
  * 0x97000..0x9EFFF, user sample slots 0xA0000..0xDBFFF (eng_sample.c), user preset banks 0xDC000..0xDFFFF
@@ -54,6 +57,18 @@ static uint32_t st_crc32(const void *p, uint32_t n)   /* zlib CRC-32, 4 bits per
 
 UI_SMALL static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy A (0) / B (1) */
 {
+#if FELUCCA_STATTIC
+    if(obj==OBJ_SETTINGS)return 0xFC000u+copy*ST_SECTOR;
+    if(obj>=OBJ_UPRESET0&&obj<OBJ_AUTOSAVE)
+        return 0xDC000u+(obj-OBJ_UPRESET0)*2u*ST_SECTOR+copy*ST_SECTOR;
+    if((obj>=OBJ_PROJECT0&&obj<OBJ_UPRESET0)||obj==OBJ_AUTOSAVE){
+        uint32_t index=(obj==OBJ_AUTOSAVE?4u:obj-OBJ_PROJECT0)*2u+copy;
+        /* Ten 12 KiB copies: first three in 97000..9ffff, next seven in
+         * e5000..f9fff. Sample slots use a0000..dbfff; OTA staging is e0000..e4fff. */
+        return index<3u?0x97000u+index*12288u:0xE5000u+(index-3u)*12288u;
+    }
+    return 0; /* the native FM6 bank is not a STATTIC storage object */
+#else
     if (obj == OBJ_SETTINGS)
         return 0xFC000u + copy * ST_SECTOR;
     if (obj == OBJ_AUTOSAVE)
@@ -63,6 +78,11 @@ UI_SMALL static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset
     if (obj >= OBJ_UPRESET0 && obj < OBJ_AUTOSAVE)
         return 0xDC000u + (obj - OBJ_UPRESET0) * 2u * ST_SECTOR + copy * ST_SECTOR;
     return 0x97000u + (obj - OBJ_PROJECT0) * 2u * ST_SECTOR + copy * ST_SECTOR;
+#endif
+}
+static uint32_t st_span(uint32_t obj)
+{
+    return FELUCCA_STATTIC&&((obj>=OBJ_PROJECT0&&obj<OBJ_UPRESET0)||obj==OBJ_AUTOSAVE)?12288u:ST_SECTOR;
 }
 
 #include "scratch.h"                          /* sloop-lab: the payload buffer is the main loop's shared scratch */
@@ -71,11 +91,11 @@ _Static_assert(sizeof main_scratch.st == ST_PAYLOAD_MAX, "the scratch holds a pa
 
 UI_SMALL static int st_head(uint32_t obj, uint32_t copy, st_hdr_t *h)   /* commit record valid: 0 */
 {
-    if (obj >= OBJ_COUNT || copy > 1u)
+    if (obj >= OBJ_COUNT || copy > 1u || (FELUCCA_STATTIC&&obj==OBJ_FM6BANK))
         return -1;
     if (st_read(st_sector(obj, copy), h, sizeof *h))
         return -1;
-    if (h->magic != ST_MAGIC || h->type != obj || h->slot != copy || h->len > ST_PAYLOAD_MAX ||   /* (slot: the copy
+    if (h->magic != ST_MAGIC || h->type != obj || h->slot != copy || h->len > st_span(obj)-ST_PAYLOAD_OFF ||   /* (slot: the copy
                                                      * it was written to; after Felucca 1.0) */
         h->hcrc != st_crc32(h, sizeof *h - 4u))
         return -1;
@@ -180,7 +200,7 @@ UI_SMALL static int st_save3(uint32_t obj, const void *src, uint32_t len, const 
     uint32_t seq, base, off;
     int cur, rc;
     st_hdr_t h;
-    if (obj >= OBJ_COUNT || len + len2 + len3 > ST_PAYLOAD_MAX)
+    if (obj >= OBJ_COUNT || (FELUCCA_STATTIC&&obj==OBJ_FM6BANK) || len + len2 + len3 > st_span(obj)-ST_PAYLOAD_OFF)
         return -1;
     cur = st_current(obj, &h);
     seq = cur < 0 ? 0u : h.seq;
@@ -193,8 +213,9 @@ UI_SMALL static int st_save3(uint32_t obj, const void *src, uint32_t len, const 
     for (off = 0; off < len3; off++)
         st_buf[len + off] = ((const uint8_t *)src3)[off];
     len += len3;
-    if ((rc = st_erase(base)) != 0)
-        return rc;
+    for(off=0;off<st_span(obj);off+=ST_SECTOR)
+        if ((rc = st_erase(base+off)) != 0)
+            return rc;
     for (off = 0; off < len; off += 256u) {
         uint32_t n = len - off > 256u ? 256u : len - off;
         if ((rc = st_prog(base + ST_PAYLOAD_OFF + off, st_buf + off, n)) != 0)

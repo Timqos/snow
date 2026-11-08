@@ -9,7 +9,8 @@
 #ifndef FELUCCA_STATTIC
 #define FELUCCA_STATTIC 0
 #endif
-#define STATTIC_CHANNELS 6u
+#define STATTIC_CHANNELS 4u
+#define STATTIC_SOUND_ROLES 6u /* original KK/SD/HH/PR/BS/CH sound/vector data */
 #define STATTIC_CH_VOICES 4u
 #define STATTIC_CH_RELEASE 113 /* ESYNC_NAMES[22]: 2BAR */
 #define NVOICE 8                 /* voices per part, and the budget shared by all parts */
@@ -26,8 +27,11 @@ enum { V_POLY, V_MONO, V_LEGATO, V_UNISON };   /* P_VOICE */
 /* SLOOP 2.4: FM6 (eng_fm6.c) is engine 9 in every build; SLICE, when built, comes last (10). Projects and user
  * presets store the engine index as a byte, and no shipped SLOOP was built with SLICE, so its number is stored
  * nowhere: FM6 may take 9 and SLICE moves up (engines.c ENGINES[], params.c N_ENGNAME follow this order) */
-#define NENGINES (12 + FELUCCA_SLICE + (FELUCCA_STATTIC ? STATTIC_CHANNELS : 0u))
-#define ENGI_STATTIC (12u + FELUCCA_SLICE)
+#define NENGINES (FELUCCA_STATTIC ? 7u : 12u + FELUCCA_SLICE)
+#define ENGI_STATTIC 0u
+#define STATTIC_BS_ENGINE 4u
+#define STATTIC_CH_ENGINE 5u
+#define STATTIC_SY_ENGINE 6u
 #define ENGI_GRAIN 8u            /* GRAIN, PHYS, NOISE (SLOOP 2.5, appended after FM6: the stores keep the numbers) */
 #define ENGI_PHYS 10u
 #define ENGI_NOISE 11u
@@ -77,10 +81,10 @@ enum {                          /* per-track parameters */
     P_FTYPE,                                   /* ANALOG's filter TYPE: LP (as before) / BP / HP (eng_analog.c) */
     P_ESYNC,                                   /* ENV SYNC: ATK DEC REL as note values of the tempo (voice.c) */
     P_LSYNC, P_LTRIG, P_LPOL,                  /* LFO 2: SYNC to the tempo, TRIG (NOTE / FREE), POL (BI / UNI) (voice.c) */
-    P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7,
 #if FELUCCA_STATTIC
 #include "stattic_params.h"
 #endif
+    P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7,
     P_COUNT
 };
 
@@ -135,6 +139,11 @@ typedef struct {
     uint32_t ph[3];
     int32_t s[FELUCCA_STATTIC ? 10 : 8]; /* STATTIC: independent pitch and FM envelopes */
     uint32_t age;
+#if FELUCCA_STATTIC
+    uint8_t mvel, side, stage2;
+    int16_t mrnd;
+    int32_t env2;
+#endif
 } voice_t;
 
 typedef struct {                 /* per-voice control-rate modulation, computed in voice.c */
@@ -252,6 +261,13 @@ typedef struct track {
     int32_t lfo_val;             /* Q15 */
     int32_t lfo_fade;            /* Q15 ramp after note-on */
     uint32_t lfo_rnd;
+#if FELUCCA_STATTIC
+    int16_t lfo_prev;
+    int32_t m_env, m_env2;
+    uint8_t m_vel, m_key, m_vi, mw, at, ex_off;
+    int16_t m_rnd;
+    int32_t dist_dc;
+#endif
     /* keyboard / arp input: held notes in press order */
     uint8_t held[16];
     uint8_t nheld;
@@ -413,6 +429,10 @@ static int trk_silent(const track_t *t)
 }
 #define RING_PUBLISH() __asm__ volatile("" ::: "memory")   /* slot store before the index update */
 static volatile uint32_t fm1_ms;  /* milliseconds since boot (TIMER4-based, TIMER5 ISR in main.c) */
+#if FELUCCA_STATTIC
+#include "stattic_runtime.h"
+#include "stattic_profile.h"
+#endif
 /* Two early failed boots -> USB recovery; recovery reset -> mask-ROM UBOOT. */
 #include "bootguard.h"
 bootguard_t bootguard __attribute__((section(".noinit")));

@@ -36,7 +36,13 @@ static const uint16_t SCALE_MASK[] = {
     (1 << 0) | (1 << 2) | (1 << 4) | (1 << 6) | (1 << 8) | (1 << 10),              /* WHOLE */
     (1 << 0) | (1 << 1) | (1 << 3) | (1 << 4) | (1 << 6) | (1 << 7) | (1 << 9) | (1 << 10), /* DIMHW */
     (1 << 0) | (1 << 2) | (1 << 3) | (1 << 5) | (1 << 6) | (1 << 8) | (1 << 9) | (1 << 11), /* DIMWH */
+#if FELUCCA_STATTIC
+#define SN_SCALE_MASK(name,mask) mask,
+    SN_EXTRA_SCALES(SN_SCALE_MASK)
+#undef SN_SCALE_MASK
+#endif
 };
+_Static_assert(NELEM(SCALE_MASK)==NELEM(N_SCALE),"scale names and intervals agree");
 #define NSCALES (sizeof SCALE_MASK / sizeof SCALE_MASK[0])
 #define SEQ_NONE 0xFFFFFFFFu
 
@@ -259,8 +265,15 @@ static const int8_t CHORD_DEG[6][4] = {
     {0, 3, 4, -1},                       /* SUS4: 1 4 5 */
     {0, -1, -1, -1},                     /* POWER: 1 5 8 (semitones, below) */
 };
+#if FELUCCA_STATTIC
+#include "stattic_chord.c"
+#include "stattic_follow.c"
+#endif
 static uint32_t chord_notes(const track_t *t, uint32_t n, uint8_t *c)
 {
+#if FELUCCA_STATTIC
+    int32_t root;uint16_t mask;return chord_make(t,n,c,&root,&mask);
+#else
     uint32_t type = (uint32_t)clamp(t->p[P_CHORD], 0, 5), mask = t->p[P_SCALE] ? scale_mask(t) : SCALE_MASK[2];
     uint32_t k = 0, j;
     if (type == 5u) {
@@ -281,6 +294,7 @@ static uint32_t chord_notes(const track_t *t, uint32_t n, uint8_t *c)
             c[k++] = (uint8_t)m;
     }
     return k;
+#endif
 }
 
 /* CHORD+ (2.4, after HiChord / minichord): in chord mode the black keys are modifiers. Held while a white key
@@ -438,7 +452,14 @@ static uint32_t trk_div(const track_t *t) { return (uint32_t)t->p[P_SDIV] % NDIV
 static uint32_t trk_grid(const track_t *t, uint32_t *into, uint32_t *len)
 {
     uint32_t div = trk_div(t);
+#if FELUCCA_STATTIC
+    uint32_t beat=clk_beat-stattic_origin[(uint32_t)(t-trk)%NTRK],u=div_units(div),abs,frac;
+    if(div<NDIV_SHORT){abs=beat*DIV_DEN[div]+clk_pos/u;frac=clk_pos%u;}
+    else {uint32_t m=DIV_BEATS[(div-NDIV_SHORT)%3u];abs=beat/m;frac=(beat%m)*BEAT_U+clk_pos;}
+    return grid_swing(abs,frac,u,swings(div)?swing_units(t->p[P_SSWING]+song.g[G_SWING],u):0u,into,len);
+#else
     return grid_at(div, swings(div) ? swing_units(t->p[P_SSWING] + song.g[G_SWING], div_units(div)) : 0u, into, len);
+#endif
 }
 static uint32_t trk_len(const track_t *t) { return t->p[P_SLEN] > 0 ? (uint32_t)t->p[P_SLEN] : 1u; }
 
@@ -456,6 +477,9 @@ static uint32_t undo_sess = 1;           /* UI sessions (seq.c: recording passes
 static void undo_mark(const track_t *t, uint32_t sess)
 {
     uint32_t i = trk_index(t);
+#if FELUCCA_STATTIC
+    stattic_undo_mark(t,sess);
+#endif
     if (undo.valid && !undo.undone && undo.trk == i && undo.sess == sess)
         return;                                          /* (this session is marked already) */
     memcpy(undo.st, t->step, sizeof undo.st);
@@ -1892,6 +1916,9 @@ static void input_on(track_t *t, uint32_t note, uint32_t vel)
         drum_input(midi_drum_lane(note), vel_lvl(vel), 0, 1);
         return;
     }
+#if FELUCCA_STATTIC
+    fol_key(t,note,1);
+#endif
     last_note = (uint8_t)note;
     {   /* (2.6) played again under the pedal: the note-off it waited with first (the arp's key count, a recording's
          * note end), then this one held by its key */
@@ -1954,6 +1981,9 @@ static void input_off(track_t *t, uint32_t note)
 }
 static void input_off_now(track_t *t, uint32_t note)
 {
+#if FELUCCA_STATTIC
+    fol_key(t,note,0);
+#endif
     if (ft_on && t == &trk[ft_trk % NTRK])
         ft_note_off(note);
     rec_release(t, note);
@@ -1962,6 +1992,10 @@ static void input_off_now(track_t *t, uint32_t note)
     if (!(song.playing && seq_has(t, note)))        /* other mode (ARP switched while held). (2.8.3) The pattern plays */
         trk_note_off(t, note);                      /* it too: it ends with the pattern's note, not with the key */
 }
+
+#if FELUCCA_STATTIC
+#include "stattic_midi_notes.c"
+#endif
 
 /* a drum hit from a key, MIDI or a roll: lane, level; rat: its ratchet when recorded (rolls); rec: it
  * may be recorded (a roll records one hit a step) */
@@ -2406,6 +2440,16 @@ static void audition_block(void)
 static void keyboard_block(void)
 {
     uint32_t cur = fm1_in.notes, ch = cur ^ kb_prev, k, r;
+#if FELUCCA_STATTIC
+    if(stattic_home_ms_reset){
+        for(k=0;k<27u;k++)if((kb_prev>>k)&1u)key_up(k);
+        stattic_home_ms_reset=0;kb_prev=cur;ch=0;
+    }
+    if(stattic_home_ms){
+        for(k=0;k<27u;k++)if((ch>>k)&1u)stattic_ms_key(k,(cur>>k)&1u);
+        kb_prev=cur;return;
+    }
+#endif
     audition_block();
     /* (2.7: MUTE mode stays when EDIT is let go, until a black key again: the mutes at hand, live; 2.6 went back to
      * erasing) */
@@ -2586,6 +2630,9 @@ static void song_restore(void);
 
 static void seq_start(void)
 {
+#if FELUCCA_STATTIC
+    stattic_runtime_start();
+#endif
 #if FELUCCA_ARRANGER
     if (arrangement_enabled && !song.playing) {
         rec_wait = 0;                              /* song mode plays, it does not record */
@@ -2649,11 +2696,15 @@ static uint32_t step_vel(const step_t *s, uint32_t i)
 /* play one synth step: TIE extends, REST releases, NOTE (re)triggers; a SLIDE on the previous
  * step makes this one legato with a glide (acid style). skip: bit k = note k already sounds
  * from live recording (not triggered, not released here). len: the step's length (units). */
+static uint32_t stattic_seq_index(const track_t *t,uint32_t abs);
 static void seq_step(track_t *t, const step_t *s, uint32_t slen, uint32_t skip)
 {
     uint32_t i, j, gate = slen * (uint32_t)t->p[P_SGATE] / 128u;
+#if FELUCCA_STATTIC
+    if(s->time==ST_NOTE&&s->n)fol_step(t,s->note,s->n);
+#endif
     uint32_t slide_in = t->seq_hold && t->seq_n;
-    const step_t *nx = &t->step[(t->seq_idx + 1u) % trk_len(t)];
+    const step_t *nx = &t->step[stattic_seq_index(t,t->seq_abs+1u)];
     uint32_t next_tie = nx->time == ST_TIE || (nx->time == ST_NOTE && (nx->flags & (SF_CONT_ALL | SF_LEG)));   /* (2.7: notes
                                                      * going on into the next step: held to it, it says which end;
                                                      * 2.7.2: a legato note next: held to it) */
@@ -2803,10 +2854,38 @@ static void seq_ratchets(track_t *t, uint32_t into, uint32_t slen)
 
 /* the nudge of grid step abs of track t, in units of a step slen long: where in its own step it fires
  * (micro >= 0), or how far before its step (micro < 0, as a negative number) */
+static uint32_t stattic_seq_index(const track_t *t,uint32_t abs)
+{
+    uint32_t len=trk_len(t),pos=abs%len;
+#if FELUCCA_STATTIC
+    switch(t->p[P_DIR]) {
+    case 1:return len-1u-pos;
+    case 2:if(len>1u){pos=abs%(2u*len-2u);return pos<len?pos:2u*len-2u-pos;}break;
+    case 3:{uint32_t r=abs*0x9e3779b9u+(uint32_t)t->p[SN_G_SEED]+1u;
+        r^=r>>16;r*=0x7feb352du;r^=r>>15;return r%len;}
+    }
+#endif
+    return pos;
+}
+#if FELUCCA_STATTIC
+static struct { uint32_t abs,delay;uint8_t valid; } stattic_step_time[NTRK][2];
+#endif
 static int32_t micro_units(const track_t *t, uint32_t abs, uint32_t slen)
 {
-    int32_t m = t->micro[abs % trk_len(t) % NSTEP];
-    return (int32_t)(slen / 64u) * m;                /* |m| <= 32: fits */
+    uint32_t step=stattic_seq_index(t,abs);int32_t m=t->micro[step];
+    int32_t result=(int32_t)(slen/64u)*m;
+#if FELUCCA_STATTIC
+    if(mod_has(t,MD_TIME)){
+        uint32_t k=trk_index(t),slot=abs&1u,bpm=(uint32_t)clamp(song.g[G_BPM],20,300);
+        if(!stattic_step_time[k][slot].valid||stattic_step_time[k][slot].abs!=abs){
+            uint32_t note=is_drum(t)?36u:t->step[step].note[0],vel=is_drum(t)?100u:step_vel(&t->step[step],0);
+            stattic_step_time[k][slot].delay=mod_time((track_t *)t,note,vel,slen/bpm)*bpm;
+            stattic_step_time[k][slot].abs=abs;stattic_step_time[k][slot].valid=1;
+        }
+        result=clamp(result+(int32_t)stattic_step_time[k][slot].delay,-(int32_t)slen/2,(int32_t)(slen*7u/16u));
+    }
+#endif
+    return result;                /* |m| <= 32: fits */
 }
 
 /* The steps fire in order, one a block at most, each at its nudged time (micro: 1/64 of a step early
@@ -2851,11 +2930,11 @@ static void seq_tick(track_t *t, uint32_t adv)
     }
     if (fire) {                                      /* a new step: one a block at most */
         t->seq_abs = nabs;
-        idx = nabs % len;
+        idx = stattic_seq_index(t,nabs);
         t->seq_idx = (uint16_t)idx;
         t->rat_done[0] = t->rat_done[1] = t->rat_done[2] = t->rat_done[3] = 0;
         t->rat_lanes = 0;
-        if (!idx)
+        if (!(nabs%len))
             t->pass++;                               /* a new pass of the loop (recording: one undo) */
         if (erasing(t))
             erase_step(t, idx);                      /* EDIT + key held: gone as it passes */
@@ -2996,9 +3075,14 @@ static const uint8_t MIDI_CC_MAP[][2] = {
  * 96..101, 120..127 the channel modes) are never learned. The UI (ui_input.c ml_*) writes the entries with the
  * interrupts off; ml_arm / ml_heard hand it a CC heard while learning */
 #define ML_N 16u
-#define ML_E0 120u
+#define ML_E0 (FELUCCA_STATTIC ? 248u : 120u)
 _Static_assert(P_E0 < ML_E0 && P_E7 - P_E0 == 7, "MIDI LEARN: native engine parameter codes");
-static volatile uint16_t ml_tab[ML_N];
+#if FELUCCA_STATTIC
+typedef uint32_t ml_entry_t;
+#else
+typedef uint16_t ml_entry_t;
+#endif
+static volatile ml_entry_t ml_tab[ML_N];
 static volatile uint8_t ml_arm, ml_heard;  /* the UI waits for a CC; the CC that came meanwhile + 1 (0 none) */
 static uint32_t ml_id(uint32_t code)        /* an entry's code -> P_* id, P_COUNT: none this firmware knows */
 {
@@ -3029,6 +3113,9 @@ static void midi_cc_set(track_t *t, uint32_t id, uint32_t value)
 {
     const param_desc_t *d = is_drum(t) && id == P_E0 ? &DRUM_KIT_DESC
                             : id >= P_E0 ? &ENGINES[t->eng_req % NENGINES]->edit[(id - P_E0) & 7u] : &TP[id % P_COUNT];
+#if FELUCCA_STATTIC
+    if(id==P_MUTE){stattic_mute_set(trk_index(t),value>=64u);return;}
+#endif
     if (d->max > d->min)
         t->p[id % P_COUNT] = (int16_t)(d->min + ((int32_t)(value & 127u) * (d->max - d->min) + 63) / 127);
 }
@@ -3075,6 +3162,9 @@ static uint32_t cc74_slot(const engine_t *e)      /* 0..7, or 8: none */
 }
 static void __attribute__((noinline)) midi_cc(track_t *t, uint32_t cc, uint32_t value)
 {
+#if FELUCCA_STATTIC
+    mod_midi(t,0xB0u,cc,value);
+#endif
     const param_desc_t *d = 0;
     int16_t *slot = 0;
     uint32_t i, id = 0xFFFFu;
@@ -3105,9 +3195,13 @@ static void __attribute__((noinline)) midi_cc(track_t *t, uint32_t cc, uint32_t 
     if (d) {
     } else if (is_drum(t)) {
         if (id == P_LEVEL || id == P_REV || id == P_DLY) {
+#if FELUCCA_STATTIC
+            d=track_desc(t,id);slot=&t->p[id];
+#else
             id = id == P_LEVEL ? G_DRLVL : id == P_REV ? G_DRREV : G_DRDLY;
             d = &GP[id];
             slot = &song.g[id];
+#endif
         } else if (id == P_PAN || id == P_TFLT) {
             d = &TP[id];
             slot = &t->p[id];
@@ -3536,12 +3630,20 @@ static void events_block(uint32_t n)
             }
             step_in_push(d1 | 0x80u | trk_index(t) << 8);
             mi_trk_held[trk_index(t) % NTRK][d1 >> 5] |= 1u << (d1 & 31u);
+#if FELUCCA_STATTIC
+            stattic_midi_on(t,ch,d1,d2);
+#else
             input_on(t, d1, d2);
+#endif
         } else {
             mi_pen[d1 >> 5] &= ~(1u << (d1 & 31u));
             step_in_push(d1 | trk_index(t) << 8);
             mi_trk_held[trk_index(t) % NTRK][d1 >> 5] &= ~(1u << (d1 & 31u));
+#if FELUCCA_STATTIC
+            stattic_midi_off(t,ch,d1);
+#else
             input_off(t, d1);
+#endif
         }
     }
     if (midi_in_lost) {                               /* (2.8.3) a note message was lost (the ring full), once what came is read: the notes MIDI
@@ -3553,12 +3655,24 @@ static void events_block(uint32_t n)
                 for (b = 0; b < 32u; b++)
                     if ((mi_trk_held[ti][w] >> b) & 1u) {
                         mi_trk_held[ti][w] &= ~(1u << b);
+#if FELUCCA_STATTIC
+                        stattic_midi_off(&trk[ti],16u,w*32u+b);
+#else
                         input_off(&trk[ti], w * 32u + b);
+#endif
                     }
         mi_pen[0] = mi_pen[1] = mi_pen[2] = mi_pen[3] = 0;
     }
+#if FELUCCA_STATTIC
+    stattic_runtime_tick();
+#endif
+#if FELUCCA_STATTIC
+    uint32_t order=fol_order();
+    for(i=0;i<NTRK;i++,order>>=4)seq_tick(&trk[order&15u],adv);
+#else
     for (i = 0; i < NTRK; i++)
         seq_tick(&trk[i], adv);
+#endif
     click_tick();
     roll_block(adv);
     for (i = 0; i < NPART; i++)

@@ -3,8 +3,13 @@
 /* Felucca user interface. Four columns map to KNOB 1..4. Rendering is lazy:
  * every element remembers what it last drew and is redrawn only on change. */
 #ifndef FELUCCA_VERSION
+#if FELUCCA_STATTIC
+#define FELUCCA_VERSION "STATTIC 0.9.0-S1"
+#else
 #define FELUCCA_VERSION "SLOOP 2.8.5"  /* the beat machine firmware for the FM-1 (based on Felucca) */
 #endif
+#endif
+static void track_select(uint32_t i);
 static void project_save(uint32_t slot);
 static void arrangement_save(void);
 static void panel_setup(void);
@@ -258,6 +263,10 @@ UI_SMALL static void step_clear(step_t *st)
 /* undo / redo (EDIT + OCT- / OCT+): the marked pattern and the one now swap places */
 UI_SMALL static int undo_swap(int redo)
 {
+#if FELUCCA_STATTIC
+    int done=stattic_undo(redo);if(done){ui.force=1;sync_reload=1;}return done;
+#else
+
     track_t *t;
     int16_t len;
     if (!undo.valid || (uint32_t)!!redo != undo.undone)
@@ -283,6 +292,7 @@ UI_SMALL static int undo_swap(int redo)
     sync_reload = 1;
     ui.force = 1;
     return 1;
+#endif
 }
 
 /* SEQ cursor: wraps inside the pattern length, the bank follows, a step entry ends */
@@ -562,7 +572,7 @@ UI_SMALL static void page_fix(void)
 UI_SMALL static void go_home(void)
 {
 #if FELUCCA_ARRANGER
-    ui.home = 0;
+    ui.home = FELUCCA_STATTIC?1:0;
     ui.page = (uint8_t)page_first(FAM_TRK);
 #else
     ui.home = 1;
@@ -578,7 +588,7 @@ UI_SMALL static void go_home(void)
  * writes the sequencer: every pattern is the one the player records or enters. */
 
 /* the parts' sounds at power-on (engine, preset): bass, pad, lead */
-static const uint8_t TRK_DEF[NPART][2] = {{0, 0}, {1, 0}, {4, 5}};   /* ANALOG 808 BOOM, DIGITAL RHODES, SAMPLE LOFI FLUTE */
+static const uint8_t TRK_DEF[NPART][2] = {{FELUCCA_STATTIC?STATTIC_BS_ENGINE:0,0},{FELUCCA_STATTIC?STATTIC_SY_ENGINE:1,0},{FELUCCA_STATTIC?STATTIC_CH_ENGINE:4,FELUCCA_STATTIC?0:5}};   /* ANALOG 808 BOOM, DIGITAL RHODES, SAMPLE LOFI FLUTE */
 UI_SMALL static uint32_t trk_def_engine(uint32_t i) { return i < NPART ? TRK_DEF[i][0] : 0u; }
 
 UI_SMALL static int seq_is_empty(const track_t *t) { return track_empty(t); }
@@ -665,6 +675,12 @@ UI_SMALL static void apply_preset_to(track_t *t, uint32_t pi)
         }
         preset_extras(t->p, pr);                     /* glide, pitch / LFO modulation, voice mode */
     }
+#if FELUCCA_STATTIC
+    snow_fill(t->p,t->eng_req,pi);
+    t->p[SN_PLAY_MODE]=t->eng_req==STATTIC_CH_ENGINE?0:1;
+    t->p[P_CHORD]=t->eng_req==STATTIC_CH_ENGINE?1:0;
+    t->p[SN_MODE]=1;
+#endif
     fm6_track_loaded(t);                             /* FM6: the preset's patch (its PTCH) */
 }
 
@@ -672,6 +688,10 @@ UI_SMALL static void apply_preset_to(track_t *t, uint32_t pi)
  * its values or the new one with its own (voice.c engine_block), never one with the other's */
 UI_SMALL static void set_engine_of(track_t *t, uint32_t ei)
 {
+#if FELUCCA_STATTIC
+    uint32_t part=(uint32_t)(t-trk);
+    if(part<NPART)ei=trk_def_engine(part);
+#endif
     const engine_t *e = ENGINES[ei % NENGINES];
     uint32_t i;
     if (is_drum(t))
@@ -694,6 +714,9 @@ UI_SMALL static void track_defaults(track_t *t)
     uint32_t i;
     for (i = 0; i < P_E0; i++)
         t->p[i] = TP[i].def;
+#if FELUCCA_STATTIC
+    t->p[P_SLEN]=64;t->p[P_SCALE]=2;t->p[P_QUANT]=1;t->p[SN_G_BASE]=is_drum(t)?60:t==&trk[0]?60:60;
+#endif
     track_defaults_steps(t);
 }
 
@@ -712,6 +735,40 @@ UI_SMALL static void select_engine(uint32_t e)
  * engine's preset table may change order; tests/ui_pages_test.c checks every preset is here once */
 enum { BK_BASS, BK_KEYS, BK_ORGAN, BK_PAD, BK_LEAD, BK_PLUCK, BK_STAB, BK_FX };
 static const char *const BANK_KIND[] = {"BASS", "KEYS", "ORGN", "PAD", "LEAD", "PLCK", "STAB", "FX"};
+#if FELUCCA_STATTIC
+static const struct { uint8_t kind,e;const char *name; } BANK[]={
+    {BK_BASS,4,"DEEP BASS"},
+    {BK_BASS,4,"RUBBER BASS"},
+    {BK_BASS,4,"HOLLOW BASS"},
+    {BK_BASS,4,"ACID SUB"},
+    {BK_BASS,4,"REESE BASS"},
+    {BK_BASS,4,"PLUCK BASS"},
+    {BK_BASS,4,"FM GROWL"},
+    {BK_BASS,4,"DUB SUB"},
+    {BK_BASS,4,"SOFT SINE"},
+    {BK_BASS,4,"SAW BASS"},
+    {BK_KEYS,6,"GLASS CHORD"},
+    {BK_KEYS,6,"SOFT CHORD"},
+    {BK_KEYS,6,"METAL CHORD"},
+    {BK_KEYS,6,"WARM KEYS"},
+    {BK_KEYS,6,"DEEP STAB"},
+    {BK_KEYS,6,"AMBIENT PAD"},
+    {BK_KEYS,6,"DIGITAL FM"},
+    {BK_KEYS,6,"MINOR KEYS"},
+    {BK_KEYS,6,"ORGAN CHORD"},
+    {BK_KEYS,6,"CRYSTAL KEYS"},
+    {BK_PAD,5,"GLASS CHORD"},
+    {BK_PAD,5,"SOFT CHORD"},
+    {BK_PAD,5,"METAL CHORD"},
+    {BK_PAD,5,"WARM KEYS"},
+    {BK_PAD,5,"DEEP STAB"},
+    {BK_PAD,5,"AMBIENT PAD"},
+    {BK_PAD,5,"DIGITAL FM"},
+    {BK_PAD,5,"MINOR KEYS"},
+    {BK_PAD,5,"ORGAN CHORD"},
+    {BK_PAD,5,"CRYSTAL KEYS"},
+};
+#else
 static const struct { uint8_t kind, e; const char *name; } BANK[] = {
     {BK_BASS, 0, "808 BOOM"}, {BK_BASS, 0, "808 DIRTY"}, {BK_BASS, 0, "808 SLIDE"}, {BK_BASS, 0, "SUB BASS"},
     {BK_BASS, 0, "PLUGG BASS"}, {BK_BASS, 0, "REESE"}, {BK_BASS, 0, "WOBBLE"}, {BK_BASS, 0, "ACID 303"},
@@ -763,6 +820,8 @@ static const struct { uint8_t kind, e; const char *name; } BANK[] = {
     {BK_FX, ENGI_SLICE, "USR SLICE"},
 #endif
 };
+#endif
+
 #define NBANK (sizeof BANK / sizeof BANK[0])
 static uint8_t bank_pi[NBANK];                       /* the preset index of each entry in its engine */
 static uint8_t bank_ready;
@@ -935,6 +994,11 @@ UI_SMALL static const char *preset_kind(uint32_t n)
 /* list index n into track t (2.6: MIDI Program Change, any track); 0 done, 1 no such sound */
 UI_SMALL static int preset_go_to(track_t *t, uint32_t n)
 {
+#if FELUCCA_STATTIC
+    if(is_drum(t))return 1;
+    if(n<10u){apply_preset_to(t,n);ui.force=1;return 0;}
+    return n<10u+UP_SLOTS?up_load_to(t,n-10u):1;
+#else
     uint32_t k, total, e;
     if (is_drum(t))
         return 1;
@@ -951,6 +1015,7 @@ UI_SMALL static int preset_go_to(track_t *t, uint32_t n)
     apply_preset_to(t, k);
     ui.force = 1;
     return 0;
+#endif
 }
 /* MIDI Program Change (2.6, after Felucca 1.5.1, PR #179 by @renebohne): seq.c queues it per track (the track its
  * channel plays, GLO > MIDI); here, in the main loop (a flash read, a sound loaded): a synth track takes the n-th sound
@@ -1004,6 +1069,11 @@ UI_SMALL static void preset_go(uint32_t n)                    /* load list index
         up_load(k);
         return;
     }
+#if FELUCCA_STATTIC
+    if(e==STATTIC_BS_ENGINE)track_select(0);
+    else if(e==STATTIC_SY_ENGINE)track_select(1);
+    else if(e==STATTIC_CH_ENGINE)track_select(2);
+#endif
     if (e != TSEL->eng_req)
         select_engine(e);
     apply_preset(k);
@@ -1055,7 +1125,7 @@ UI_SMALL static uint32_t ml_code(uint32_t id) { return id >= P_E0 ? ML_E0 + id -
 UI_SMALL static void ml_put(uint32_t i, uint32_t e)       /* (the ISR reads the entry: never half of one) */
 {
     fm1_irq_off();
-    ml_tab[i % ML_N] = (uint16_t)e;
+    ml_tab[i % ML_N] = (ml_entry_t)e;
     fm1_irq_on();
 }
 UI_SMALL static uint32_t ml_count(void)

@@ -431,9 +431,22 @@ UI_SMALL static void layer_key(uint32_t layer, uint32_t k, uint32_t down)
         if (k == 1u) {                                      /* (2.6) the black key F#3: MIDI LEARN on / off */
             ml_toggle();
         } else if (w >= 0 && w < 4) {
+#if FELUCCA_STATTIC
+            /* Route native GLO track order through the same bar queue. */
+            uint32_t logical=stattic_home_role((uint32_t)w),white=0,key=0;
+            for(;;key++){if(punch_key(key)>=0){if(white++==logical)break;}}
+            stattic_ms_key(key,1);
+#else
             trk[w].p[P_MUTE] = (int16_t)!trk[w].p[P_MUTE];
+#endif
         } else if (w >= 4 && w < 8) {
+#if FELUCCA_STATTIC
+            uint32_t logical=stattic_home_role((uint32_t)w-4u),black=0,key=0;
+            for(;;key++){if(punch_key(key)<0){if(black++==logical)break;}}
+            stattic_ms_key(key,1);
+#else
             song.solo ^= (uint8_t)(1u << (w - 4));
+#endif
         } else if (w == 8) {
             fill_held = 1;                                  /* FILL while held */
         } else if (w == 9) {
@@ -562,7 +575,7 @@ UI_SMALL static void layer_knobs(uint32_t layer)
             }
             break;
         case LY_MIX: {
-            int16_t *lv = k == TRK_DRUM ? &song.g[G_DRLVL] : &trk[k].p[P_LEVEL];
+            int16_t *lv = FELUCCA_STATTIC?&trk[k].p[P_LEVEL]:k == TRK_DRUM ? &song.g[G_DRLVL] : &trk[k].p[P_LEVEL];
             *lv = (int16_t)clamp(*lv + accel(EN_K1 + k, s, 127), 0, 127);
             break;
         }

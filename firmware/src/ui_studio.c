@@ -372,7 +372,7 @@ UI_SMALL static void drum_screen_draw(void)
     {
         char st[16], nm[9];
         const char *style = DRUM_KIT_STYLES[kit];
-        if (kit >= DRUM_SYN) {                          /* SYN1..4: the name you gave it (editor DRUM SYNTH) */
+        if (kit >= DRUM_SYN && kit < DRUM_STATTIC) {                          /* SYN1..4: the name you gave it (editor DRUM SYNTH) */
             memcpy(nm, dsu_kit(kit - DRUM_SYN)->name, 8);
             nm[8] = 0;
             if (nm[0])
@@ -688,7 +688,13 @@ UI_SMALL static void drum_screen_input(uint32_t pressed, uint32_t home, uint32_t
             return;
         }
     }
-    if ((s = panel_enc(EN_PRESET))) TDRUM->p[P_E0] = (int16_t)clamp(TDRUM->p[P_E0] + s, 0, DRUM_KITS - 1);
+    if ((s = panel_enc(EN_PRESET))) {
+#if FELUCCA_STATTIC
+                stattic_prepare(TRK_DRUM,1);
+#else
+                TDRUM->p[P_E0] = (int16_t)clamp(TDRUM->p[P_E0] + s, 0, DRUM_KITS - 1);
+#endif
+            }
     for (k = 0; k < 4u; k++) if ((s = panel_enc(EN_K1 + k))) {
         ui.hot_col = (uint8_t)k;
         ui.hot_t = 40;
@@ -738,7 +744,13 @@ UI_SMALL static void drum_screen_input(uint32_t pressed, uint32_t home, uint32_t
             }
             if (k == 3) song.g[G_DRLVL] = (int16_t)clamp(song.g[G_DRLVL] + s, 0, 127);
         } else {
-            if (k == 0) TDRUM->p[P_E0] = (int16_t)clamp(TDRUM->p[P_E0] + s, 0, DRUM_KITS - 1);
+            if (k == 0) {
+#if FELUCCA_STATTIC
+                stattic_prepare(TRK_DRUM,1);
+#else
+                TDRUM->p[P_E0] = (int16_t)clamp(TDRUM->p[P_E0] + s, 0, DRUM_KITS - 1);
+#endif
+            }
             if (k == 1) song.g[G_DRLVL] = (int16_t)clamp(song.g[G_DRLVL] + s, 0, 127);
             if (k == 2) song.g[G_DRREV] = (int16_t)clamp(song.g[G_DRREV] + s, 0, 127);
             if (k == 3) TDRUM->p[P_PAN] = (int16_t)clamp(TDRUM->p[P_PAN] + s, -64, 63);

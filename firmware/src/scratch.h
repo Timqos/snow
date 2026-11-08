@@ -11,7 +11,7 @@
 #pragma once
 #include <stdint.h>
 static union {
-    uint8_t st[4096 - 256];                  /* ST_PAYLOAD_MAX (storage.c) */
+    uint8_t st[(FELUCCA_STATTIC ? 12288u : 4096u) - 256u]; /* ST_PAYLOAD_MAX */
     int16_t vis[2][512];                     /* VIS_FFT (ui_vis.c): left, right */
     int16_t snap[512];                       /* SCOPE_N (ui_draw.c) */
 } main_scratch __attribute__((aligned(4)));

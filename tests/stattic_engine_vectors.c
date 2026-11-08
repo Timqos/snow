@@ -20,6 +20,7 @@ static uint64_t hword(uint64_t h, uint32_t v)
     return h;
 }
 
+static FILE *drum_dump;
 static void vector(uint32_t role,uint32_t preset,uint32_t variant)
 {
     memset(trk,0,sizeof trk);memset(&song,0,sizeof song);
@@ -52,6 +53,7 @@ static void vector(uint32_t role,uint32_t preset,uint32_t variant)
     snow_note_on(t,v);
     uint64_t h=UINT64_C(14695981039346656037);
     uint32_t peak=0,frames=role==5u&&!variant?FS*5u:16384u;
+    if(drum_dump)frames=FS/2u;
     int32_t last=0;
     for(uint32_t at=0;at<frames;at+=CTL){
         if(at>=4096u)v->gate=0;
@@ -62,6 +64,7 @@ static void vector(uint32_t role,uint32_t preset,uint32_t variant)
         for(uint32_t i=0;i<CTL;i++){
             uint32_t a=out[i]<0?0u-(uint32_t)out[i]:(uint32_t)out[i];
             if(a>peak)peak=a;h=hword(h,(uint32_t)out[i]);
+            if(drum_dump&&at+i<frames){int16_t sample=(int16_t)clamp(out[i],-32767,32767);fwrite(&sample,2,1,drum_dump);}
         }
     }
     for(uint32_t i=0;i<3;i++)h=hword(h,v->ph[i]);
@@ -69,8 +72,13 @@ static void vector(uint32_t role,uint32_t preset,uint32_t variant)
     printf("%u %u %u %016llx %u %u\n",role,preset,variant,(unsigned long long)h,peak,snow_done(t,v));
 }
 
-int main(void)
+int main(int argc,char **argv)
 {
+    if(argc==2){
+        drum_dump=fopen(argv[1],"wb");if(!drum_dump)return 2;
+        for(uint32_t r=0;r<4;r++)for(uint32_t p=0;p<10;p++)vector(r,p,0);
+        return fclose(drum_dump)!=0;
+    }
     for(uint32_t r=0;r<6;r++)for(uint32_t p=0;p<10;p++)vector(r,p,0);
     for(uint32_t r=0;r<6;r++)for(uint32_t v=1;v<=36;v++)vector(r,0,v);
     return 0;

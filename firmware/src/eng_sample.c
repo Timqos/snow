@@ -19,6 +19,9 @@ typedef struct {
     uint16_t z0, nz;
 } smp_set_t;
 #include "felucca_samples.h"
+#if FELUCCA_STATTIC
+#include "stattic_drum_catalog.h"
+#endif
 
 static const int16_t IMA_STEP[89] = {
     7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97,
@@ -43,8 +46,8 @@ static uint32_t pow2_q16(int32_t d16)
 #define SMP_USER_SLOTS 4
 #define SMP_USER_BASE 0xA0000u                      /* USR1..USR3: 0xA0000..0xDBFFF */
 #define SMP_USER4_BASE 0xE7000u                     /* USR4 (2.4): the free flash after the FM6 bank, 0xE7000..0xFAFFF */
-#define SMP_USER_SIZE 0x14000u
-#define SMP_USER_OFF(k) ((k) < 3u ? SMP_USER_BASE + (k) * SMP_USER_SIZE : SMP_USER4_BASE)
+#define SMP_USER_SIZE (FELUCCA_STATTIC ? 0xF000u : 0x14000u)
+#define SMP_USER_OFF(k) (FELUCCA_STATTIC ? SMP_USER_BASE+(k)*SMP_USER_SIZE : ((k) < 3u ? SMP_USER_BASE + (k) * SMP_USER_SIZE : SMP_USER4_BASE))
 #define SMP_USER_DATA 512u
 #define SMP_USER_MAGIC 0x504D5346u                  /* "FSMP" */
 #define SMP_NALL (SMP_NSETS + SMP_USER_SLOTS)
@@ -86,6 +89,9 @@ static void smp_user_scan(uint32_t k)
     uint32_t i, base;
     smp_user_gen++;
     usr_nz[k] = 0;                                  /* (from here no new voice takes the slot) */
+#if FELUCCA_STATTIC
+    stattic_user_catalog[k]=0;
+#endif
     slc_user_scan(k, 0);
     if (h->magic != SMP_USER_MAGIC || h->version != 1 || !h->nz || h->nz > 16u ||
         h->data_len > SMP_USER_SIZE - SMP_USER_DATA)
@@ -101,6 +107,9 @@ static void smp_user_scan(uint32_t k)
     for (i = 0; i < h->nz; i++)
         usr_zone[k][i] = zs[i];
     usr_nz[k] = h->nz;
+#if FELUCCA_STATTIC
+    stattic_user_catalog[k]=(uint8_t)(h->rsv==0x53u);
+#endif
     fm1_irq_on();
     slc_user_scan(k, 1);
 }

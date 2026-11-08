@@ -172,7 +172,7 @@ static void con_flr(const char *p)                  /* flash read over SPI (no X
 static void con_status(void)
 {
     const engine_t *e = ENGINES[TSEL->eng_req % NENGINES];
-    con_puts("felucca ");
+    con_puts(FELUCCA_STATTIC?"stattic ":"felucca ");
     con_puts(FELUCCA_VERSION);
     con_puts("\r\n");
     con_kv("uptime_ms", (int32_t)fm1_ms);
@@ -194,6 +194,30 @@ static void con_status(void)
     con_kv("sstack_free", (int32_t)stack_free_sup());    /* its supervisor stack (8 KB) */
     con_kx("sp", stack_sp());                           /* where the main loop runs now: which of the two regions */
     con_kv("audio_max_us", (int32_t)felucca_dbg.max_us);
+#if FELUCCA_STATTIC
+    __typeof__(stattic_profile) profile;
+    uint32_t guard=STATTIC_GUARD_SAVE();memcpy(&profile,&stattic_profile,sizeof profile);STATTIC_GUARD_RESTORE(guard);
+    con_kv("diag_schema",3);con_kv("audio_half_us",HALF_FRAMES*1000000u/FS);
+    con_kv("audio_last_us",(int32_t)felucca_dbg.last_us);con_kv("audio_late",(int32_t)felucca_dbg.late);
+    con_kv("profile_halves",(int32_t)profile.halves);
+    con_kv("late_snapshot_count",(int32_t)profile.bad_count);con_kv("late_wall_us",(int32_t)profile.bad_wall);
+    con_kv("late_nested_us",(int32_t)profile.bad_nested);con_kv("late_events_us",(int32_t)profile.bad_events);con_kv("late_buses_us",(int32_t)profile.bad_buses);
+    con_kv("late_ch_synth_us",(int32_t)(profile.bad[2][0]/FM1_TICKS_PER_US));
+    con_kv("late_ch_fx_us",(int32_t)(profile.bad[2][1]/FM1_TICKS_PER_US));
+    con_kv("late_bs_total_us",(int32_t)(profile.bad[0][2]/FM1_TICKS_PER_US));
+    con_kv("late_sy_total_us",(int32_t)(profile.bad[1][2]/FM1_TICKS_PER_US));
+    con_kv("late_dr_total_us",(int32_t)(profile.bad[3][2]/FM1_TICKS_PER_US));
+    con_kv("events_last_us",(int32_t)(profile.events_last/FM1_TICKS_PER_US));
+    con_kv("events_max_us",(int32_t)(profile.events_max/FM1_TICKS_PER_US));
+    con_kv("buses_last_us",(int32_t)(profile.buses_last/FM1_TICKS_PER_US));
+    con_kv("buses_max_us",(int32_t)(profile.buses_max/FM1_TICKS_PER_US));
+    static const char *const labels[4][3]={{"bs_synth_us","bs_fx_us","bs_total_us"},{"sy_synth_us","sy_fx_us","sy_total_us"},{"ch_synth_us","ch_fx_us","ch_total_us"},{"dr_player_us","dr_fx_us","dr_total_us"}};
+    static const char *const peaks[4][3]={{"bs_synth_max_us","bs_fx_max_us","bs_total_max_us"},{"sy_synth_max_us","sy_fx_max_us","sy_total_max_us"},{"ch_synth_max_us","ch_fx_max_us","ch_total_max_us"},{"dr_player_max_us","dr_fx_max_us","dr_total_max_us"}};
+    for(uint32_t k=0;k<NTRK;k++)for(uint32_t j=0;j<3;j++){
+        con_kv(labels[k][j],(int32_t)(profile.last[k][j]/FM1_TICKS_PER_US));
+        con_kv(peaks[k][j],(int32_t)(profile.max[k][j]/FM1_TICKS_PER_US));
+    }
+#endif
     con_kv("voices_shed", (int32_t)shed_count);
     con_kv("voices_given_up", (int32_t)voice_kills);
     con_kv("track", (int32_t)song.sel + 1);
@@ -311,7 +335,7 @@ static void con_exec(const char *p)
 static void cdc_task(void)                              /* main loop */
 {
     if (cdc.dtr && !con.dtr_seen) {
-        con_puts("\r\nFelucca ");
+        con_puts(FELUCCA_STATTIC?"\r\nSTATTIC ":"\r\nFelucca ");
         con_puts(FELUCCA_VERSION);
         con_puts(" console - 'help'\r\n> ");
     }

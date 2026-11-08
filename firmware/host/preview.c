@@ -11,8 +11,10 @@
 #undef memcpy
 #undef memcmp
 #include "felucca_tables.h"
+#ifndef SMP_USER_XIP
 static uint8_t user_flash[4][0x14000];
 #define SMP_USER_XIP(k) (user_flash[(k) & 3u])
+#endif
 static struct { volatile uint32_t notes, buttons; } fm1_in;
 static void fm1_irq_off(void) {}
 static void fm1_irq_on(void) {}
@@ -20,6 +22,9 @@ static void fm1_irq_on(void) {}
 #include "../src/engines.c"
 #include "../src/drums.c"
 #include "../src/params.c"
+#if FELUCCA_STATTIC
+#include "../src/stattic_mod.c"
+#endif
 #include "../src/voice.c"
 #include "../src/slicer.c"
 #include "../src/cpu1.h"                        /* (2.7) no second core in the browser: every unit renders here */
@@ -31,7 +36,13 @@ static uint32_t cpu1_ticks(void) { return 0; }
 static void fm1_delay_ms(uint32_t ms) { (void)ms; }
 #include "../src/usb.c"
 #include "../src/midi_uart.c"
+#if FELUCCA_ARRANGER
+#include "../src/arranger.c"
+#endif
 #include "../src/seq.c"
+#if FELUCCA_STATTIC
+#include "../src/stattic_runtime.c"
+#endif
 
 static uint8_t transfer[SMP_USER_SIZE];
 static int32_t block[CTL * 2];
@@ -40,7 +51,7 @@ static float output[CTL * 2];
 void preview_init(void)
 {
     uint32_t i, k;
-    memset(user_flash, 0xFF, sizeof user_flash);
+    memset(user_flash, 0xFF, SMP_USER_SLOTS*SMP_USER_SIZE);
     for (i = 0; i < G_COUNT; i++) song.g[i] = GP[i].def;
     song.g[G_SYNC] = 0;
     song.master_q12 = 4096;

@@ -180,9 +180,17 @@ UI_SMALL static void felucca_init(void)
         }
         track_defaults_steps(t);              /* the sequencers start empty */
     }
-    TDRUM->p[P_E0] = DRUM_DEFAULT_KIT;        /* the 808 kit */
+    TDRUM->p[P_E0] = DRUM_DEFAULT_KIT;
+#if FELUCCA_STATTIC
+    TDRUM->p[P_E1]=127;TDRUM->p[P_E2]=0;TDRUM->p[P_E3]=TDRUM->p[P_E4]=64;
+    stattic_macro[TRK_DRUM]=0;
+#endif
+        /* the 808 kit */
     song.sel = 0;
     song.master_q12 = 2048;
+#if FELUCCA_STATTIC
+    stattic_runtime_init();song.sel=TRK_DRUM;
+#endif
     autosave_resume();                        /* the project as it was left (project.c) */
     song.g[G_SYNC] = (int16_t)lights_sync;    /* a setting of the FM-1 (panel.c) */
     song.g[G_MIDI] = (int16_t)lights_mout;

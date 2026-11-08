@@ -558,7 +558,13 @@ UI_SMALL static void edit_param(uint32_t slot, int32_t steps)
         return;
     v = d->names == ESYNC_NAMES || d->names == N_IBITS || d->names == N_IRATE ? names_turn(d, *vp, steps)   /* (a name a detent) */
                                     : clamp(*vp + accel(EN_K1 + slot, steps, d->names ? 0 : d->max - d->min), d->min, d->max);
+#if FELUCCA_STATTIC
+    if(pg->scope!=SC_GLOBAL&&id==P_MUTE){stattic_mute_set(song.sel,(uint32_t)v);return;}
+#endif
     *vp = (int16_t)v;
+#if FELUCCA_STATTIC
+    if(pg->scope==SC_TRACK||pg->scope==SC_ENGINE)stattic_touch(TSEL,id);
+#endif
     if (pg->scope != SC_GLOBAL && p_lockable(id))
         ui.lock_par = (uint8_t)id;                        /* the SEQ layer's lock parameter: the last one touched */
     if (pg->scope != SC_GLOBAL)
@@ -1101,6 +1107,9 @@ UI_SMALL static void remote_poll(void)
     fm1_remote_btn = m;
 }
 
+#if FELUCCA_STATTIC
+#include "stattic_home_input.c"
+#endif
 UI_SMALL static void ui_input(void)
 {
     uint32_t pressed = fm1_input_edges(0), notes = fm1_input_note_edges(), now = fm1_ticks(), id, b, k;
@@ -1108,6 +1117,13 @@ UI_SMALL static void ui_input(void)
     int32_t s;
     int layered;
     enc_hold = 0;                                       /* (panel.c: every knob readable again this pass) */
+#if FELUCCA_STATTIC
+    stattic_performance_input(&pressed,&home);
+    stattic_runtime_poll();
+    if(stattic_ui_dirty){stattic_ui_dirty=0;ui.force=1;}
+    uint8_t home_ms=(uint8_t)(ui.home&&stattic_home_page==4u&&!ui.menu&&ui.layer==LY_PLAY);
+    if(home_ms!=stattic_home_ms){stattic_home_ms_reset=1;stattic_home_ms=home_ms;}
+#endif
     if (pressed || notes)
         ui_input_ms = fm1_ms;
     remote_poll();                                      /* (2.7) the buttons over MIDI */
@@ -1199,13 +1215,20 @@ UI_SMALL static void ui_input(void)
     }
 #endif
     if (home == BT_TAP) {                               /* HOME acts on release: a hold opens the menu */
+#if FELUCCA_STATTIC
+        vis_on=0;go_home();
+#else
         if (!ui.home && cur_page()->scope == SC_TRK && !vis_on)
             vis_open();                                 /* HOME on HOME: the visualiser (ui_vis.c) */
         else {
             vis_on = 0;                                 /* (HOME again: back to the TRACKS screen) */
             go_home();
         }
+#endif
     }
+#if FELUCCA_STATTIC
+    if(ui.home&&!layered&&!ui.hold_kind)stattic_home_input(&pressed);
+#endif
     cursor_fix();                                       /* LEN may have changed (knob, editor, load) */
     if (on_notes_page()) {                              /* (2.7.2) OCT+ held: the note's sheet; tapped: as before */
         uint32_t ev, ob = 1u << panel.btn[B_OCTDN];
@@ -1272,7 +1295,11 @@ UI_SMALL static void ui_input(void)
          * being edited. Every detent counts */
         uint32_t total, cur = preset_pos(&total);
         if (is_drum(TSEL))
+#if FELUCCA_STATTIC
+            (void)stattic_prepare(TRK_DRUM,1);
+#else
             TDRUM->p[P_E0] = (int16_t)clamp(TDRUM->p[P_E0] + s, 0, DRUM_KITS - 1);
+#endif
         else if (total)
             preset_go((uint32_t)(((int32_t)cur + s % (int32_t)total + (int32_t)total) % (int32_t)total));
     }

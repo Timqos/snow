@@ -34,7 +34,7 @@ enum { ED_INFO = 1, ED_GET, ED_SET, ED_DUMP, ED_DESC, ED_STEP_GET, ED_STEP_SET, 
 /* v10 (SLOOP 2.5): DSYN_LIST .. DSYN_PLAY = 72..76, editor_dsyn.c; backup object 9 = the SYN kits */
 /* v11 (SLOOP 2.7): backup object 11 = your theme (gfx.c theme_t), the editor's Theme page */
 /* v12 (SLOOP 2.7): LIVE = 77, editor_live.c: the LIVE page (transport, sections, mix keys, punch-in FX, REC, undo) */
-#define ED_PROTO 12u                                   /* the protocol version INFO ends with */
+#define ED_PROTO (FELUCCA_STATTIC?13u:12u)                                   /* the protocol version INFO ends with */
 
 static uint8_t ed_out[600];
 static uint32_t ed_n;
@@ -696,6 +696,29 @@ UI_SMALL static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes b
             return;
         ed_live(a, na);
         break;
+#if FELUCCA_STATTIC
+    case 78: /* STATTIC capabilities: positively identify the new storage map. */
+        ed_b(1);ed_b(NTRK);ed_b(ST_PATTERNS);ed_b(NSTEP);ed_b(SMP_USER_SLOTS);ed_b(SMP_USER_SIZE/1024u);
+        ed_b(16);ed_b(0x53);ed_b(P_COUNT&127u);ed_b(P_COUNT>>7);ed_b(P_E0&127u);ed_b(P_E0>>7);
+        ed_b(song.playing);ed_b(flash_ok);ed_str(FELUCCA_VERSION,24);
+        break;
+    case 79: { /* track (4 = globals), full 14-bit parameter ID, set?, value */
+        if(na<4u||a[0]>NTRK)return;
+        uint32_t k=a[0],id=(uint32_t)a[1]|(uint32_t)a[2]<<7;
+        if((k<NTRK&&id>=P_COUNT)||(k==NTRK&&id>=G_COUNT))return;
+        track_t *t=k<NTRK?&trk[k]:TSEL;
+        const param_desc_t *d=k<NTRK?track_desc(t,id):&GP[id];
+        int16_t *v=k<NTRK?&t->p[id]:&song.g[id];
+        if(a[3]&&na>=6u){
+            int16_t value=(int16_t)clamp(ed_rv(a+4),d->min,d->max);
+            if(k<NTRK&&id==P_MUTE)stattic_mute_set(k,value!=0);
+            else *v=value;
+            if(k<NTRK)stattic_touch(t,id);ui.force=1;
+        }
+        ed_b(k);ed_b(id&127u);ed_b(id>>7);ed_v(*v);ed_v(d->min);ed_v(d->max);ed_str(d->label,16);
+        break;
+    }
+#endif
     case ED_INFO:
         ed_str("FELUCCA " FELUCCA_VERSION, 24);
         ed_b(NENGINES);
@@ -807,7 +830,7 @@ UI_SMALL static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes b
         uint32_t rc;
         if (na < 1u || a[0] >= SMP_USER_SLOTS || !flash_ok)
             return;
-        rc = ed_smp_erase(a[0], cmd == ED_SMP_ERASE) ? 1u : 0u;
+        rc = FELUCCA_STATTIC&&ed_flash_busy()?3u:ed_smp_erase(a[0], cmd == ED_SMP_ERASE) ? 1u : 0u;
         ed_smp_open[a[0]] = (uint8_t)(cmd == ED_SMP_BEGIN && !rc);
         ed_b(a[0]);
         ed_b(rc);
@@ -819,7 +842,8 @@ UI_SMALL static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes b
             return;
         off = (uint32_t)a[1] | (uint32_t)a[2] << 7 | (uint32_t)a[3] << 14;
         len = ed_unpack7(a + 4, na - 4u, ed_smp_buf, 256u);
-        if (off < SMP_USER_DATA || (off & 0xFFu) || !len || off + len > SMP_USER_SIZE)
+        if(FELUCCA_STATTIC&&ed_flash_busy())rc=5u;
+        else if (off < SMP_USER_DATA || (off & 0xFFu) || !len || off + len > SMP_USER_SIZE)
             rc = 1;
         else if (usr_nz[a[0]] || !ed_smp_open[a[0]])
             rc = 4;                                        /* slot in use: SMP_BEGIN first (voices read it) */
@@ -840,7 +864,7 @@ UI_SMALL static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes b
         if (na < 2u || a[0] >= SMP_USER_SLOTS || !flash_ok)
             return;
         ed_b(a[0]);
-        ed_b((uint32_t)ed_smp_end(a[0], a + 1, na - 1u));
+        ed_b(FELUCCA_STATTIC&&ed_flash_busy()?4u:(uint32_t)ed_smp_end(a[0], a + 1, na - 1u));
         break;
     case ED_SMP_INFO:                                      /* -> per slot: zones (0 = empty), name, data KiB */
         ed_b(SMP_USER_SLOTS);
@@ -988,9 +1012,17 @@ UI_SMALL static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes b
             return;
         t = &trk[a[0]];
         lv = a[0] == TRK_DRUM ? &song.g[G_DRLVL] : &t->p[P_LEVEL];
+#if FELUCCA_STATTIC
+        lv = &t->p[P_LEVEL];
+#endif
         if (na >= 4u) {
             *lv = (int16_t)clamp(ed_rv(a + 1), 0, 127);
+#if FELUCCA_STATTIC
+            stattic_mute_set(a[0],a[3]!=0);
+            if(a[0]==TRK_DRUM)song.g[G_DRLVL]=*lv;
+#else
             t->p[P_MUTE] = (int16_t)(a[3] ? 1 : 0);
+#endif
             if (a[0] == TRK_DRUM)                          /* the editor's own change: no push */
                 ed_w.v[P_COUNT + G_DRLVL] = *lv;
             else

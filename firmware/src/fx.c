@@ -4,8 +4,10 @@
  * Stereo dry mix; the chorus and the reverb come back in stereo, the delay in the middle. */
 #define DLY_LEN 65536u           /* 1.49 s: 1/4 down to 41 BPM, 1/8 dotted down to 31, 1/4 dotted down to 61 (clamped below) */
 #define CHO_LEN 2048u
+#if !FELUCCA_STATTIC
 static int16_t dly_buf[DLY_LEN] __attribute__((section(".pool")));
 static int16_t cho_buf[CHO_LEN] __attribute__((section(".pool")));
+#endif
 /* the reverb: two input diffusers, then four delay lines mixed by a Hadamard matrix (a feedback delay
  * network: every echo feeds all four, so it thickens instead of ringing like a comb), damped in the
  * loop, one line slowly modulated (no metallic tone on long tails); left and right take different lines */
@@ -205,11 +207,16 @@ static uint32_t delay_samples(void)
 static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t *rev_in, int32_t *wet_l,
                      int32_t *wet_r, uint32_t n)
 {
-    uint32_t i, k, dl = delay_samples();
-    int32_t fb = song.g[G_DFDBK] * 230, col = 2000 + song.g[G_DCOLOR] * 240;
+    uint32_t i,k;
+#if !FELUCCA_STATTIC
+    uint32_t dl=delay_samples();int32_t col=2000+song.g[G_DCOLOR]*240;
+#endif
+    int32_t fb=song.g[G_DFDBK]*230;
     if (thr_dly && fb < 89 * 230)                       /* ECHO THROW: FDBK at least 70 %, gliding with it (2.6) */
         fb += ((89 * 230 - fb) * thr_dly) >> 15;
+#if !FELUCCA_STATTIC
     int32_t dmix = song.g[G_DMIX] * 258;
+#endif
     int32_t g = 17000 + song.g[G_RSIZE] * 104, lpk = 32767 - song.g[G_RDAMP] * 200;   /* loop gain (RT60 ~0.4..4 s), damping */
     int32_t frnd = rev_frz ? 128 : 0;                  /* FREEZE: what is in the lines stays there (below: no
                                                          * loss, rounded to nearest; 0: as always, bit for bit) */
@@ -228,7 +235,11 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
         dca = (ca1 - ca0) >> CTL_LOG2, dcb = (cb1 - cb0) >> CTL_LOG2;
     }
     for (i = 0; i < n; i++) {
-        int32_t yl, yr, x, a, o0, o1, o2, o3;
+        int32_t yl,yr,a,o0,o1,o2,o3;
+#if !FELUCCA_STATTIC
+        int32_t x;
+#endif
+#if !FELUCCA_STATTIC
         /* chorus: two modulated short delays, 5..15 ms, the LFO half a turn apart: left and right move apart */
         cho_buf[fx.cho_w & (CHO_LEN - 1u)] = (int16_t)clamp(cho_in[i] >> 1, -32768, 32767);
         {
@@ -249,6 +260,11 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
         x = mulq15(x << 1, dmix);
         yl += x;
         yr += x;
+#else
+        /* STATTIC has independent per-channel chorus/delay racks. Retain
+         * SLOOP's master reverb path for its native FREEZE punch-in only. */
+        yl=yr=0;
+#endif
         /* reverb: two diffusers, then the four lines */
         a = mulq15(rev_in[i], 13000);
         {
@@ -640,12 +656,12 @@ static __attribute__((noinline)) int ins_run(ins_t *s, const int16_t *p, int32_t
 /* a part's INSERT on its block b (mix_part): nothing while TYPE is OFF or MIX is 0 and faded */
 static void track_insert(track_t *t, int32_t *b, uint32_t n)
 {
-    t->ins_run = (uint8_t)ins_run(&ins[(uint32_t)(t - trk) % NPART], t->p, b, n);
+    t->ins_run = (uint8_t)ins_run(&ins[(uint32_t)(t - trk) % (FELUCCA_STATTIC?NTRK:NPART)], t->p, b, n);
 }
 /* the INSERT at rest at once (mix_part: TYPE turned OFF while the part was silent, its fade never ran) */
 static __attribute__((noinline)) void ins_rest(track_t *t)
 {
-    memset(&ins[(uint32_t)(t - trk) % NPART], 0, sizeof(ins_t));
+    memset(&ins[(uint32_t)(t - trk) % (FELUCCA_STATTIC?NTRK:NPART)], 0, sizeof(ins_t));
     t->ins_run = 0;
 }
 
@@ -667,6 +683,12 @@ static void mix_part(track_t *t, uint32_t n, mixacc_t *mx, int32_t *b)   /* into
     mix_part_run(t, n, mx, b);
     memcpy(t->p, pn, sizeof pnew[0]);
 }
+#if FELUCCA_STATTIC
+#include "stattic_dist.c"
+#include "stattic_fx.c"
+#include "stattic_duck.c"
+#include "stattic_mix.c"
+#else
 static void mix_part_run(track_t *t, uint32_t n, mixacc_t *mx, int32_t *b)
 {
     uint32_t i;
@@ -740,6 +762,8 @@ static void mix_part_run(track_t *t, uint32_t n, mixacc_t *mx, int32_t *b)
         t->peak = pk;
     }
 }
+
+#endif
 
 /* ---- DUST: the master through an old sampler and a record. G_DUST 0..127 turns up together: drive
  * into a soft clip, a lower sample rate (held samples, 44.1 -> 11 kHz), fewer bits (15 -> 8), a
@@ -836,6 +860,13 @@ static void drum_insert(int32_t *l, int32_t *r, int32_t *v, int32_t *d, uint32_t
 }
 /* the drum track with the metronome: drums_render, through the SLICER when it is on (slicer.c), then through its
  * INSERT (2.6) and the track's FILTER when they are on (into drum_buf, left, right and the two sends apart, then added) */
+#if FELUCCA_STATTIC
+static void mix_drums(uint32_t n,mixacc_t *mx)
+{
+    mix_part(TDRUM,n,mx,part_buf[mx!=&acc[0]]);
+    click_render(mx->l,mx->r,n);
+}
+#else
 static void mix_drums(uint32_t n, mixacc_t *mx)
 {
     uint32_t i;
@@ -868,6 +899,8 @@ static void mix_drums(uint32_t n, mixacc_t *mx)
     }
     click_render(mx->l, mx->r, n);                        /* the metronome: its own voice (drums.c), any kit, any mute */
 }
+
+#endif
 
 /* the units of mask into the set mx, in their order */
 static void mix_units(uint32_t mask, uint32_t n, mixacc_t *mx, int32_t *scratch)
@@ -905,9 +938,16 @@ static void cpu1_units_job(uint32_t arg)                /* core 1's job: the uni
  * less the parts that must stay here (above) */
 static uint32_t units_split(void)
 {
-    uint32_t mask = cpu1_units < 0 ? (1u << (NPART - 1u)) | U_DRUMS : (uint32_t)cpu1_units & U_ALL, k, nform = 0;
+    uint32_t mask = cpu1_units < 0 ? (1u << (NPART - 1u)) | U_DRUMS : (uint32_t)cpu1_units & U_ALL;
+#if !FELUCCA_STATTIC
+    uint32_t k;
+#endif
+#if !FELUCCA_STATTIC
+    uint32_t nform=0;
+#endif
     if (!mask)
         return 0;
+#if !FELUCCA_STATTIC
     for (k = 0; k < NPART; k++)
         nform += ENGINES[trk[k].engine] == &ENG_FORMANT;
     for (k = 0; k < NPART; k++) {
@@ -924,6 +964,11 @@ static uint32_t units_split(void)
             (e == &ENG_FORMANT && nform > 1u))
             mask &= ~(1u << k);
     }
+#else
+    /* STATTIC instruments and sampled DR own their LFO random streams.
+     * The native handoff need not move a whole CH render onto core 0 just
+     * because an LFO wraps; RATE modulation remains safe on either core. */
+#endif
     return mask;
 }
 
@@ -1187,7 +1232,14 @@ static void mix_block(int32_t *out, uint32_t n)
         thr_rev = (q & 1u) ? (thr_rev + 1928 > 32767 ? 32767 : thr_rev + 1928) : (thr_rev > 1928 ? thr_rev - 1928 : 0);
         thr_dly = (q & 2u) ? (thr_dly + 1928 > 32767 ? 32767 : thr_dly + 1928) : (thr_dly > 1928 ? thr_dly - 1928 : 0);
     }
+#if FELUCCA_STATTIC
+    uint32_t event_start=STATTIC_PROFILE_TICKS();
+#endif
     events_block(n);
+#if FELUCCA_STATTIC
+    stattic_duck_block(n);
+    stattic_profile.events_now+=STATTIC_PROFILE_TICKS()-event_start;
+#endif
     duck_block(n * (uint32_t)song.g[G_BPM]);
     c1 = cpu1_on() ? units_split() : 0;                 /* core 1's units this block */
     if (c1) {
@@ -1215,6 +1267,9 @@ static void mix_block(int32_t *out, uint32_t n)
             acc[0].sr[i] += acc[1].sr[i];
         }
     }
+#if FELUCCA_STATTIC
+    uint32_t bus_start=STATTIC_PROFILE_TICKS();
+#endif
     texture_mix(mix_l, mix_r, n);                       /* GLO > TEXTURE (2.6): the bed, dry; after both cores' units
                                                          * (what it adds does not depend on them: the same sum) */
     punch_freeze_feed(acc[0].sr, mix_l, mix_r, n);     /* punch-in FREEZE: the whole dry mix into the held reverb */
@@ -1266,4 +1321,8 @@ static void mix_block(int32_t *out, uint32_t n)
             }
         }
     }
+#if FELUCCA_STATTIC
+    stattic_profile.buses_now+=STATTIC_PROFILE_TICKS()-bus_start;
+#endif
+
 }

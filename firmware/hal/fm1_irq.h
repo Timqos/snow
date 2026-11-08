@@ -37,6 +37,17 @@ static inline uint32_t fm1_icfg(void) { uint32_t v; __asm__ volatile("%0 = icfg"
 static inline void fm1_icfg_set(uint32_t v) { __asm__ volatile("icfg = %0" ::"r"(v) : "memory"); }
 static inline void fm1_irq_off(void) { __asm__ volatile("cli" ::: "memory"); }
 static inline void fm1_irq_on(void) { __asm__ volatile("csync\n\tsti" ::: "memory"); }
+/* Bounded STATTIC main-loop publications may nest inside another guarded UI
+ * operation. Preserve ICFG's global delivery mask instead of unconditionally
+ * issuing STI at an inner return. This does not change clocks or supplies. */
+static inline uint32_t fm1_irq_guard_save(void)
+{
+    uint32_t f=fm1_icfg();fm1_icfg_set(f&~0x100u);__asm__ volatile("csync" ::: "memory");return f;
+}
+static inline void fm1_irq_guard_restore(uint32_t f)
+{
+    __asm__ volatile("csync" ::: "memory");fm1_icfg_set(f);
+}
 
 #define FM1_CRASH_MAGIC 0x43525348u          /* "CRSH" */
 typedef struct {

@@ -43,13 +43,19 @@ typedef union {
     fm6_part_t fm6;                      /* eng_fm6.c: six notes and the operator buses */
     uint32_t phys[PHYS_ARENA / 4u];      /* eng_phys.c: two SYMP slots or three small ones */
 } eng_arena_t;
+#if !FELUCCA_STATTIC
 static eng_arena_t eng_arena[NPART] __attribute__((section(".pool")));
+#endif
 static uint8_t eng_arena_own[NPART];            /* the engine + 1 whose state is in it, 0 = none */
 #ifdef ARENA_STATS
 static uint32_t eng_arena_claims, eng_arena_bad;   /* host tests: claims, accesses by an engine the part does not play */
 #endif
 static void *eng_arena_of(const track_t *t, uint32_t eng)
 {
+#if FELUCCA_STATTIC
+    (void)t;(void)eng;
+    return 0; /* only STATTIC engines are selectable; none uses a native heavy arena */
+#else
     uint32_t p = (uint32_t)(t - trk);
     if (p >= NPART)
         return 0;
@@ -65,6 +71,7 @@ static void *eng_arena_of(const track_t *t, uint32_t eng)
 #endif
     }
     return &eng_arena[p];
+#endif
 }
 
 /* fx.c units_split: rendering t this block would draw rng() (libc.c), so t stays on core 0, where the draws
@@ -72,6 +79,9 @@ static void *eng_arena_of(const track_t *t, uint32_t eng)
  * When the arena or the layout is not PHYS's yet, every slot starts over (phys_slot_of): taken as a draw */
 static int phys_render_draws(const track_t *t, int32_t model)   /* model: the MODEL this block renders with (fx.c) */
 {
+#if FELUCCA_STATTIC
+    (void)t;(void)model;return 0;
+#else
     uint32_t p = (uint32_t)(t - trk), md = (uint32_t)model % PM_COUNT, big = md == PM_SYMP, i;
     uint32_t sz = big ? PHYS_SLOT_BIG : PHYS_SLOT_SMALL;
     const uint8_t *a = (const uint8_t *)&eng_arena[p % NPART];
@@ -83,6 +93,7 @@ static int phys_render_draws(const track_t *t, int32_t model)   /* model: the MO
         if (t->v[i].active && ((const phys_slot_t *)(a + i * sz))->model != md)
             return 1;
     return 0;
+#endif
 }
 #if FELUCCA_SLICE
 #include "eng_slice.c"
@@ -91,7 +102,9 @@ static int phys_render_draws(const track_t *t, int32_t model)   /* model: the MO
 #include "eng_stattic.c"
 #endif
 
-static const engine_t *const ENGINES[NENGINES] = {&ENG_ANALOG, &ENG_DIGITAL, &ENG_PHASE, &ENG_LOFI, &ENG_SAMPLE,
+static const engine_t *const ENGINES[NENGINES] = {
+#if !FELUCCA_STATTIC
+                                                    &ENG_ANALOG, &ENG_DIGITAL, &ENG_PHASE, &ENG_LOFI, &ENG_SAMPLE,
                                                     &ENG_FORMANT, &ENG_TRIO, &ENG_DRAWBAR,   /* 7: ENGI_DRAWBAR (eng_drawbar.c) */
                                                     &ENG_GRAIN,
                                                     &ENG_FM6,    /* 9 (ENGI_FM6): always; SLICE after it (core.h) */
@@ -99,9 +112,10 @@ static const engine_t *const ENGINES[NENGINES] = {&ENG_ANALOG, &ENG_DIGITAL, &EN
 #if FELUCCA_SLICE
                                                     &ENG_SLICE,
 #endif
+#endif
 #if FELUCCA_STATTIC
                                                     &SNOW_ENG[0], &SNOW_ENG[1], &SNOW_ENG[2],
-                                                    &SNOW_ENG[3], &SNOW_ENG[4], &SNOW_ENG[5],
+                                                    &SNOW_ENG[3], &SNOW_ENG[4], &SNOW_ENG[5], &SNOW_ENG[6],
 #endif
 };
 _Static_assert(ENGI_FM6 == 9u, "ENGINES[ENGI_FM6] is FM6");
@@ -112,5 +126,9 @@ _Static_assert(ENGI_GRAIN == 8u && ENGI_PHYS == 10u && ENGI_NOISE == 11u && ENGI
 #include "preset_trim.h"
 static int16_t preset_trim(uint32_t e, uint32_t pi)
 {
+#if FELUCCA_STATTIC
+    (void)e;(void)pi;return 0;
+#else
     return e < PT_ENGINES && pi < PT_MAX ? PRESET_TRIM[e][pi] : 0;
+#endif
 }

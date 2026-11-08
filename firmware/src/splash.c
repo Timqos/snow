@@ -1,3 +1,16 @@
+/* STATTIC uses the supplied mark; native SLOOP keeps its original splash. */
+#if FELUCCA_STATTIC
+#include "stattic_logo.h"
+UI_SMALL static void sloop_splash(void)
+{
+    lcd_fill(0,0,240,240,C_BLACK);cv_begin(112,98,C_BLACK);
+    for(uint32_t y=0;y<98;y++)for(uint32_t x=0;x<112;x++)
+        if((ST_LOGO[y][x/8u]>>(7u-x%8u))&1u)cv_rect(x,y,1,1,C_WHITE);
+    cv_blit(64,39);cv_begin(240,64,C_BLACK);
+    cv_text(64,0,&FONT_L,"STATTIC",C_WHITE);
+    cv_text(56,36,&FONT_S,"0.9.0-S1 / SLOOP",RGB(160,160,160));cv_blit(0,158);
+}
+#else
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* SLOOP boot splash: the logo (tools/gen_logo.py -> sloop_logo.h: 16 colours, RLE runs of
  * (run - 1) << 4 | colour), drawn into the canvas in bands of at most 120 rows. */
@@ -64,3 +77,5 @@ UI_SMALL static void sloop_splash(void)
     cv_text(120 - text_w(&FONT_S, "based on felucca") / 2, 18, &FONT_S, "based on felucca", RGB(96, 96, 104));
     cv_blit(0, 202);
 }
+
+#endif

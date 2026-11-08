@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Detail columns: ALG W1 W2 RATIO NOISE TUNE FINE MODE PDEC PAMT FILTER RESO PW SUB MIX W3 RATIO3 FMDEC FBROUTE KEYTRACK. */
 /* Ten curated starting sounds per fixed instrument; manual synthesis remains unrestricted. */
-static const char *const SN_ROLES[STATTIC_CHANNELS]={"KICK","SNARE","HAT","PERC","BASS","CHORD"};
-static const preset_t SNOW_PATCHES[STATTIC_CHANNELS][10]={
+static const char *const SN_ROLES[STATTIC_SOUND_ROLES]={"KICK","SNARE","HAT","PERC","BASS","CHORD"};
+static const preset_t SNOW_PATCHES[STATTIC_SOUND_ROLES][10]={
  { /* KICK — varied synthesis; mostly short factory envelopes, full manual decay range. */
   {"ROUND KICK",{18,64,64,64,0,0,112,20},{0,72,0,45},0,1,FX(0,0,0,0)},
   {"HARD KNOCK",{26,64,64,64,0,12,86,62},{0,59,0,30},0,1,FX(0,0,0,0)},
@@ -76,7 +76,7 @@ static const preset_t SNOW_PATCHES[STATTIC_CHANNELS][10]={
   {"CRYSTAL KEYS",{95,64,64,64,0,45,120,8},{0,95,65,78},0,0,FX(0,0,0,0)},
  },
 };
-static const int8_t SNOW_DETAIL[STATTIC_CHANNELS][10][20]={
+static const int8_t SNOW_DETAIL[STATTIC_SOUND_ROLES][10][20]={
  {
   {0,0,0,16,2,-28,0,0,10,28,1,8,64,0,0,0,8,42,0,0},
   {0,1,0,16,4,-24,0,0,8,34,1,8,64,0,0,0,8,24,0,0},
@@ -150,4 +150,4 @@ static const int8_t SNOW_DETAIL[STATTIC_CHANNELS][10][20]={
   {2,0,0,48,0,0,0,1,28,0,1,12,64,0,0,0,23,85,0,127},
  },
 };
-static const uint8_t SNOW_CHORD[STATTIC_CHANNELS][10]={{0,0,0,0,0,0,0,0,0,0},{0,0,0,0,0,0,0,0,0,0},{0,0,0,0,0,0,0,0,0,0},{0,0,0,0,0,0,0,0,0,0},{0,0,0,0,0,0,0,0,0,0},{3,3,3,3,3,3,3,4,3,3}};
+static const uint8_t SNOW_CHORD[STATTIC_SOUND_ROLES][10]={{0,0,0,0,0,0,0,0,0,0},{0,0,0,0,0,0,0,0,0,0},{0,0,0,0,0,0,0,0,0,0},{0,0,0,0,0,0,0,0,0,0},{0,0,0,0,0,0,0,0,0,0},{3,3,3,3,3,3,3,4,3,3}};
