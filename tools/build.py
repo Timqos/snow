@@ -200,12 +200,13 @@ def build_app():
     elf = OUT / "felucca.elf"
     tc("pi32v2/bin/ld", "-T", FW / "app.ld", OUT / "crt0.o", OUT / "fm1_vec.o", OUT / "fm1_isr.o",
        OUT / "fm1_cpu1.o", OUT / "felucca.o", "-o", elf)
-    for sect in ("text.bin", "data.bin", "ramtext.bin", "c1text.bin"):
+    for sect in ("text.bin", "data.bin", "ramtext.bin", "c1text.bin", "hottext.bin"):
         (OUT / sect).unlink(missing_ok=True)
     *_, syms, dis, rt = tc_all(("common/bin/objcopy", "-O", "binary", "-j", ".text", elf, OUT / "text.bin"),
                                ("common/bin/objcopy", "-O", "binary", "-j", ".data", elf, OUT / "data.bin"),
                                ("common/bin/objcopy", "-O", "binary", "-j", ".ram_text", elf, OUT / "ramtext.bin"),
                                ("common/bin/objcopy", "-O", "binary", "-j", ".c1_text", elf, OUT / "c1text.bin"),
+                               ("common/bin/objcopy", "-O", "binary", "-j", ".hot_text", elf, OUT / "hottext.bin"),
                                ("common/bin/objdump", "-t", elf),
                                ("common/bin/objdump", "-d", elf),
                                ("common/bin/objdump", "-d", "-j", ".ram_text", elf))
@@ -216,7 +217,8 @@ def build_app():
     img = bytearray((OUT / "text.bin").read_bytes())
     # .ram_text, .c1_text (the second core's loop) and .data follow .text at their load addresses, in
     # that order; main.c copies them by words at boot
-    for sect, lname in (("ramtext.bin", "_rt_load"), ("c1text.bin", "_c1_load"), ("data.bin", "_data_load")):
+    for sect, lname in (("ramtext.bin", "_rt_load"), ("c1text.bin", "_c1_load"), ("data.bin", "_data_load"),
+                        ("hottext.bin", "_hot_load")):   # (STATTIC: the render's hot loops, copied to SRAM at boot)
         load = symv(lname)
         if load % 4:
             raise SystemExit(f"{lname} {load:#x} is not word aligned")
@@ -261,7 +263,10 @@ def check(img, syms, dis, rt):
         mm = re.search(r"^([0-9a-f]+) .*\s" + name + r"$", syms, re.M)
         return int(mm.group(1), 16) if mm else 0
     bss = sym("_bss_end") - 0x01C08000
-    pool = sym("_pool_end") - sym("_pool_start")
+    pool = sym("_pool_end") - 0x01C20000          # (the POOL region: .hot_text, then the .pool buffers)
+    hot = sym("_hot_end") - sym("_hot_start")
+    if hot:
+        notes.append(f".hot_text: {hot} B of render code run from SRAM")
     lowram = sym("_lr_end") - sym("_lr_start")    # the SRAM below the RAM region (app.ld .lowram), up to 0x01C07F00
     notes.append(f"image {len(img)} B; RAM .data+.bss {bss} B of 98304; lowram {lowram} B of "
                  f"{0x01C07F00 - sym('_lr_start')}; pool {pool} B of {0x54000}")

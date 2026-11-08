@@ -20,6 +20,9 @@
 #define STATTIC_GUARD_SAVE() fm1_irq_guard_save()
 #define STATTIC_GUARD_RESTORE(f) fm1_irq_guard_restore(f)
 #define STATTIC_PROFILE_TICKS() fm1_ticks()
+#if FELUCCA_STATTIC
+#define ST_HOT __attribute__((section(".hot_text"), noinline, used))   /* the render's hot loops: SRAM (app.ld) */
+#endif
 #include "core.h"
 #include "cpu1.h"           /* the second core's job API (defined in cpu1.c; the host tests have their own) */
 #include "engines.c"

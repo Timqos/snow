@@ -33,6 +33,12 @@ SECTIONS
     .data : { . = ALIGN(4); _data_start = .; *(.data*) *(.sdata*) . = ALIGN(4); _data_end = .; } > RAM AT > XIP
     _data_load = LOADADDR(.data);
     .bss (NOLOAD) : { _bss_start = .; *(.bss*) *(.sbss*) *(COMMON) . = ALIGN(4); _bss_end = .; } > RAM
+    /* (STATTIC rasp fix) the render's hot loops copied to SRAM at boot (main.c): code fetched from the
+     * SPI flash through the shared 32 KiB I-cache costs several cycles an instruction (X0X measured 7
+     * for a one-instruction loop); the PC guard's RAM window covers RAMTEXT up to here (_pc_ram_end) */
+    .hot_text : { . = ALIGN(4); _hot_start = .; KEEP(*(.hot_text*)) . = ALIGN(4); _hot_end = .; } > POOL AT > XIP
+    _hot_load = LOADADDR(.hot_text);
+    _pc_ram_end = _hot_end > _hot_start ? _hot_end : _rt_end;
     .pool (NOLOAD) : { _pool_start = .; *(.pool*) . = ALIGN(4); _pool_end = .; } > POOL
     /* (SLOOP 2.8.3) .noinit.c1bar (fm1_cpu1.h, one core until power-off) after the others: none of them moves */
     .noinit (NOLOAD) : { *(.noinit) *(.noinit.*) } > NOINIT

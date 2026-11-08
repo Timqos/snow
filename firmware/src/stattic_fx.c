@@ -21,7 +21,7 @@ typedef struct {
     uint8_t enabled,rv_model,running;
     uint32_t quiet;
 } snow_fx_t;
-static snow_fx_t snow_fx[NTRK] __attribute__((section(".pool")));
+static snow_fx_t snow_fx[NPART] __attribute__((section(".pool")));   /* (BS SY CH: DR has no rack; ~28 KiB back for .hot_text) */
 /* Per-channel performance processing, after the channel's stereo rack and
  * before its final pan. Zero/zero is an exact bypass for existing projects. */
 static struct { int32_t filter,width,bp[2],lp[2],wet,wgain;tsvf_t coef; } snow_mix_fx[NTRK];
@@ -39,7 +39,7 @@ static int snow_mix_begin(track_t *t)
     if(a)tsvf_coef(&snow_mix_fx[k].coef,*f<0?127*256-a*125/64:a*121/63,0);
     return a||*w;
 }
-static void snow_mix_sample(track_t *t,int32_t *l,int32_t *r)
+static ST_HOT void snow_mix_sample(track_t *t,int32_t *l,int32_t *r)
 {
     uint32_t k=(uint32_t)(t-trk);int32_t v[2]={*l,*r};
     for(uint32_t c=0;c<2;c++)if(snow_mix_fx[k].wet){
@@ -125,9 +125,10 @@ static uint32_t snow_fx_quiet_span(const snow_fx_t *s,uint32_t enabled,uint32_t 
     }
     return span;
 }
-static void snow_fx_process(track_t *t,int32_t *b,uint32_t n)
+static ST_HOT void snow_fx_process(track_t *t,int32_t *b,uint32_t n)
 {
-    snow_fx_t *s=&snow_fx[(uint32_t)(t-trk)%NTRK];const int16_t *p=t->p;
+    if(is_drum(t))return;
+    snow_fx_t *s=&snow_fx[(uint32_t)(t-trk)%NPART];const int16_t *p=t->p;
     int32_t on=!p[SN_FX_BYPASS],cm=on?p[P_CHOR]:0,dm=on?p[P_DLY]:0,rm=on?p[P_REV]:0;
     if(on&&thr_rev)rm=send_thr(rm*258,thr_rev)/258;
     int32_t tm=on?p[SN_TMIX]:0,bm=on?p[SN_BMIX]:0;

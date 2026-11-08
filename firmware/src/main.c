@@ -8,6 +8,7 @@
 extern uint32_t _data_start[], _data_end[], _data_load[], _bss_start[], _bss_end[];
 extern uint32_t _pool_start[], _pool_end[], _rt_start[], _rt_end[], _rt_load[];
 extern uint32_t _c1_start[], _c1_end[], _c1_load[];
+extern uint32_t _hot_start[], _hot_end[], _hot_load[];
 extern uint32_t _lr_start[], _lr_end[];
 
 /* .lowram (app.ld): the SRAM between the second core's loop and the boot status words at 0x01C07F00, which no
@@ -408,6 +409,8 @@ UI_SMALL void fm1_cstart(void)
         *d = *s;                                /* flash driver code that must run from RAM */
     for (s = _c1_load, d = _c1_start; d < _c1_end; s++, d++)
         *d = *s;                                /* the second core's waiting loop (fm1_cpu1.h) */
+    for (s = _hot_load, d = _hot_start; d < _hot_end; s++, d++)
+        *d = *s;                                /* (STATTIC) the render's hot loops, run from SRAM (app.ld) */
     fm1_mailbox_clear();
     fm1_guard_enable(FM1_GUARD_STACK | FM1_GUARD_WRITE | FM1_GUARD_BUS | FM1_GUARD_PC);
     fm1_boot.p3_rst = (uint8_t)p3;

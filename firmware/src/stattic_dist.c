@@ -17,19 +17,19 @@ static inline __attribute__((always_inline)) void dist_clip(track_t *t, int32_t 
         b[i] = mulq15(t->dist_lp2, mk);
     }
 }
-static __attribute__((noinline)) void dist_hard(track_t *t, int32_t *b, uint32_t n, int32_t g, int32_t k, int32_t mk)
+static ST_HOT void dist_hard(track_t *t, int32_t *b, uint32_t n, int32_t g, int32_t k, int32_t mk)
 {
     dist_clip(t, b, n, g, k, mk, IT_HARD);
 }
-static __attribute__((noinline)) void dist_fold(track_t *t, int32_t *b, uint32_t n, int32_t g, int32_t k, int32_t mk)
+static ST_HOT void dist_fold(track_t *t, int32_t *b, uint32_t n, int32_t g, int32_t k, int32_t mk)
 {
     dist_clip(t, b, n, g, k, mk, IT_FOLD);
 }
-static __attribute__((noinline)) void dist_fuzz(track_t *t, int32_t *b, uint32_t n, int32_t g, int32_t k, int32_t mk)
+static ST_HOT void dist_fuzz(track_t *t, int32_t *b, uint32_t n, int32_t g, int32_t k, int32_t mk)
 {
     dist_clip(t, b, n, g, k, mk, IT_FUZZ);
 }
-static __attribute__((noinline)) void dist_crush(track_t *t, int32_t *b, uint32_t n, int32_t d, int32_t k, int32_t mk)
+static ST_HOT void dist_crush(track_t *t, int32_t *b, uint32_t n, int32_t d, int32_t k, int32_t mk)
 {
     uint32_t s = (uint32_t)d / 11u, hm = (1u << ((uint32_t)d >> 5)) - 1u;   /* bits taken 0..11, held 1 2 4 8 */
     int32_t h = 0;
@@ -49,7 +49,7 @@ static __attribute__((noinline)) void dist_crush(track_t *t, int32_t *b, uint32_
  * (a little bias = even harmonics) -> tone low-pass that closes with drive ->
  * make-up gain (straight into tanh over the full band, it would sound like a
  * broken digital fuzz). State per part (track_t dist_*). (Skiff phase 9) DRIVE's TYPE and TONE: above */
-static void stattic_dist(track_t *t, int32_t *b, uint32_t n)
+static ST_HOT void stattic_dist(track_t *t, int32_t *b, uint32_t n)
 {
     int32_t d = t->p[P_DIST], i, g, k, mk, bias = 2400, b0;
     if (!d)

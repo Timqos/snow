@@ -26,6 +26,7 @@ static struct {
 static volatile uint8_t rev_frz;         /* punch-in FREEZE (punch.c): the reverb holds, no loss, no damping */
 static int32_t rev_l[CTL], rev_r[CTL];   /* the reverb's own return of this block (FREEZE plays it) */
 #if FELUCCA_STATTIC
+static volatile uint8_t rev_unit_done;   /* DR's unit ran the reverb this block (stattic_mix.c): mix_block does not */
 static uint8_t rev_clean;                /* every line, diffuser and damper exactly zero (fx_buses skips) */
 static uint32_t rev_quiet;               /* samples since the last nonzero write or damper state */
 #endif
@@ -81,7 +82,7 @@ typedef struct {
 #define LIM_REL 11                      /* the release after the hold: ~46 ms (12 before the hold: ~93 ms; the same loudness) */
 static lim_t lim_dac = {.env = LIM_T, .g = 32768}, lim_usb = {.env = LIM_T, .g = 32768};
 /* l, r: n (<= CTL) samples in; out: the n samples of CTL before, limited (before the knee) */
-static void lim_block(lim_t *s, int32_t *l, int32_t *r, uint32_t n)
+static ST_HOT void lim_block(lim_t *s, int32_t *l, int32_t *r, uint32_t n)
 {
     uint32_t i, w = s->w;
     int32_t pk = 0, a, g0 = s->g, g1, dg, e = s->env;
@@ -208,7 +209,7 @@ static uint32_t delay_samples(void)
 /* process the three buses for one block; sends in, wet out (stereo). The LFOs (chorus, reverb line)
  * are computed per block and ramped: no sine per sample */
 #define HALF0(v) ((v) >= 0 ? (v) >> 1 : -(-(v) >> 1))   /* v / 2 towards zero */
-static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t *rev_in, int32_t *wet_l,
+static ST_HOT void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t *rev_in, int32_t *wet_l,
                      int32_t *wet_r, uint32_t n)
 {
     uint32_t i,k;
@@ -1290,7 +1291,7 @@ static void texture_mix(int32_t *l, int32_t *r, uint32_t n)
         texture_reset(src);                             /* faded out: the new source from rest */
 }
 
-static void mix_block(int32_t *out, uint32_t n)
+static ST_HOT void mix_block(int32_t *out, uint32_t n)
 {
     uint32_t i, c1;
     int32_t m0, m1, *mix_l = acc[0].l, *mix_r = acc[0].r;
@@ -1350,10 +1351,17 @@ static void mix_block(int32_t *out, uint32_t n)
     texture_mix(mix_l, mix_r, n);                       /* GLO > TEXTURE (2.6): the bed, dry; after both cores' units
                                                          * (what it adds does not depend on them: the same sum) */
     punch_freeze_feed(acc[0].sr, mix_l, mix_r, n);     /* punch-in FREEZE: the whole dry mix into the held reverb */
-    fx_buses(acc[0].sc, acc[0].sd, acc[0].sr, wet_l, wet_r, n);
-    for (i = 0; i < n; i++) {
-        mix_l[i] += wet_l[i];
-        mix_r[i] += wet_r[i];
+#if FELUCCA_STATTIC
+    if (rev_unit_done)                                  /* (the reverb ran inside DR's unit, its return added there) */
+        rev_unit_done = 0;
+    else
+#endif
+    {
+        fx_buses(acc[0].sc, acc[0].sd, acc[0].sr, wet_l, wet_r, n);
+        for (i = 0; i < n; i++) {
+            mix_l[i] += wet_l[i];
+            mix_r[i] += wet_r[i];
+        }
     }
     dust_process(mix_l, mix_r, n);
     punch_process(mix_l, mix_r, n);

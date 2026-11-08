@@ -438,6 +438,9 @@ static int trk_silent(const track_t *t)
 static volatile uint32_t fm1_ms;  /* milliseconds since boot (TIMER4-based, TIMER5 ISR in main.c) */
 #if FELUCCA_STATTIC
 #include "stattic_runtime.h"
+#ifndef ST_HOT
+#define ST_HOT                                          /* (felucca.c on the FM-1: the code runs from SRAM) */
+#endif
 #include "stattic_profile.h"
 #endif
 /* Two early failed boots -> USB recovery; recovery reset -> mask-ROM UBOOT. */

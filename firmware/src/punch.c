@@ -229,7 +229,7 @@ static void punch_freeze_feed(int32_t *rev, const int32_t *l, const int32_t *r, 
 }
 
 /* l, r: the mix before the master (fx.c mix_block), n samples, in place */
-static void punch_process(int32_t *l, int32_t *r, uint32_t n)
+static ST_HOT void punch_process(int32_t *l, int32_t *r, uint32_t n)
 {
     uint32_t i;
     int32_t want = punch.req, pstep;

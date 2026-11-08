@@ -6,8 +6,8 @@
  */
 #define SN_CH_VOICES STATTIC_CH_VOICES
 #define SN_CH_RELEASE STATTIC_CH_RELEASE
-#define SNOW_RENDER_RAM __attribute__((flatten))
-#define SNOW_WAVE_RAM
+#define SNOW_RENDER_RAM ST_HOT __attribute__((flatten))
+#define SNOW_WAVE_RAM ST_HOT
 static uint32_t stattic_env_coef(const track_t *t, uint32_t i);
 /* Exact division by 2^bits, including C's truncation of negative samples.
  * JieLi's size optimiser otherwise leaves hardware divisions in hot loops. */

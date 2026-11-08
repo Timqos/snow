@@ -2,7 +2,7 @@
 /* STATTIC's channel processors inside SLOOP's native render-unit API.
  * One scratch/accumulator per core; all effect histories remain per track. */
 static int32_t stattic_drum_tone,stattic_drum_amp=32767;
-static void mix_part_run(track_t *t,uint32_t n,mixacc_t *mx,int32_t *b)
+static ST_HOT void mix_part_run(track_t *t,uint32_t n,mixacc_t *mx,int32_t *b)
 {
     uint32_t k=(uint32_t)(t-trk),i,start=STATTIC_PROFILE_TICKS(),synth_end;
     int32_t g0=32767-t->att,g1=gain_next(t),side[CTL];
@@ -54,7 +54,7 @@ static void mix_part_run(track_t *t,uint32_t n,mixacc_t *mx,int32_t *b)
             for(i=0;i<n;i++)b[i]=0;
         }
         if(!is_drum(t))snow_fx_process(t,b,n);
-        asleep=!snow_fx[k].running;
+        asleep=is_drum(t)||!snow_fx[k%NPART].running;
     }else{
         tsvf_t fc;
         if(djf_block(&tflt[k],t->p[P_TFLT],&fc,tflt_reso()))
@@ -74,9 +74,18 @@ static void mix_part_run(track_t *t,uint32_t n,mixacc_t *mx,int32_t *b)
         }
         if(is_drum(t)){
             /* (the owner) DR has no rack of its own: its REV is a send into the shared
-             * reverb (fx_buses, as SLOOP's drums: post level, the THROW glide too) */
+             * reverb (fx_buses, as SLOOP's drums: post level, the THROW glide too).
+             * (rasp fix) The reverb runs here, inside DR's unit on whichever core has it,
+             * not on core 0 after both cores (the late halves: +400 us there); FREEZE
+             * (punch-in) still feeds and runs it after the mix (fx.c mix_block). */
             int32_t rs=t->p[SN_FX_BYPASS]?0:send_thr(t->p[P_REV]*258,thr_rev);
-            if(rs)for(i=0;i<n;i++)mx->sr[i]+=mulq15(b[i],rs);
+            if(!rev_frz){
+                int32_t snd[CTL],wl[CTL],wr[CTL];
+                for(i=0;i<n;i++)snd[i]=rs?mulq15(b[i],rs):0;
+                fx_buses(snd,snd,snd,wl,wr,n);
+                for(i=0;i<n;i++){mx->l[i]+=wl[i];mx->r[i]+=wr[i];}
+                rev_unit_done=1;
+            }else if(rs)for(i=0;i<n;i++)mx->sr[i]+=mulq15(b[i],rs);
         }else snow_fx_process(t,b,n);
     }
     int performance=snow_mix_begin(t);
@@ -88,7 +97,8 @@ static void mix_part_run(track_t *t,uint32_t n,mixacc_t *mx,int32_t *b)
     int32_t l0=t->mix_on?t->lvl:lvl,p0=t->mix_on?t->gpl:gl,q0=t->mix_on?t->gpr:gr;
     t->lvl=mix_glide(l0,lvl);t->gpl=mix_glide(p0,gl);t->gpr=mix_glide(q0,gr);t->mix_on=1;
     int32_t pk=t->peak,drum=is_drum(t);
-    if(drum&&snow_fx[k].running){snow_fx[k].running=0;for(i=0;i<CTL;i++)snow_fx[k].side[i]=0;}   /* (a rack from before) */
+    static const int32_t no_side[CTL];
+    const int32_t *rack_side=drum?no_side:snow_fx[k%NPART].side;   /* (DR: no rack) */
     /* Fully muted with no performance filter: every product below is exactly
      * 0 (MULQ12R(x, 0, 4) rounds to 0), so nothing would be added. */
     if(!g0&&!g1&&!performance)asleep=1;
@@ -96,7 +106,7 @@ static void mix_part_run(track_t *t,uint32_t n,mixacc_t *mx,int32_t *b)
         /* Steady block (no mute, duck, level or pan ramp): the same arithmetic
          * with its per-sample constants computed once. */
         int32_t gain=drum?g0:mulq15(g0,duck.g0),gk=gain>>3,pl=p0>>4,pr=q0>>4;
-        int32_t *sx=snow_fx[k].side;
+        const int32_t *sx=rack_side;
         for(i=0;i<n;i++){
             int32_t sd=sx[i]+side[i],l=b[i]+sd,r=b[i]-sd;
             if(performance)snow_mix_sample(t,&l,&r);
@@ -109,7 +119,7 @@ static void mix_part_run(track_t *t,uint32_t n,mixacc_t *mx,int32_t *b)
         asleep=1;
     }
     if(!asleep)for(i=0;i<n;i++){
-        int32_t sd=snow_fx[k].side[i]+side[i],l=b[i]+sd,r=b[i]-sd;
+        int32_t sd=rack_side[i]+side[i],l=b[i]+sd,r=b[i]-sd;
         if(performance)snow_mix_sample(t,&l,&r);
         int32_t gain=g0+(((g1-g0)*(int32_t)i)>>CTL_LOG2);
         if(!drum)gain=mulq15(gain,duck.g0+(((duck.g1-duck.g0)*(int32_t)i)>>CTL_LOG2));

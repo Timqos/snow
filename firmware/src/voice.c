@@ -918,7 +918,7 @@ static __attribute__((noinline)) void stattic_env2_tick(track_t *t, voice_t *v) 
 
 #endif
 /* render one block of a part into out (cleared here); returns the voices rendered */
-static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
+static ST_HOT uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
 {
     const engine_t *e = ENGINES[t->engine];
     const int16_t *p = t->p;
