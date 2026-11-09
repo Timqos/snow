@@ -527,6 +527,7 @@ static void trk_note_on(track_t *t, uint32_t note, uint32_t vel)
     if (trk_silent(t))
         return;                                         /* MUTE, or another track soloed */
 #if FELUCCA_STATTIC
+    stattic_scene_notes |= (uint8_t)(1u << ((uint32_t)(t - trk) & 3u));   /* (HOME's scene: its flower flashes) */
     stattic_duck_note(t,note);
 #endif
     vis_hit |= (uint8_t)(1u << ((uint32_t)(t - trk) & 3u));

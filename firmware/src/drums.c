@@ -26,6 +26,9 @@
 #define DRUM_PAIR (DRUM_USR + SMP_USER_SLOTS)   /* USR3+4: one kit in two slots (the editor splits it), ~15 s */
 #define DRUM_SYN (DRUM_PAIR + 1u)                /* SLOOP 2.5: SYN1..SYN4, your synthesised kits (drum_synth.c dsu) */
 #define DRUM_STATTIC (DRUM_SYN + DSU_N)
+#if FELUCCA_STATTIC
+static volatile uint8_t stattic_scene_notes,stattic_scene_hats;   /* (HOME's scene: the channels that played, the hats) */
+#endif
 #define DRUM_KITS (DRUM_SYN + DSU_N + (FELUCCA_STATTIC?1u:0u))
 static const char *const DRUM_KIT_NAMES[] = {"ACOUSTIC", "DEEP", "TIGHT", "BRIGHT", "DUST", DS_KIT_NAME_LIST,
                                              "USR1", "USR2", "USR3", "USR4", "USR3+4",
@@ -362,6 +365,7 @@ static void drum_on(uint32_t note, uint32_t vel)
         uint32_t lane=lane_of_note(note);
         if(note==76u||note==77u)return;
         note=LANE_NOTE[lane];
+        if(!trk_silent(TDRUM)){stattic_scene_notes|=8u;if(ST_LANE_CATEGORY[lane]==2u)stattic_scene_hats++;}
         if(stattic_pick_user(stattic_drum_pick[lane]))zid=stattic_shot_zone(stattic_drum_pick[lane],ST_LANE_CATEGORY[lane]);
         if(zid<0){stattic_micro_on(lane,note,vel);return;}   /* (2026-11-09) the synthesised micro drums */
     }else

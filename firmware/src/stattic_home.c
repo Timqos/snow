@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * STATTIC HOME: user reference pages on the native 240x240 pixel grid.
  * Dirty strips, <=20Hz, no audio-thread drawing or additional framebuffer. */
+#include "stattic_scene_draw.c"
 static uint8_t snow_home_active;
 static uint8_t stattic_overview;
 static struct { uint32_t body,head,scope_ms,body_ms,card_blits,scope_blits; } snow_home_state;
@@ -131,7 +132,8 @@ static void stattic_page_body(uint32_t page)
             cv_rect(99,65,62,30,T_THEME);stattic_text(108,71,ST_MIX_NAMES[stattic_focus[2]],T_INK,13,21,3);
             char pct[6];fmt_int(pct,(int32_t)snow_home_percent(t,ST_MIX_IDS[stattic_focus[2]]));str_cpy(pct+str_len(pct),"%",sizeof pct-str_len(pct));stattic_text(169,71,pct,T_TEXT,11,20,4);
         }
-        stattic_graph(page);
+        stattic_scene_draw(page==0u?92:99,236,T_TEXT,T_THEME,T_MID);   /* (2026-11-09) the story scene */
+        {char pg[4]="1/6";pg[0]=(char)('1'+page);pg[2]=(char)('0'+SN_HOME_COUNT);stattic_text(206,page==0u?94:101,pg,T_THEME,6,9,3);}
     }else if(page==3u){
         stattic_text(16,37,"PATTERN SW",T_THEME,12,17,10);stattic_small_icon(2,166,34);
         for(uint32_t col=0;col<NTRK;col++){
@@ -174,7 +176,7 @@ static void stattic_page_body(uint32_t page)
             char v[5];fmt_int(v,(int32_t)pct);str_cpy(v+str_len(v),"%",sizeof v-str_len(v));stattic_text(196,y,v,T_TEXT,8,17,4);
         }
     }
-    stattic_footer(page);
+    if(page>=3u)stattic_footer(page);                  /* (pages 1-3: the scene runs to the bottom, no helper) */
 }
 static void snow_home_draw(void)
 {
@@ -190,15 +192,10 @@ static void snow_home_draw(void)
         fmt_int(b,song.g[G_BPM]);stattic_text(74,15,b,T_TEXT,7,10,3);stattic_text(101,15,"BPM",T_MID,7,10,3);stattic_text(132,13,"STATTIC",T_THEME,7,12,7);
         cv_frame(201,13,22,11,T_MID);cv_rect(223,17,3,4,T_MID);int32_t batt=batt_shown();cv_rect(203,15,batt==4?18:clamp(batt,0,3)*6,7,T_TEXT);cv_blit(0,0);
     }
-    if(page<3u){                                         /* (2026-11-09, the owner) the picture runs up: a row every 0.5 s,
-                                                          * a turn's push a row every 50 ms; the knobs still pick the picture */
-        static uint32_t st_slow_ms,st_fast_ms;uint32_t period=ST_ART_PERIOD[stattic_art_pick[page]%ST_ART_COUNT];
-        if(stattic_scroll_push[page]&&fm1_ms-st_fast_ms>=50u){st_fast_ms=fm1_ms;stattic_scroll_push[page]--;stattic_scroll[page]=(stattic_scroll[page]+1u)%period;st_slow_ms=fm1_ms;}
-        else if(fm1_ms-st_slow_ms>=500u){st_slow_ms=fm1_ms;stattic_scroll[page]=(stattic_scroll[page]+1u)%period;}
-    }
+    uint32_t scene=page<3u&&stattic_scene_tick()?sc.frame:0u;(void)scene;
     uint32_t sig=stattic_palette_revision*977u+k*31u+page*65537u+t->preset*7919u+t->user*131u+stattic_revision*8179u+song.solo*11717u;
     for(uint32_t ch=0;ch<NTRK;ch++)sig=(sig^stattic_revision^(uint32_t)trk[ch].p[P_LEVEL]^(uint32_t)trk[ch].p[P_MUTE]<<16^stattic_pattern_current(ch))*16777619u;
-    if(page<3u)sig^=stattic_scroll[page]*104729u+stattic_focus[page]*349u+stattic_art_pick[page]*194713u;
+    if(page<3u)sig^=stattic_focus[page]*349u+sc.frame*2654435761u;
     if(page==SN_HOME_MIX)for(uint32_t id=0;id<4u;id++)sig=(sig^(uint32_t)t->p[ST_MIX_IDS[id]])*16777619u;
     sig^=(uint32_t)t->p[SN_PLAY_MODE]*32993u;
     if(page==SN_HOME_PROJ)sig^=(stattic_proj_sel+1u)*7703u+arrangement_ready()*1009u+(uint32_t)(live_sec+2)*97u+(uint32_t)song.playing*3u+

@@ -223,10 +223,11 @@ static uint8_t stattic_art_next(void)
     }
     uint8_t next=stattic_art_shuffle.bag[--stattic_art_shuffle.left];stattic_art_shuffle.last=next;return next;
 }
+#include "stattic_scene.c"
 static void stattic_turn(uint32_t knob,int32_t detents)
 {
     if(stattic_home_page<3u){
-        uint32_t page=stattic_home_page;stattic_focus[page]=(uint8_t)(knob&3u);
+        uint32_t page=stattic_home_page;stattic_focus[page]=(uint8_t)(knob&3u);stattic_scene_knob(knob);
         if(stattic_art_shuffle.page!=page||stattic_art_shuffle.knob!=(knob&3u)){
             stattic_art_pick[page]=stattic_art_next();stattic_art_shuffle.page=(uint8_t)page;stattic_art_shuffle.knob=(uint8_t)(knob&3u);
         }
