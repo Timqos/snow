@@ -542,7 +542,7 @@ static void proj_apply(const project_t *p, int all)
         drum_tune[i]=(int8_t)clamp(p->tune[i],-8,7);
         drum_dec[i]=(int8_t)clamp(p->decay[i],-4,3);
         uint32_t shot=p->shots[i],cat=ST_LANE_CATEGORY[i];
-        stattic_drum_pick[i]=(uint8_t)(stattic_shot_zone(shot,cat)>=0?shot:cat*10u);
+        stattic_drum_pick[i]=(uint8_t)(stattic_pick_ok(shot,cat)?shot:cat*10u);
     }
     stattic_control_mask=p->control&15u;
 #else

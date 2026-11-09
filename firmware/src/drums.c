@@ -284,6 +284,51 @@ static void __attribute__((noinline)) drum_synth_on(uint32_t note, uint32_t vel,
         ds_on(&drums.ds[i], snd, crush, note, vel, tweak ? drum_tune[ln] * 16 : 0, tweak ? (uint32_t)(drum_dec[ln] + 4) : 4u);
     }
 }
+#if FELUCCA_STATTIC
+/* (2026-11-09, the owner) STATTIC DR: a synthesised micro drum, the lane's sound built from its seed
+ * (stattic_micro_make), shaped by HOME DR K3 BEND and K4 LENGTH (64: as drawn) and a little different
+ * every hit (a few cents and the click). Each voice keeps its sound: its dsv_t points at it */
+static dsnd_t stattic_micro_snd[NDRUM];
+static uint32_t stattic_micro_jit = 0x2545f491u;
+static void __attribute__((noinline)) stattic_micro_on(uint32_t lane, uint32_t note, uint32_t vel)
+{
+    voice_t *v;
+    uint32_t i, crush, x;
+    dsnd_t *d;
+    int32_t bend = stattic_drum_macro(TDRUM, 2) - 64, len = stattic_drum_macro(TDRUM, 3) - 64, tune16;
+    if (note == 42u || note == 44u)                 /* hi-hat choke */
+        for (i = 0; i < NDRUM; i++)
+            if (drums.v[i].active && drums.v[i].note == 46u) {
+                drums.v[i].active = 0;
+                drums.tail += drums.v[i].s[7];
+            }
+    v = drum_pick(note);
+    if (v->active)
+        drums.tail += v->s[7];
+    i = (uint32_t)(v - drums.v);
+    v->note = (uint8_t)note;
+    v->vel = (uint8_t)vel;
+    v->active = 1;
+    v->s[7] = 0;
+    v->age = ++drums.age;
+    drums.synth[i] = 1;
+    drums.kit[i] = (uint8_t)DRUM_STATTIC;
+    d = &stattic_micro_snd[i];
+    crush = stattic_micro_make(d, lane, stattic_drum_pick[lane]);
+    d->decay = (uint8_t)clamp((int32_t)d->decay + len / 3, 0, 127);
+    d->ndec = (uint8_t)clamp((int32_t)d->ndec + len / 3, 0, 127);
+    if (bend > 0 && d->wave)
+        d->bend = (uint8_t)clamp((int32_t)d->bend + bend / 3, 0, 96);
+    else if (bend < 0)
+        d->bend = (uint8_t)((int32_t)d->bend * (64 + bend) / 64);
+    x = stattic_micro_jit;
+    x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+    stattic_micro_jit = x;
+    tune16 = drum_tune[lane & 15u] * 16 + (int32_t)(x % 7u) - 3;
+    d->click = (uint8_t)clamp((int32_t)d->click * (int32_t)(12u + (x >> 8) % 9u) / 16, 0, 127);
+    ds_on_one(&drums.ds[i], d, 0, crush, note, vel, tune16, (uint32_t)(drum_dec[lane & 15u] + 4));
+}
+#endif
 /* the editor's audition (editor_dsyn.c DSYN_PLAY): queued, played by the audio ISR (drum_audition_poll) */
 static volatile uint8_t dsu_aud_k, dsu_aud_lane, dsu_aud_vel;
 static void drum_audition_poll(void)
@@ -317,8 +362,8 @@ static void drum_on(uint32_t note, uint32_t vel)
         uint32_t lane=lane_of_note(note);
         if(note==76u||note==77u)return;
         note=LANE_NOTE[lane];
-        zid=stattic_shot_zone(stattic_drum_pick[lane],ST_LANE_CATEGORY[lane]);
-        if(zid<0)zid=(int32_t)ST_LANE_CATEGORY[lane]*10;
+        if(stattic_pick_user(stattic_drum_pick[lane]))zid=stattic_shot_zone(stattic_drum_pick[lane],ST_LANE_CATEGORY[lane]);
+        if(zid<0){stattic_micro_on(lane,note,vel);return;}   /* (2026-11-09) the synthesised micro drums */
     }else
 #endif
     if (kit >= DRUM_SYN) {                          /* SYN1..SYN4: your synthesised kit */

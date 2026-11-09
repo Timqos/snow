@@ -125,12 +125,12 @@ static const int16_t DS_METAL[6] = {0, 109, 163, 259, 268, 377};
 static const int8_t DK_IDX[8] = {-26, -17, -10, -4, 0, 6, 13, 21};
 static const uint16_t DK_SCALE[8] = {64, 102, 154, 205, 256, 358, 512, 768};
 /* tune16: the sound's TUNE in 1/16 semitones; dsel: its DECAY + 4 (0 .. 7) */
-static void ds_on(dsv_t *s, const dsnd_t *snd, uint32_t crush, uint32_t note, uint32_t vel, int32_t tune16, uint32_t dsel)
+/* (STATTIC 2026-11-09) one sound d, its semitone offset semi: STATTIC's micro drums build d per hit */
+static void ds_on_one(dsv_t *s, const dsnd_t *d, int32_t semi, uint32_t crush, uint32_t note, uint32_t vel, int32_t tune16,
+                      uint32_t dsel)
 {
     int32_t dk = DK_IDX[dsel & 7u];
-    int32_t semi;
-    uint32_t lane = ds_lane(note, &semi), i;
-    const dsnd_t *d = &snd[lane];
+    uint32_t i;
     memset(s, 0, sizeof *s);
     s->d = d;
     s->crush = (uint8_t)crush;
@@ -183,6 +183,12 @@ static void ds_on(dsv_t *s, const dsnd_t *snd, uint32_t crush, uint32_t note, ui
     }
     for (i = 0; i < 6u; i++)
         s->minc[i] = ds_inc(s->base16 + DS_METAL[i]);
+}
+static void ds_on(dsv_t *s, const dsnd_t *snd, uint32_t crush, uint32_t note, uint32_t vel, int32_t tune16, uint32_t dsel)
+{
+    int32_t semi;
+    uint32_t lane = ds_lane(note, &semi);
+    ds_on_one(s, &snd[lane], semi, crush, note, vel, tune16, dsel);
 }
 
 /* one CTL block of control: the envelopes' targets at its end */

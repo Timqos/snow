@@ -135,6 +135,56 @@ static void st_idm_burst(stattic_pattern_t *p,uint32_t bar,uint32_t len,uint32_t
         dstep_set(&p->drum[s+i],ln,lvl,rat);
     }
 }
+/* (2026-11-09, the owner: ambient IDM, lighter on the whole, sometimes full as before, and more kinds)
+ * A MOOD per generation: SPARSE (most often), LIGHT, or FULL (as before). The whole kit at once shares
+ * one (st_idm_kit_mood); a single category draws its own. SPARSE and LIGHT thin the base (the kick's
+ * downbeat and the snare's backbeat stay) and make the grids and bursts rarer; hat and percussion may
+ * take a FIGURE in place of the base: euclidean, polymetric (a cycle of 3 5 6 7 9 steps across the bar
+ * lines), a few scattered ticks, off-beat pairs, or two of its sounds answering each other */
+enum { ST_MOOD_SPARSE, ST_MOOD_LIGHT, ST_MOOD_FULL };
+static uint8_t st_idm_kit_mood=0xFFu,st_idm_mood=ST_MOOD_FULL;
+static uint32_t stattic_mood_pick(uint32_t *r)
+{
+    uint32_t x=snow_int(r,0,99);
+    return x<45u?ST_MOOD_SPARSE:x<80u?ST_MOOD_LIGHT:ST_MOOD_FULL;
+}
+static const uint8_t ST_CAT_LANES[4][8]={{0,1},{2,3,8},{4,6,4,6,5},{7,9,10,11,12,13,14,15}},ST_CAT_NL[4]={2,3,5,8};
+static uint32_t st_idm_lane(uint32_t cat,uint32_t *r){return ST_CAT_LANES[cat&3u][snow_int(r,0,ST_CAT_NL[cat&3u]-1u)];}
+static void st_idm_thin(stattic_pattern_t *p,uint32_t len,uint32_t cat,uint32_t mood,uint32_t *r)
+{
+    uint32_t drop=mood==ST_MOOD_SPARSE?(cat<2u?35u:55u):mood==ST_MOOD_LIGHT?(cat<2u?15u:30u):0u;
+    if(!drop)return;
+    for(uint32_t s=0;s<len;s++){
+        uint32_t i=s%16u;
+        if(cat==0u&&i==0u&&!((s/16u)&1u&&mood==ST_MOOD_SPARSE&&snow_prob(r,30)))continue;   /* (the downbeat; in SPARSE bars 2 and 4 may breathe) */
+        if(cat==1u&&(i==4u||i==8u||i==12u))continue;                                         /* (the backbeat) */
+        if(st_idm_has(&p->drum[s],cat)&&snow_prob(r,drop))st_idm_clear(p,s,cat);
+    }
+}
+static void st_idm_figure(stattic_pattern_t *p,uint32_t len,uint32_t cat,uint32_t mood,uint32_t *r)
+{
+    static const uint8_t cyc[5]={3,5,6,7,9};
+    uint32_t kind=snow_int(r,0,4),ln=st_idm_lane(cat,r),ln2=st_idm_lane(cat,r);
+    uint32_t k=snow_int(r,2,mood==ST_MOOD_SPARSE?4u:cat==2u?9u:6u),rot=snow_int(r,0,15);
+    uint32_t c=cyc[snow_int(r,0,4)],o=snow_int(r,0,c-1u);
+    for(uint32_t s=0;s<len;s++)st_idm_clear(p,s,cat);
+    for(uint32_t b=0;b<len;b+=16u){
+        for(uint32_t i=0;i<16u&&b+i<len;i++){
+            uint32_t at=b+i,on=0,lv=LV_SOFT,l=ln,e=(((i+rot)&15u)*k)%16u<k;
+            if(kind==0u){on=e;lv=(i&3u)?LV_GHOST:LV_SOFT;}                       /* euclidean */
+            else if(kind==1u){on=(at+o)%c==0u;lv=i?LV_SOFT:LV_NORM;}              /* polymetric */
+            else if(kind==4u){on=e;l=((i+rot)&4u)?ln2:ln;}                        /* two sounds answer */
+            if(on&&!(mood==ST_MOOD_SPARSE&&snow_prob(r,25)))dstep_set(&p->drum[at],l,lv,0);
+        }
+        if(kind==2u){                                                           /* a few scattered ticks */
+            uint32_t n=snow_int(r,1,mood==ST_MOOD_SPARSE?2u:4u);
+            for(uint32_t j=0;j<n;j++){uint32_t at=b+snow_int(r,0,15);if(at<len)dstep_set(&p->drum[at],st_idm_lane(cat,r),snow_prob(r,60)?LV_SOFT:LV_GHOST,0);}
+        }else if(kind==3u){                                                     /* off-beat pairs */
+            uint32_t n=snow_int(r,1,2);
+            for(uint32_t j=0;j<n;j++){uint32_t at=b+2u*snow_int(r,0,6)+1u;if(at+1u<len){dstep_set(&p->drum[at],ln,LV_SOFT,0);dstep_set(&p->drum[at+1u],ln,LV_GHOST,0);}}
+        }
+    }
+}
 /* one category, base + feel + grids + bursts, onto p (its lanes cleared first) */
 static void stattic_dr_place(track_t *c,stattic_pattern_t *p,uint32_t cat,uint32_t seed,uint32_t feel,uint32_t *r)
 {
@@ -152,16 +202,19 @@ static void stattic_dr_place(track_t *c,stattic_pattern_t *p,uint32_t cat,uint32
         if(alone||!idm)p->micro[i]=stattic_phrase_micro[i];
     }
     if(!idm||!dens||dens>=100u)return;
+    uint32_t mood=st_idm_mood,scale=mood==ST_MOOD_SPARSE?35u:mood==ST_MOOD_LIGHT?70u:100u;
+    if(cat>=2u&&snow_prob(r,mood==ST_MOOD_SPARSE?55u:mood==ST_MOOD_LIGHT?40u:20u))st_idm_figure(p,len,cat,mood,r);
+    else st_idm_thin(p,len,cat,mood,r);
     if(cat==0u){                                               /* kick doubles (x2), never on the downbeat */
         for(uint32_t i=1;i<len;i++)if(dstep_has(&p->drum[i],0)&&i%16u&&snow_prob(r,idm/7u))dstep_set(&p->drum[i],0,LV_SOFT,1);
         return;
     }
     for(uint32_t s=0;s+4u<=len;s+=4u)
-        if(snow_prob(r,(cat==1u?idm/6u:idm*45u/100u)))st_idm_beat(p,s,cat,lane[cat],r);
+        if(snow_prob(r,(cat==1u?idm/6u:idm*45u/100u)*scale/100u))st_idm_beat(p,s,cat,cat>=2u?st_idm_lane(cat,r):lane[cat],r);
     for(uint32_t b=0;b+16u<=len;b+=16u){
-        if(cat==1u){if(((b/16u)&1u)&&snow_prob(r,idm*2u/3u))st_idm_burst(p,b,len,cat,r);continue;}
-        if(snow_prob(r,idm*3u/5u))st_idm_burst(p,b,len,cat,r);
-        if(snow_prob(r,idm/4u))st_idm_burst(p,b,len,cat,r);
+        if(cat==1u){if(((b/16u)&1u)&&snow_prob(r,idm*2u/3u*scale/100u))st_idm_burst(p,b,len,cat,r);continue;}
+        if(snow_prob(r,idm*3u/5u*scale/100u))st_idm_burst(p,b,len,cat,r);
+        if(snow_prob(r,idm/4u*scale/100u))st_idm_burst(p,b,len,cat,r);
     }
 }
 static void st_idm_sign(const stattic_pattern_t *p,uint32_t cat,uint32_t len,uint64_t *hit,uint64_t *rat)
@@ -178,6 +231,7 @@ static void stattic_dr_make(track_t *c,stattic_pattern_t *p,uint32_t cat,uint32_
     static int8_t bestm[NSTEP] __attribute__((section(".pool"))),startm[NSTEP] __attribute__((section(".pool")));
     uint32_t len=(uint32_t)clamp(c->p[P_SLEN],1,NSTEP),bestd=0;cat&=3u;
     memcpy(start,p->drum,sizeof start);memcpy(startm,p->micro,sizeof startm);
+    st_idm_mood=(uint8_t)(st_idm_kit_mood<3u?st_idm_kit_mood:stattic_mood_pick(r));
     for(uint32_t t=0;t<6u;t++){
         if(t){memcpy(p->drum,start,sizeof start);memcpy(p->micro,startm,sizeof startm);}
         stattic_dr_place(c,p,cat,seed^t*0x9e3779b9u,feel,r);

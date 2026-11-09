@@ -156,7 +156,7 @@ static void stattic_runtime_tick(void)
         if((q->what&ST_CHANGE_SHOTS)&&k==TRK_DRUM){
             for(uint32_t l=0;l<16;l++){
                 uint8_t shot=q->value.shots[l];
-                stattic_drum_pick[l]=stattic_shot_zone(shot,ST_LANE_CATEGORY[l])>=0?shot:(uint8_t)(ST_LANE_CATEGORY[l]*10u);
+                stattic_drum_pick[l]=stattic_pick_ok(shot,ST_LANE_CATEGORY[l])?shot:(uint8_t)(ST_LANE_CATEGORY[l]*10u);
             }
             t->p[P_E0]=DRUM_STATTIC;
         }
@@ -351,7 +351,9 @@ static int stattic_prepare(uint32_t k,uint32_t knob)
         if(k==TRK_DRUM){
             memset(next.pattern.drum,0,sizeof next.pattern.drum);memset(next.pattern.micro,0,sizeof next.pattern.micro);
             uint32_t feel=stattic_feel_pick((uint32_t)clamp(candidate.p[SN_G_COMPLEX],0,100),&seed);
+            st_idm_kit_mood=(uint8_t)stattic_mood_pick(&seed);      /* (one mood for the whole kit) */
             for(uint32_t cat=0;cat<4;cat++)stattic_dr_make(&candidate,&next.pattern,cat,seed^((cat+1u)*977u),feel,&seed);
+            st_idm_kit_mood=0xFFu;
         }else{
             snow_phrase(&candidate,role,seed,next.pattern.step);
             memcpy(next.pattern.micro,stattic_phrase_micro,sizeof next.pattern.micro);

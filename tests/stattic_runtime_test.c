@@ -64,16 +64,27 @@ static void drums_catalog(void)
     init();uint8_t old[16];memcpy(old,stattic_drum_pick,sizeof old);
     assert(!stattic_prepare(TRK_DRUM,1));assert(!memcmp(old,stattic_drum_pick,sizeof old));
     stattic_runtime_tick();
-    for(uint32_t i=0;i<16;i++)assert(stattic_drum_pick[i]/10u==ST_LANE_CATEGORY[i]);
+    for(uint32_t i=0;i<16;i++)assert(stattic_pick_ok(stattic_drum_pick[i],ST_LANE_CATEGORY[i])&&!stattic_pick_user(stattic_drum_pick[i]));
     assert(memcmp(old,stattic_drum_pick,sizeof old));
     uint32_t r=123456;
     for(uint32_t attempt=0;attempt<500;attempt++){
+        uint8_t was[16];memcpy(was,stattic_drum_pick,sizeof was);
         stattic_drum_random(stattic_drum_pick,&r);
-        for(uint32_t i=0;i<16;i++)assert(stattic_shot_zone(stattic_drum_pick[i],ST_LANE_CATEGORY[i])>=0);
+        for(uint32_t i=0;i<16;i++){
+            assert(stattic_pick_ok(stattic_drum_pick[i],ST_LANE_CATEGORY[i]));
+            assert(stattic_drum_pick[i]!=was[i]);                 /* (every turn a new sound) */
+        }
     }
-    stattic_drum_pick[0]=127;drum_on(36,100);
-    assert(drums.v[0].active&&drums.v[0].s[4]>=0&&drums.v[0].s[4]<40);
-    puts("DR: category-preserving sample randomization and missing-user-shot fallback");
+    /* a seed makes the same sound every time, of its lane's category, in range */
+    for(uint32_t lane=0;lane<16;lane++)for(uint32_t pick=0;pick<256;pick+=7){
+        if(stattic_pick_user(pick))continue;
+        dsnd_t a,b;uint32_t ca=stattic_micro_make(&a,lane,pick),cb=stattic_micro_make(&b,lane,pick);
+        assert(ca==cb&&!memcmp(&a,&b,sizeof a));
+        dsnd_t f=a;dsu_fix_sound(&f);assert(!memcmp(&a,&f,sizeof a));
+    }
+    stattic_drum_pick[0]=127;drum_on(36,100);              /* a missing user shot: the synthesised sound */
+    assert(drums.v[0].active&&drums.synth[0]);
+    puts("DR: micro drum seeds: every turn new, reproducible, in range; missing user shot falls back to synth");
 }
 static void phrases(void)
 {

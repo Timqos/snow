@@ -44,6 +44,19 @@ UI_SMALL static void st_role_box(int32_t x, int32_t y, uint32_t trk_i)    /* "DR
     cv_rect(x, y, 22, 16, TE_COL[trk_i & 3u]);
     cv_text(x + 3, y, &FONT_S, ST_TRK_ROLE[trk_i & 3u], C_BLACK);
 }
+/* (2026-11-09, the owner: every window in HOME's style) HOME's inks and its dot text (stattic_home.c) */
+#define ST_TX 0xffffu                              /* HOME T_TEXT */
+#define ST_TH C_WHITE                              /* HOME T_THEME */
+#define ST_TM RGB(176, 172, 168)                   /* HOME T_MID */
+static int32_t stattic_text(int32_t x, int32_t y, const char *s, uint16_t ink, int32_t w, int32_t h, uint32_t max);
+static int32_t stattic_hint_text(int32_t x, int32_t y, const char *s, uint16_t ink);
+UI_SMALL static int32_t st_hint_w(const char *s)  /* stattic_hint_text's width: a space or a colon half a letter */
+{
+    int32_t w = 0;
+    for (; *s; s++)
+        w += *s == ' ' || *s == ':' ? 6 : 12;
+    return w;
+}
 #define CURVE st_line2
 #else
 #define CURVE cv_line
@@ -81,6 +94,19 @@ UI_SMALL static int32_t batt_shown(void)
 }
 
 /* top bar: transport, BPM, octave | USB, battery, CPU; messages replace it */
+#if FELUCCA_STATTIC
+UI_SMALL static void st_sound_name(char *pn)       /* the selected channel's sound, pn holds 16 */
+{
+    const engine_t *e = ENGINES[TSEL->eng_req % NENGINES];
+    pn[0] = 0;
+    if (is_drum(TSEL))
+        str_cpy(pn, DRUM_KIT_NAMES[drum_kit()], 16);
+    else if (user_of(TSEL) < UP_SLOTS)
+        up_name(user_of(TSEL), pn);
+    else if (e->npresets)
+        str_cpy(pn, e->presets[TSEL->preset % e->npresets].name, 16);
+}
+#endif
 UI_SMALL static void draw_head(void)
 {
     char b[16];
@@ -90,6 +116,9 @@ UI_SMALL static void draw_head(void)
     uint32_t sig = (uint32_t)song.playing * 3u + rec * 5u + (uint32_t)(song.octave + 8) * 11u + song.sel * 13131u +
                    (ui.msg_t ? str_hash(7u, ui.msg) : 0u) + (uint32_t)song.g[G_BPM] * 101u + (ui.bpm_t != 0) * 31u +
                    (uint32_t)batt_shown() * 7777u + (usb.config && !usb.suspended) * 99991u + mlu.on * 7919u;
+#if FELUCCA_STATTIC
+    sig += (clk_beat % 16u) * 1000003u + (uint32_t)TSEL->preset * 6151u + (uint32_t)TSEL->user * 92821u;
+#endif
     if (!ui.force && sig == ui.head_sig)
         return;
     ui.head_sig = sig;
@@ -99,6 +128,45 @@ UI_SMALL static void draw_head(void)
         cv_blit(0, Y_HEAD);
         return;
     }
+#if FELUCCA_STATTIC
+    {   /* (HOME's status line) play / stop, bar.beat, BPM, the sound (or OCT, LEARN), the battery */
+        int32_t lvl = batt_shown();
+        uint32_t beat = clk_beat % 16u, n;
+        char nm[16];
+        if (song.playing) {
+            cv_rect(6, 4, 2, 9, ST_TH);
+            for (i = 0; i < 5u; i++)
+                cv_rect(8 + (int32_t)i, 4 + (int32_t)i, 1, 9 - (int32_t)i * 2, ST_TH);
+        } else {
+            cv_rect(6, 4, 9, 9, ST_TM);
+        }
+        if (rec)
+            te_disc(24, 9, 4, rec == 2u ? TE_RED : C_GRAY);
+        fmt_int(b, (int32_t)(beat / 4u) + 1);
+        n = str_len(b);
+        b[n] = '.';
+        fmt_int(b + n + 1, (int32_t)(beat % 4u) + 1);
+        stattic_text(32, 5, b, ST_TX, 7, 10, 4);
+        fmt_int(b, song.g[G_BPM]);
+        x = stattic_text(70, 5, b, ui.bpm_t ? ST_TH : ST_TX, 7, 10, 3);
+        stattic_text(x, 5, "BPM", ST_TM, 7, 10, 3);
+        if (mlu.on) {
+            str_cpy(nm, "LEARN", sizeof nm);
+        } else if (song.octave) {
+            str_cpy(nm, song.octave > 0 ? "OCT+" : "OCT", sizeof nm);
+            fmt_int(nm + str_len(nm), song.octave);
+        } else {
+            st_sound_name(nm);
+        }
+        stattic_text(128, 3, nm, mlu.on ? C_AMB : ST_TH, 7, 12, 7);
+        cv_rect(201, 4, 22, 1, ST_TM); cv_rect(201, 14, 22, 1, ST_TM);
+        cv_rect(201, 4, 1, 11, ST_TM); cv_rect(222, 4, 1, 11, ST_TM);
+        cv_rect(223, 8, 3, 4, ST_TM);
+        cv_rect(203, 6, lvl >= 3 ? 18 : clamp(lvl, 0, 3) * 6, 7, lvl == 1 && batt_level() <= 1 ? TE_RED : ST_TX);
+        cv_blit(0, Y_HEAD);
+        return;
+    }
+#endif
     if (song.playing) {                               /* > play, square stop */
         for (i = 0; i < 5u; i++)
             cv_rect(4 + (int32_t)i * 2, 4 + (int32_t)i, 2, 10 - 2 * (int32_t)i, C_WHITE);
@@ -190,7 +258,7 @@ UI_SMALL static void draw_column(uint32_t c, const char *label, const char *val,
     str_cpy(key + str_len(key), u, 8);
     {
         uint32_t n = str_len(key);
-        key[n] = (char)('A' + (vc == C_WHITE) + (vc == C_DIM) * 2);
+        key[n] = (char)('A' + (vc == C_WHITE) + (vc == C_DIM) * 2 + (FELUCCA_STATTIC && ui.hot_t && c == ui.hot_col) * 4);
         key[n + 1] = (char)(' ' + (ratio < 0 ? 0 : 1 + ratio / 20));
         key[n + 2] = (char)(icon == ICON_NONE ? '~' : '!' + icon % 90u);   /* same label, other icon */
         key[n + 3] = 0;
@@ -210,6 +278,31 @@ UI_SMALL static void draw_column(uint32_t c, const char *label, const char *val,
         return;
     str_cpy(ui.col[c], key, sizeof ui.col[c]);
     cv_begin(55, Y_SEP_END - Y_LABEL, C_BLACK);         /* x 4..58: the rule at 59 stays */
+#if FELUCCA_STATTIC
+    {   /* (HOME's style) the name in the theme ink, boxed when it is the knob just turned; the value white */
+        int dim = vc == C_DIM && vc != ST_TH, hot = ui.hot_t && c == ui.hot_col;
+        int32_t lw = (int32_t)(str_len(l) < 6u ? str_len(l) : 6u) * 8;
+        if (hot && l[0]) {
+            cv_rect(0, 0, lw + 2, 13, ST_TH);
+            stattic_text(1, 1, l, C_BLACK, 6, 10, 6);
+        } else {
+            stattic_text(0, 1, l, dim ? C_DIM : ST_TH, 6, 10, 6);
+        }
+        x = stattic_text(0, Y_VALUE - Y_LABEL, v, dim ? C_DIM : ST_TX, 6, 10, 6);
+        if (u[0] && x + (int32_t)str_len(u) * 8 <= 56)
+            stattic_text(x, Y_VALUE - Y_LABEL, u, ST_TM, 6, 10, 3);
+        if (ratio >= 0) {                               /* a dotted track, a white dithered fill, a 2 px end */
+            int32_t gy = Y_GAUGE - Y_LABEL;
+            fx = ratio * gw / 1000;
+            st_dots(0, gy + 1, gw, C_DIM);
+            st_hbar(0, gy - 1, fx, 5, dim ? C_DIM : ST_TX);
+            cv_rect(fx, gy - 2, 2, 7, dim ? C_DIM : hot ? ST_TH : ST_TX);
+        }
+        (void)icon;
+        cv_blit(c * 60u + 4u, Y_LABEL);
+        return;
+    }
+#endif
     if (FELUCCA_ICONS && icon != ICON_NONE && l[0])
         cv_icon(0, 1, icon, TE_COL[c & 3u]);            /* icon rows 1..10 = the label's cap height */
     cv_text(l[0] ? LABEL_X : 0, 0, &FONT_S, l, C_GRAY);
@@ -521,7 +614,7 @@ UI_SMALL static uint32_t graph_signature(void)
         h = str_hash(str_hash(str_hash(h ^ 0x5555u, ui.focus_v), ui.focus_l), ui.focus_u);
     if (!ui.home && big_page(pg))                    /* the big values: as the columns show them */
         for (i = 0; i < 4u; i++)
-            h = str_hash(str_hash(str_hash(h ^ ui.big_c[i] * 31u, ui.big_v[i]), ui.big_l[i]), ui.big_u[i]);
+            h = str_hash(str_hash(str_hash(h ^ ui.big_c[i] * 31u ^ (uint32_t)(ui.hot_t && i == ui.hot_col) * 0x5bd1e995u, ui.big_v[i]), ui.big_l[i]), ui.big_u[i]);
     if (ui.home)
         return h ^ (ui.frame / 2u);                  /* scope: redraw every other frame */
     h ^= (uint32_t)pg->graph * 131u + TSEL->eng_req + song.sel * 7777u;
@@ -823,10 +916,21 @@ UI_SMALL static void graph_big(void)
             x0 = (240 - text_w(&FONT_L, ui.big_v[c]) - (ui.big_u[c][0] ? text_w(&FONT_S, ui.big_u[c]) + 4 : 0)) / 2;
             y0 = 30;
         }
+#if FELUCCA_STATTIC
+        if (ui.hot_t && c == ui.hot_col) {              /* (HOME's style) the name boxed when just turned, the value white */
+            cv_rect(x0 - 1, y0 + 1, (int32_t)str_len(ui.big_l[c]) * 9 + 2, 13, ST_TH);
+            stattic_text(x0, y0 + 2, ui.big_l[c], C_BLACK, 7, 10, 7);
+        } else {
+            stattic_text(x0, y0 + 2, ui.big_l[c], ui.big_c[c] == C_DIM ? C_DIM : ST_TH, 7, 10, 7);
+        }
+        x = cv_text(x0, y0 + 20, &FONT_L, ui.big_v[c], ui.big_c[c] == C_DIM ? C_DIM : ST_TX);
+        if (0)
+#endif
         cv_text(x0, y0 + 2, &FONT_S, ui.big_l[c], TE_COL[c & 3u]);
+        if (!FELUCCA_STATTIC)
         x = cv_text(x0, y0 + 20, &FONT_L, ui.big_v[c], ui.big_c[c] == C_DIM ? C_DIM : ui.big_c[c] == C_WHITE ? C_WHITE : C_HI);
         if (ui.big_u[c][0])
-            cv_text(x + 4, y0 + 34, &FONT_S, ui.big_u[c], C_GRAY);
+            cv_text(x + 4, y0 + 34, &FONT_S, ui.big_u[c], FELUCCA_STATTIC ? ST_TM : C_GRAY);
     }
 }
 
@@ -851,8 +955,13 @@ UI_SMALL static void draw_graph(void)
         graph_scope(c);
     } else if (drum_note) {                          /* a page the drum track has no use for */
         static const char *const L[2] = {"DRUM TRACK", "SEQ  TRACKS  GLO DRUMS"};
+#if FELUCCA_STATTIC
+        stattic_hint_text((240 - st_hint_w(L[0])) / 2, 22, L[0], ST_TX);   /* (HOME's style) */
+        stattic_text((240 - (int32_t)str_len(L[1]) * 8) / 2, 52, L[1], ST_TM, 6, 10, 24);
+#else
         cv_text((240 - text_w(&FONT_S, L[0])) / 2, 26, &FONT_S, L[0], C_HI);
         cv_text((240 - text_w(&FONT_S, L[1])) / 2, 52, &FONT_S, L[1], C_DIM);
+#endif
     } else {
         switch (pg->graph) {
         case GR_ADSR:
@@ -1000,9 +1109,27 @@ UI_SMALL static void draw_foot(void)
     }
     x = 4;
 #if FELUCCA_STATTIC
-    st_role_box(4, 20, song.sel);                     /* (HOME style) the channel's box, the sound, the page */
-    x = 26;
-    (void)en;
+    {   /* (HOME's style) the channel's box, the window's name, its page as HOME's PG n/5 (the sound is in the head) */
+        char tt[12], pp[8];
+        uint32_t n = 1, k = ui.home ? 1u : page_pos(&n);
+        const char *pt = ui.home ? "HOME" : pg->scope == SC_ENGINE ? e->page_title[pg->id[0] != P_E0] : pg->title;
+        str_cpy(tt, pt ? pt : pg->title, sizeof tt);
+        pp[0] = 0;
+        if (n > 1u) {
+            fmt_int(pp, (int32_t)k);
+            str_cpy(pp + str_len(pp), "/", 4);
+            fmt_int(pp + str_len(pp), (int32_t)n);
+        }
+        st_role_box(4, 21, song.sel);
+        while (tt[0] && 32 + st_hint_w(tt) > 232 - st_hint_w(pp) - 8)
+            tt[str_len(tt) - 1u] = 0;
+        stattic_hint_text(32, 22, tt, ST_TX);
+        stattic_hint_text(236 - st_hint_w(pp), 22, pp, ST_TH);
+        (void)en;
+        (void)x;
+        cv_blit(0, Y_FOOT);
+        return;
+    }
 #else
     if (FELUCCA_ICONS) {                              /* row 2: engine icon + name, preset, page */
         cv_icon(x, 21, engine_icon(ename), C_GRAY);

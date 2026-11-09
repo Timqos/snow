@@ -135,6 +135,7 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
     p[SN_MODE]=melodic?1:0;p[SN_KEYTRACK]=channel>=3u?127:0;
     p[P_VOICE]=channel==5u?V_POLY:V_MONO;
     p[P_ATK]=ss_range(&r,0,5);p[P_SUS]=0;p[P_REL]=ss_range(&r,20,55);
+    int keys_style=-1;                               /* (SY, CH: the ambient style drawn below) */
     if(channel==0u){ /* Kick: a low fundamental and a brief pitch transient. */
         int body=ss_range(&r,0,5);
         p[SN_TUNE]=ss_range(&r,-34,-22);p[SN_WAVE1]=body==4?1:0;p[SN_WAVE2]=ss_range(&r,0,1);
@@ -191,6 +192,55 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
         p[P_ATK]=ss_range(&r,0,ss_chance(&r,20)?60:6);p[P_DEC]=ss_range(&r,60,95);
         p[P_SUS]=ss_range(&r,kind==4?110:20,kind==4?127:100);p[P_REL]=ss_range(&r,30,80);
         p[P_GLIDE]=ss_range(&r,0,4);
+        /* (2026-11-09, the owner: ambient IDM. Smooth scapes, warm dark keys, short plucks and mallets,
+         * quiet glassy bells on top, short blips; as different as can be, one turn in seven keeps the
+         * wider draw above as it was). A style sets its envelope, brightness and FM; everything else stays
+         * drawn as above, so two sounds of a style still differ */
+        static const uint8_t style_w[7]={22,16,16,12,10,9,15};   /* SCAPE DARK PLUCK MALLET BELL BLIP OPEN */
+        static const int8_t style_trim[7]={-3,0,2,2,-5,3,0};      /* (SY: their loudness against each other) */
+        uint32_t x=(uint32_t)ss_range(&r,0,99);keys_style=0;
+        while(keys_style<6&&x>=style_w[keys_style]){x-=style_w[keys_style];keys_style++;}
+        static const uint8_t harm[]={16,16,32,32,48},mallet[]={48,64,64,112},bell[]={56,56,88,112,112};
+        switch(keys_style){
+        case 0:                                                  /* SCAPE: slow, smooth, dark, held */
+            p[SN_WAVE1]=ss_chance(&r,60)?0:ss_chance(&r,60)?1:5;p[SN_RATIO]=harm[ss_rand(&r)%NELEM(harm)];
+            p[P_E0]=ss_range(&r,4,30);p[P_E2]=ss_range(&r,0,30);p[SN_FMDEC]=ss_range(&r,40,90);
+            p[P_ATK]=ss_range(&r,34,92);p[P_DEC]=ss_range(&r,82,100);p[P_SUS]=ss_range(&r,100,127);p[P_REL]=ss_range(&r,64,108);
+            p[P_E6]=ss_range(&r,36,72);p[P_E5]=ss_range(&r,0,10);p[P_E7]=ss_range(&r,0,10);p[P_E4]=ss_range(&r,10,40);
+            p[SN_NOISE]=ss_chance(&r,30)?ss_range(&r,1,6):0;p[P_GLIDE]=ss_range(&r,0,14);
+            break;
+        case 1:                                                  /* DARK KEYS: warm, round */
+            p[SN_WAVE1]=ss_chance(&r,70)?0:1;p[SN_RATIO]=harm[ss_rand(&r)%NELEM(harm)];
+            p[P_E0]=ss_range(&r,14,44);p[P_E2]=ss_range(&r,30,90);p[SN_FMDEC]=ss_range(&r,60,95);
+            p[P_ATK]=ss_range(&r,0,6);p[P_DEC]=ss_range(&r,70,95);p[P_SUS]=ss_range(&r,40,100);p[P_REL]=ss_range(&r,40,80);
+            p[P_E6]=ss_range(&r,44,78);p[P_E7]=ss_range(&r,0,14);
+            break;
+        case 2:                                                  /* PLUCK: short, a bright hit falling warm */
+            p[P_E0]=ss_range(&r,20,60);p[P_E2]=ss_range(&r,70,127);p[SN_FMDEC]=ss_range(&r,40,75);
+            p[P_ATK]=ss_range(&r,0,2);p[P_DEC]=ss_range(&r,28,58);p[P_SUS]=ss_range(&r,0,24);p[P_REL]=ss_range(&r,24,55);
+            p[P_E6]=ss_range(&r,54,96);
+            break;
+        case 3:                                                  /* MALLET: marimba, vibes, kalimba */
+            p[SN_WAVE1]=0;p[SN_RATIO]=mallet[ss_rand(&r)%NELEM(mallet)];
+            p[P_E0]=ss_range(&r,12,36);p[P_E2]=ss_range(&r,90,127);p[SN_FMDEC]=ss_range(&r,30,60);
+            p[P_ATK]=0;p[P_DEC]=ss_range(&r,45,75);p[P_SUS]=ss_range(&r,0,30);p[P_REL]=ss_range(&r,30,60);
+            p[P_E6]=ss_range(&r,58,100);
+            break;
+        case 4:                                                  /* BELL: glass and tines, quiet, shining on top */
+            p[SN_WAVE1]=0;p[SN_RATIO]=bell[ss_rand(&r)%NELEM(bell)];
+            p[P_E0]=ss_range(&r,18,48);p[P_E2]=ss_range(&r,40,100);p[SN_FMDEC]=ss_range(&r,60,95);
+            p[P_ATK]=ss_range(&r,0,3);p[P_DEC]=ss_range(&r,70,98);p[P_SUS]=ss_range(&r,10,60);p[P_REL]=ss_range(&r,50,90);
+            p[P_E6]=ss_range(&r,96,124);
+            break;
+        case 5:                                                  /* BLIP: a short pure tick */
+            p[SN_WAVE1]=ss_chance(&r,60)?0:ss_chance(&r,50)?1:3;
+            p[P_E0]=ss_range(&r,0,20);p[P_E2]=ss_range(&r,40,127);
+            p[P_ATK]=0;p[P_DEC]=ss_range(&r,18,36);p[P_SUS]=0;p[P_REL]=ss_range(&r,10,30);
+            p[P_E6]=ss_range(&r,60,100);
+            break;
+        default:break;                                           /* OPEN: the draw above */
+        }
+        if(channel==6u)p[P_ED_FX]=style_trim[keys_style];
     } else { /* Bass/chord: stable note tracking, harmonic ratios, gated envelopes. */
         static const uint8_t waves[]={0,1,2,4,5};int voice=ss_range(&r,0,4);
         p[SN_ALG]=ss_chance(&r,30)?4:ss_range(&r,0,2);

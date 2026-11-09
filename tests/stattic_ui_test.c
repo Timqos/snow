@@ -41,7 +41,7 @@ int main(int argc,char **argv)
     song.solo=0;TDRUM->p[P_MUTE]=0;
     stattic_home_page=3;encs[panel.enc[EN_K2]]=1;frame();frames(2);assert(stattic_current[0]==1);
     stattic_home_page=1;encs[panel.enc[EN_K2]]=1;frame();frames(2);
-    for(uint32_t l=0;l<16;l++)assert(stattic_shot_zone(stattic_drum_pick[l],ST_LANE_CATEGORY[l])>=0);
+    for(uint32_t l=0;l<16;l++)assert(stattic_pick_ok(stattic_drum_pick[l],ST_LANE_CATEGORY[l]));
     tap(B_ENV);assert(!ui.home&&cur_page()->fam==FAM_ENV);ui.force=1;frame();ppm("stattic-env");
     tap(B_HOME);assert(ui.home);tap(B_GLO);assert(!ui.home&&cur_page()->fam==FAM_GLO);
     int16_t before=song.g[G_BPM];encs[panel.enc[EN_SELECT]]=1;frame();

@@ -25,8 +25,8 @@ int main(void)
             hash=(hash^(uint32_t)x)*UINT64_C(1099511628211);
         }
         assert(drum_kit()==DRUM_STATTIC);
-        for(uint32_t i=0;i<NDRUM;i++)assert(!drums.synth[i]);
+        for(uint32_t i=0;i<NDRUM;i++)assert(!drums.v[i].active||drums.synth[i]);   /* (2026-11-09) DR: synthesised micro drums */
     }
-    assert(audible>FS&&peak>100);printf("STATTIC four-track mix %016llx peak %u: 16 s, all generators, live chords, CH <=%u, sampled DR only\n",(unsigned long long)hash,peak,STATTIC_CH_VOICES);
+    assert(audible>FS&&peak>100);printf("STATTIC four-track mix %016llx peak %u: 16 s, all generators, live chords, CH <=%u, synthesised DR\n",(unsigned long long)hash,peak,STATTIC_CH_VOICES);
     return 0;
 }
