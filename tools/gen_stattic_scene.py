@@ -197,8 +197,8 @@ def main():
     for n in names:
         w, h, wh, ac = masks(S[n])
         assert w <= 32
-        L.append("static const uint32_t SC_%s_W[%d]={%s};" % (n, h, ",".join("0x%xu" % v for v in wh)))
-        L.append("static const uint32_t SC_%s_A[%d]={%s};" % (n, h, ",".join("0x%xu" % v for v in ac)))
+        L.append("static const uint32_t SC_%s_W[%d]={%s};" % (n, h, ",".join("%du" % v for v in wh)))
+        L.append("static const uint32_t SC_%s_A[%d]={%s};" % (n, h, ",".join("%du" % v for v in ac)))
     L.append("enum { %s, SC_COUNT };" % ", ".join("SC_" + n for n in names))
     L.append("static const st_sprite_t SC_SPRITES[SC_COUNT]={")
     for n in names:
