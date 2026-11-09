@@ -29,6 +29,7 @@ static const char *const SN_ALGS[] = {"FM PAIR","FM CHAIN","FM PAR","RING","ADDI
 static const char *const SN_WAVES[] = {"SINE","TRI","SAW","SQUARE","PULSE","ORGAN"};
 static const char *const SN_RMODELS[] = {"ROOM","HALL","PLATE"};
 static const char *const SN_MODES[] = {"HIT","GATED"};
+static const char *const SN_GKINDS[] = {"NOTES","MELODY","ALL","AMBIENT"};   /* (SN_G_KIND, EVOLVE > GENERATE) */
 static const char *const SN_FILTERS[] = {"OFF","LP","HP","BP"};
 static const char *const SN_FB_NAMES[] = {"MOD","CARRIER","CROSS"};
 static const char *const SN_L2_DST[] = {"OFF","TONE","SHAPE","SWEEP","DECAY","MIX","FEEDBACK","CUTOFF","DRIVE","PITCH","AMP"};

@@ -31,24 +31,30 @@ static uint32_t stattic_micro_make(dsnd_t *d,uint32_t lane,uint32_t pick)
 {
     uint32_t cat=ST_LANE_CATEGORY[lane&15u]&3u,h=st_mix32(pick*0x9e3779b1u^(lane+1u)*0x85ebca77u^0x5717a7u);
     uint32_t n=ST_MICRO_START[cat+1u]-ST_MICRO_START[cat],crush=0;
-    *d=ST_MICRO[ST_MICRO_START[cat]+h%n];h=st_mix32(h);
-    static const int8_t span[4]={5,7,12,12};               /* pitch: +- semitones */
-    int32_t semi=st_bits(&h,-span[cat],span[cat]),len=st_bits(&h,-10,10);
+    /* (2026-11-09, the owner: softer, less of a caricature) the chip and glitch families are left out (a square
+     * tone or the CHIP noise), and the variations are narrower: pitch, length, click, filter; no lo-fi */
+    for(uint32_t k=0;k<n;k++){
+        *d=ST_MICRO[ST_MICRO_START[cat]+(h+k)%n];
+        if(d->wave!=DW_SQUARE&&(d->src&15u)!=DN_CHIP)break;
+    }
+    h=st_mix32(h);
+    static const int8_t span[4]={3,4,6,7};                 /* pitch: +- semitones */
+    int32_t semi=st_bits(&h,-span[cat],span[cat]),len=st_bits(&h,-6,6);
     if(lane==5u)len+=18;                                    /* the open hat: longer, still a hat */
     if(lane==6u)len-=6;                                     /* the pedal hat: shorter */
     if(d->wave)d->pitch=st_u7((int32_t)d->pitch+semi);
     d->fine=(uint8_t)st_bits(&h,0,15);
-    if(d->bend)d->bend=(uint8_t)clamp((int32_t)d->bend+st_bits(&h,-6,8),0,96);
-    d->btime=st_u7((int32_t)d->btime+st_bits(&h,-6,6));
+    if(d->bend)d->bend=(uint8_t)clamp((int32_t)d->bend+st_bits(&h,-4,4),0,96);
+    d->btime=st_u7((int32_t)d->btime+st_bits(&h,-4,4));
     d->decay=st_u7((int32_t)d->decay+len);
     d->ndec=st_u7((int32_t)d->ndec+len);
-    d->click=st_u7((int32_t)d->click*st_bits(&h,8,24)/16);
-    if(d->flt&3u)d->fcut=st_u7((int32_t)d->fcut+st_bits(&h,-8,8)+(d->wave?0:semi));
-    if(d->hpf)d->hpf=st_u7((int32_t)d->hpf+st_bits(&h,-6,6)+semi/2);
+    d->click=st_u7((int32_t)d->click*st_bits(&h,9,15)/16);
+    if(d->flt&3u)d->fcut=st_u7((int32_t)d->fcut+st_bits(&h,-5,4)+(d->wave?0:semi));
+    if(d->hpf)d->hpf=st_u7((int32_t)d->hpf+st_bits(&h,-4,4)+semi/2);
     if(d->chip)d->chip=st_u7((int32_t)d->chip+semi*2);
     if(d->src&&!d->wave&&(d->src&15u)==DN_METAL)d->pitch=st_u7((int32_t)d->pitch+semi);
-    if(d->t2&&st_bits(&h,0,3)==0)d->t2=(uint8_t)clamp((int32_t)d->t2+st_bits(&h,-12,24),33,255);
-    if(st_bits(&h,0,9)==0)crush=0x13u+(uint32_t)st_bits(&h,0,2)*0x10u;   /* one in ten: a little lo-fi */
+    if(d->t2&&st_bits(&h,0,5)==0)d->t2=(uint8_t)clamp((int32_t)d->t2+st_bits(&h,-6,12),33,255);
+    (void)crush;                                            /* (no lo-fi any more) */
     return crush;
 }
 static void stattic_drum_random(uint8_t *picks,uint32_t *state)

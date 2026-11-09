@@ -71,6 +71,67 @@ static void snow_four_bars(step_t *out,uint32_t channel,uint32_t *rng,int repeat
         masks[b]=(uint32_t)snow_hits(bar,16);
     }
 }
+/* (2026-11-09, the owner: an AMBIENT generator next to the energetic one, GENERATE = AMBIENT in EVOLVE)
+ * Few, long, slow notes. BS: on the strong beats (the bar's 1, sometimes its 3), held to the next.
+ * CH: a chord a bar or two, held, now and then floated off the 1, a slow progression. SY: a sparse line,
+ * one to three long notes a bar (DENSITY), some bars resting, drawn from a few shapes: drops, a rising arc,
+ * an answer a bar later, a high echo. Bar 3 may return bar 1. Every note is tied to the next. */
+static void snow_ambient(track_t *t,uint32_t channel,uint32_t seed,step_t *out,uint32_t len,uint32_t density,uint32_t *rng)
+{
+    static const int8_t prog[8][4]={{0,5,3,4},{0,3,5,4},{0,-2,3,0},{0,4,5,3},{0,6,3,5},{0,2,5,4},{0,3,0,-2},{0,5,1,3}};
+    static const int8_t bassdeg[6]={0,0,4,-3,3,5};
+    uint32_t bars=len>=16u?len/16u:1u,blen=len>=16u?16u:len,pr=snow_int(rng,0,7),shape=snow_int(rng,0,3);
+    uint32_t chords_per=snow_prob(rng,40)?2u:1u,inv=snow_int(rng,0,2);
+    int32_t span=clamp(t->p[SN_G_SPAN],1,24),walk=(int32_t)snow_int(rng,0,4),lift=snow_prob(rng,50)?7:0;
+    for(uint32_t i=0;i<len;i++){memset(&out[i],0,sizeof out[i]);out[i].time=ST_REST;}
+    for(uint32_t b=0;b<bars;b++){
+        step_t *bar=out+b*blen;
+        if(b==2u&&bars==4u&&snow_prob(rng,35)){memcpy(bar,out,blen*sizeof *out);continue;}
+        int32_t harm=prog[pr][(b/chords_per)&3u];
+        if(channel==4u){                                         /* BS: the 1, sometimes the 3 */
+            int32_t d=snow_prob(rng,60)?harm:bassdeg[snow_int(rng,0,5)];
+            if(snow_prob(rng,92)){bar[0]=(step_t){.time=ST_NOTE,.n=1,.vel=(uint8_t)snow_int(rng,84,108)};bar[0].note[0]=(uint8_t)snow_degree(t,t->p[SN_G_BASE],d);}
+            if(blen>8u&&snow_prob(rng,15u+density/3u)){bar[8]=(step_t){.time=ST_NOTE,.n=1,.vel=(uint8_t)snow_int(rng,70,96)};bar[8].note[0]=(uint8_t)snow_degree(t,t->p[SN_G_BASE],snow_prob(rng,50)?d:d+4);}
+            else if(blen>14u&&snow_prob(rng,8)){bar[14]=(step_t){.time=ST_NOTE,.n=1,.vel=(uint8_t)snow_int(rng,60,84)};bar[14].note[0]=(uint8_t)snow_degree(t,t->p[SN_G_BASE],harm);}
+        }else if(channel==5u){                                   /* CH: a held chord a bar (or two) */
+            if(chords_per==2u&&(b&1u)&&snow_prob(rng,80))continue;
+            uint32_t at=snow_prob(rng,75)?0u:snow_int(rng,1,blen>6u?6u:blen-1u),n=t->p[SN_PLAY_MODE]?1u:snow_prob(rng,30)?4u:3u;
+            if(at>=blen)at=0;
+            bar[at]=(step_t){.time=ST_NOTE,.n=(uint8_t)n,.vel=(uint8_t)snow_int(rng,58,88)};
+            for(uint32_t k=0;k<n;k++){int32_t nd=harm+(int32_t)k*2;if(n>1u&&k<inv)nd+=7;bar[at].note[k]=(uint8_t)snow_degree(t,t->p[SN_G_BASE],nd);}
+        }else{                                                   /* SY: a sparse, slow line */
+            if(snow_prob(rng,shape==2u?(b&1u?70u:5u):18u))continue;          /* (resting bars; shape 2 answers a bar later) */
+            uint32_t want=1u+density/45u+(snow_prob(rng,30)?1u:0u),pos=snow_int(rng,0,3)*2u;
+            if(want>3u)want=3u;
+            for(uint32_t k=0;k<want&&pos<blen;k++){
+                int32_t step=shape==1u?1+(int32_t)snow_int(rng,0,1):(int32_t)snow_int(rng,0,4)-2;
+                walk=clamp(walk+step,-span,span);
+                bar[pos]=(step_t){.time=ST_NOTE,.n=1,.vel=(uint8_t)snow_int(rng,48,92)};
+                bar[pos].note[0]=(uint8_t)snow_degree(t,t->p[SN_G_BASE],harm+walk+lift);
+                if(shape==3u&&k==0u&&pos+3u<blen&&snow_prob(rng,50)){bar[pos+3u]=bar[pos];bar[pos+3u].vel=(uint8_t)(bar[pos].vel/2u+10u);bar[pos+3u].note[0]=(uint8_t)clamp(bar[pos].note[0]+12,0,120);}
+                pos+=snow_int(rng,3,want>1u?7u:10u);
+            }
+        }
+    }
+    if(len==64u){                                         /* (the second half plays, and not as the first) */
+        uint32_t first=64u,late=0;
+        for(uint32_t i=0;i<64u;i++)if(out[i].time==ST_NOTE&&out[i].n){if(first==64u)first=i;if(i>=32u)late=1;}
+        if(first==64u){first=0;out[0]=(step_t){.time=ST_NOTE,.n=1,.vel=80};out[0].note[0]=(uint8_t)snow_degree(t,t->p[SN_G_BASE],0);}
+        if(!late){out[32u+first%32u]=out[first];}
+        if(!memcmp(out,out+32,32u*sizeof *out)){
+            uint32_t at=48u;while(at<64u&&!(out[at].time==ST_NOTE&&out[at].n))at++;
+            if(at<64u)for(uint32_t k=0;k<out[at].n;k++)out[at].note[k]=(uint8_t)snow_degree(t,out[at].note[k],channel==4u?4:2);
+            else{out[56]=out[first];out[56].vel=(uint8_t)(out[first].vel*3u/4u);}
+        }
+    }
+    for(uint32_t i=0;i<len;i++)if(out[i].time==ST_NOTE&&out[i].n){        /* every note held to the next */
+        uint32_t limit=channel==6u?snow_int(rng,4,12):len;
+        for(uint32_t j=1;j<limit&&i+j<len&&out[i+j].time==ST_REST;j++){memset(&out[i+j],0,sizeof out[i+j]);out[i+j].time=ST_TIE;}
+        uint32_t human=(uint32_t)(t->p[SN_G_HUMAN]+9)/10u;
+        stattic_phrase_micro[i]=(int8_t)((int32_t)snow_int(rng,0,human*2u)-(int32_t)human);
+    }
+    (void)seed;
+}
 static void snow_phrase(track_t *t,uint32_t channel,uint32_t seed,step_t *out)
 {
     uint32_t len=(uint32_t)clamp(t->p[P_SLEN],1,NSTEP),density=(uint32_t)t->p[SN_G_DENS],kind=(uint32_t)t->p[SN_G_KIND];
@@ -80,6 +141,8 @@ static void snow_phrase(track_t *t,uint32_t channel,uint32_t seed,step_t *out)
     int preserve=kind==1u&&snow_hits(t->step,len)!=0;
     memcpy(out,t->step,sizeof t->step);
     memset(stattic_phrase_micro,0,sizeof stattic_phrase_micro);
+    if(kind==3u&&channel>=4u&&density>0u){snow_ambient(t,channel,seed,out,len,density,&rng);return;}
+    if(kind==3u)kind=2u;                               /* (AMBIENT on DR: its own generator, as ALL) */
     if(!preserve) {
         for(uint32_t i=0;i<len;i++){memset(&out[i],0,sizeof out[i]);out[i].time=ST_REST;}
         uint32_t pulses=0;

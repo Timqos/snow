@@ -324,7 +324,7 @@ static void __attribute__((noinline)) stattic_micro_on(uint32_t lane, uint32_t n
     x = stattic_micro_jit;
     x ^= x << 13; x ^= x >> 17; x ^= x << 5;
     stattic_micro_jit = x;
-    tune16 = drum_tune[lane & 15u] * 16 + (int32_t)(x % 7u) - 3;
+    tune16 = drum_tune[lane & 15u] * 16 + (int32_t)(x % 5u) - 2;
     d->click = (uint8_t)clamp((int32_t)d->click * (int32_t)(12u + (x >> 8) % 9u) / 16, 0, 127);
     ds_on_one(&drums.ds[i], d, 0, crush, note, vel, tune16, (uint32_t)(drum_dec[lane & 15u] + 4));
 }

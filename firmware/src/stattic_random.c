@@ -269,6 +269,21 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
     p[SN_L2_PHASE]=ss_range(&r,0,127);p[SN_L2_FADE]=ss_range(&r,0,63);p[SN_L2_TRIG]=ss_range(&r,0,1);
     p[P_EG2_ATK]=ss_range(&r,0,42);p[P_EG2_DEC]=ss_range(&r,40,93);p[P_EG2_SUS]=ss_range(&r,0,86);p[P_EG2_REL]=ss_range(&r,30,77);
     snow_design_fx(channel,&r,p);
+    if(channel>=5u){
+        /* (2026-11-09, the owner: atmosphere) SY and CH: each K2 sound comes with its own space, drawn wide
+         * (stattic_runtime adds the rack's sends and shapes to K2's mask on these two): SCAPE in a big room,
+         * PLUCK, BELL and BLIP into delays, the keys and mallets in between; SY's 8-bit sounds into a delay */
+        static const uint8_t rv_lo[7]={60,34,28,40,52,22,30},rv_hi[7]={110,72,62,80,98,56,74};
+        static const uint8_t dl_lo[7]={8,12,40,24,42,48,10},dl_hi[7]={42,46,84,62,88,92,60};
+        uint32_t st=keys_style<0?5u:(uint32_t)keys_style;
+        p[P_REV]=ss_range(&r,rv_lo[st],rv_hi[st]);p[P_DLY]=ss_range(&r,dl_lo[st],dl_hi[st]);
+        p[SN_RSIZE]=ss_range(&r,st==0u||st==4u?82:52,st==0u||st==4u?124:100);p[SN_RDAMP]=ss_range(&r,48,108);
+        p[SN_RPRE]=ss_range(&r,0,st==0u?44:24);p[SN_RTYPE]=ss_range(&r,0,2);
+        p[SN_DSYNC]=ss_chance(&r,70)?ss_range(&r,5,9):0;p[SN_DTIME]=ss_range(&r,18,72);
+        p[SN_DFB]=ss_range(&r,st==2u||st==4u||st==5u?38:22,st==2u||st==4u||st==5u?74:58);
+        p[SN_DCOLOR]=ss_range(&r,44,100);p[SN_DWIDTH]=ss_range(&r,48,124);
+        p[P_CHOR]=ss_range(&r,0,st==0u||st==1u?46:24);
+    }
     /* CH keeps its two-bar release, or the user's manual choice. */
     if(channel==5u)p[P_REL]=stattic_base_value(t,P_REL);
     for(uint32_t id=0;id<P_COUNT;id++)if((mask[id/32u]>>(id%32u))&1u){
@@ -335,6 +350,11 @@ static void snow_design_section(track_t *t,uint32_t channel,uint32_t family,uint
             next[P_SLPAT]=ss_range(&r,1,16);next[P_SLRATE]=ss_range(&r,0,4);next[P_SLDEPTH]=ss_range(&r,12,42);
             next[P_DKSRC]=ss_chance(&r,25)?(int16_t)((channel+(uint32_t)ss_range(&r,1,5))%NTRK+1u):0;
             next[P_DKAMT]=ss_range(&r,12,48);next[P_DKREL]=ss_range(&r,40,84);
+            if(t==TDRUM){                               /* (2026-11-09) DR's rack (shared with BS): a softer space */
+                next[P_REV]=ss_range(&r,12,40);next[P_DLY]=ss_chance(&r,55)?ss_range(&r,4,26):0;
+                if(next[P_CHOR]>30)next[P_CHOR]=ss_range(&r,0,30);
+                if(next[SN_DFB]>60)next[SN_DFB]=ss_range(&r,30,60);
+            }
             if(channel==4u){
                 /* (the owner) BS has no rack: HOME 2 K4 draws its colour and its place in the mix
                  * instead: DRIVE (type, amount, tone), an INSERT now and then, how much it sends

@@ -61,7 +61,7 @@
     [SN_G_SPAN] = PD("SPAN", F_INT, 1, 24, 7),
     [SN_G_CONTOUR] = PD("CONTOUR", F_INT, 0, 4, 0),
     [SN_G_ACCENT] = PD("ACCENT", F_PCT, 0, 100, 30),
-    [SN_G_KIND] = PD("GENERATE", F_INT, 0, 2, 2),
+    [SN_G_KIND] = PE("GENERATE", SN_GKINDS, 3),   /* (2026-11-09) 3 AMBIENT: the owner's ambient generator, the default */
     [SN_G_LIVE] = PD("EVOLVE", F_INT, 0, 3, 0),
     [SN_G_BASE] = PD("BASE NOTE", F_NOTE, 0, 127, 60),
     [SN_G_SEED_B] = PD("SEED B", F_INT, 0, 127, 17),
