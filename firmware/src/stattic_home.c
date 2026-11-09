@@ -174,6 +174,12 @@ static void snow_home_draw(void)
         fmt_int(b,song.g[G_BPM]);stattic_text(74,15,b,T_TEXT,7,10,3);stattic_text(101,15,"BPM",T_MID,7,10,3);stattic_text(132,13,"STATTIC",T_THEME,7,12,7);
         cv_frame(201,13,22,11,T_MID);cv_rect(223,17,3,4,T_MID);int32_t batt=batt_shown();cv_rect(203,15,batt==4?18:clamp(batt,0,3)*6,7,T_TEXT);cv_blit(0,0);
     }
+    if(page<3u){                                         /* (2026-11-09, the owner) the picture runs up: a row every 0.5 s,
+                                                          * a turn's push a row every 50 ms; the knobs still pick the picture */
+        static uint32_t st_slow_ms,st_fast_ms;uint32_t period=ST_ART_PERIOD[stattic_art_pick[page]%ST_ART_COUNT];
+        if(stattic_scroll_push[page]&&fm1_ms-st_fast_ms>=50u){st_fast_ms=fm1_ms;stattic_scroll_push[page]--;stattic_scroll[page]=(stattic_scroll[page]+1u)%period;st_slow_ms=fm1_ms;}
+        else if(fm1_ms-st_slow_ms>=500u){st_slow_ms=fm1_ms;stattic_scroll[page]=(stattic_scroll[page]+1u)%period;}
+    }
     uint32_t sig=stattic_palette_revision*977u+k*31u+page*65537u+t->preset*7919u+t->user*131u+stattic_revision*8179u+song.solo*11717u;
     for(uint32_t ch=0;ch<NTRK;ch++)sig=(sig^stattic_revision^(uint32_t)trk[ch].p[P_LEVEL]^(uint32_t)trk[ch].p[P_MUTE]<<16^stattic_pattern_current(ch))*16777619u;
     if(page<3u)sig^=stattic_scroll[page]*104729u+stattic_focus[page]*349u+stattic_art_pick[page]*194713u;

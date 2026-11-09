@@ -277,12 +277,16 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
         static const uint8_t dl_lo[7]={8,12,40,24,42,48,10},dl_hi[7]={42,46,84,62,88,92,60};
         uint32_t st=keys_style<0?5u:(uint32_t)keys_style;
         p[P_REV]=ss_range(&r,rv_lo[st],rv_hi[st]);p[P_DLY]=ss_range(&r,dl_lo[st],dl_hi[st]);
-        p[SN_RSIZE]=ss_range(&r,st==0u||st==4u?82:52,st==0u||st==4u?124:100);p[SN_RDAMP]=ss_range(&r,48,108);
-        p[SN_RPRE]=ss_range(&r,0,st==0u?44:24);p[SN_RTYPE]=ss_range(&r,0,2);
+        p[SN_RSIZE]=ss_range(&r,st==0u||st==4u?96:72,127);p[SN_RDAMP]=ss_range(&r,20,80);
+        p[SN_RPRE]=ss_range(&r,0,st==0u?44:28);p[SN_RTYPE]=ss_chance(&r,70)?ss_range(&r,1,2):0;   /* (longer tails) */
         p[SN_DSYNC]=ss_chance(&r,70)?ss_range(&r,5,9):0;p[SN_DTIME]=ss_range(&r,18,72);
         p[SN_DFB]=ss_range(&r,st==2u||st==4u||st==5u?38:22,st==2u||st==4u||st==5u?74:58);
         p[SN_DCOLOR]=ss_range(&r,44,100);p[SN_DWIDTH]=ss_range(&r,48,124);
         p[P_CHOR]=ss_range(&r,0,st==0u||st==1u?46:24);
+    }
+    if(channel==6u){                                     /* (2026-11-09, the owner) SY: no clicks; short sounds last ~0.4 s and more */
+        if(p[P_SUS]<40&&p[P_DEC]<82)p[P_DEC]=ss_range(&r,82,94);
+        if(p[P_REL]<62)p[P_REL]=ss_range(&r,62,80);
     }
     /* CH keeps its two-bar release, or the user's manual choice. */
     if(channel==5u)p[P_REL]=stattic_base_value(t,P_REL);
@@ -350,6 +354,12 @@ static void snow_design_section(track_t *t,uint32_t channel,uint32_t family,uint
             next[P_SLPAT]=ss_range(&r,1,16);next[P_SLRATE]=ss_range(&r,0,4);next[P_SLDEPTH]=ss_range(&r,12,42);
             next[P_DKSRC]=ss_chance(&r,25)?(int16_t)((channel+(uint32_t)ss_range(&r,1,5))%NTRK+1u):0;
             next[P_DKAMT]=ss_range(&r,12,48);next[P_DKREL]=ss_range(&r,40,84);
+            if(t==&trk[1]||t==&trk[2]){                 /* (2026-11-09, the owner) SY, CH: delay and reverb anywhere up to
+                                                         * ~90 %, the reverb's tail long (size, its longer models, less damping) */
+                next[P_DLY]=ss_range(&r,0,114);next[P_REV]=ss_range(&r,6,114);
+                next[SN_RSIZE]=ss_range(&r,80,127);next[SN_RTYPE]=ss_chance(&r,70)?ss_range(&r,1,2):0;
+                next[SN_RDAMP]=ss_range(&r,16,72);next[SN_RPRE]=ss_range(&r,0,40);next[SN_DFB]=ss_range(&r,24,80);
+            }
             if(t==TDRUM){                               /* (2026-11-09) DR's rack (shared with BS): a softer space */
                 next[P_REV]=ss_range(&r,12,40);next[P_DLY]=ss_chance(&r,55)?ss_range(&r,4,26):0;
                 if(next[P_CHOR]>30)next[P_CHOR]=ss_range(&r,0,30);

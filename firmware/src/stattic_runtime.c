@@ -230,8 +230,10 @@ static void stattic_turn(uint32_t knob,int32_t detents)
         if(stattic_art_shuffle.page!=page||stattic_art_shuffle.knob!=(knob&3u)){
             stattic_art_pick[page]=stattic_art_next();stattic_art_shuffle.page=(uint8_t)page;stattic_art_shuffle.knob=(uint8_t)(knob&3u);
         }
-        uint32_t h=ST_ART_PERIOD[stattic_art_pick[page]],steps=(uint32_t)(detents<0?-(int64_t)detents:detents);
-        stattic_scroll[page]=(stattic_scroll[page]+steps*6u)%h;
+        uint32_t steps=(uint32_t)(detents<0?-(int64_t)detents:detents);
+        /* (2026-11-09, the owner) the picture runs up on its own (stattic_home.c); a turn gives it a push of six
+         * rows a detent, played out quickly, then it goes on at its own pace */
+        stattic_scroll_push[page]=(uint8_t)(stattic_scroll_push[page]+steps*6u>48u?48u:stattic_scroll_push[page]+steps*6u);
     }
     stattic_ui_dirty=1;
 }

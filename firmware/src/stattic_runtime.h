@@ -31,6 +31,7 @@ static stattic_pattern_t stattic_banks[NTRK][ST_PATTERNS] __attribute__((section
 static stattic_change_t stattic_change[NTRK] __attribute__((section(".noinit")));
 static uint8_t stattic_current[NTRK],stattic_home_page,stattic_focus[3];
 static uint32_t stattic_origin[NTRK],stattic_scroll[3],stattic_revision;
+static uint8_t stattic_scroll_push[3];   /* (rows still to run quickly after a knob turn) */
 #include "stattic_art.h"
 static uint8_t stattic_art_pick[3]={0,1,2};
 /* (2026-11-08) ST_ART_COUNT pictures in a shuffled bag; each page shows 84 / 78 / 78 rows of one */

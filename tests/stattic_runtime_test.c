@@ -131,9 +131,9 @@ static void shuffled_art(void)
         assert(image<ST_ART_COUNT&&image!=prior);prior=image;
         if(gesture%ST_ART_COUNT==0)seen=0;
         assert(!(seen&(1u<<image)));seen|=1u<<image;
-        uint32_t old=stattic_scroll[stattic_home_page],height=ST_ART_PERIOD[image];
+        stattic_scroll_push[stattic_home_page]=0;uint32_t old=stattic_scroll[stattic_home_page];
         stattic_turn(knob,-2);assert(stattic_art_pick[stattic_home_page]==image);
-        assert(stattic_scroll[stattic_home_page]==(old+12u)%height);
+        assert(stattic_scroll[stattic_home_page]==old&&stattic_scroll_push[stattic_home_page]==12u);   /* (a push, played out by HOME) */
         assert(gesture%ST_ART_COUNT!=ST_ART_COUNT-1u||seen==(1u<<ST_ART_COUNT)-1u);
     }
     puts("HOME 1-3 art: shuffled bag of all pictures, no repeats, stable during one knob gesture, upward seamless wrap");

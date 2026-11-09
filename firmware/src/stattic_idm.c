@@ -207,6 +207,26 @@ static void stattic_dr_place(track_t *c,stattic_pattern_t *p,uint32_t cat,uint32
     else st_idm_thin(p,len,cat,mood,r);
     if(cat==0u){                                               /* kick doubles (x2), never on the downbeat */
         for(uint32_t i=1;i<len;i++)if(dstep_has(&p->drum[i],0)&&i%16u&&snow_prob(r,idm/7u))dstep_set(&p->drum[i],0,LV_SOFT,1);
+        /* (2026-11-09, the owner) now and then a short kick retrig in a triplet grid: x3 in a step (1/48, the
+         * 32nd triplet), a two-step 1/32 roll, a 16th-triplet pair (1/24), or eighth triplets (1/12); never on
+         * the downbeat, nudges only on steps the kick has alone */
+        uint32_t rolls=snow_prob(r,12u+idm/4u)?(snow_prob(r,25)?2u:1u):0u;
+        for(uint32_t k=0;k<rolls;k++){
+            uint32_t s=0,tries=0;
+            do{s=snow_int(r,1,len>4u?len-4u:1u);}while(++tries<24u&&(!(s%16u)||(!st_idm_has(&p->drum[s],0)&&snow_prob(r,70))));
+            if(!(s%16u)||s+3u>=len)continue;
+            uint32_t ln=st_idm_has(&p->drum[s],0)&&!dstep_has(&p->drum[s],0)?1u:0u,kind=snow_int(r,0,3);
+            int alone1=!st_idm_others(&p->drum[s+1u],0),alone3=!st_idm_others(&p->drum[s+3u],0);
+            if(kind==0u){dstep_set(&p->drum[s],ln,LV_SOFT,2);if(snow_prob(r,35))dstep_set(&p->drum[s+1u],ln,LV_GHOST,2);}
+            else if(kind==1u){dstep_set(&p->drum[s],ln,LV_SOFT,1);dstep_set(&p->drum[s+1u],ln,LV_GHOST,1);}
+            else if(kind==2u&&alone1&&alone3){
+                dstep_set(&p->drum[s],ln,LV_SOFT,0);dstep_set(&p->drum[s+1u],ln,LV_GHOST,0);p->micro[s+1u]=-21;
+                if(snow_prob(r,50)){dstep_set(&p->drum[s+2u],ln,LV_GHOST,0);dstep_set(&p->drum[s+3u],ln,LV_GHOST,0);p->micro[s+3u]=-21;}
+            }else if(alone1&&alone3){
+                dstep_set(&p->drum[s],ln,LV_SOFT,0);dstep_set(&p->drum[s+1u],ln,LV_GHOST,0);p->micro[s+1u]=21;
+                dstep_set(&p->drum[s+3u],ln,LV_GHOST,0);p->micro[s+3u]=-21;
+            }else dstep_set(&p->drum[s],ln,LV_SOFT,2);
+        }
         return;
     }
     for(uint32_t s=0;s+4u<=len;s+=4u)
