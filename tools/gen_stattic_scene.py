@@ -94,6 +94,31 @@ X.XX..XX..
 ..XX...XX.
 .XX.....XX
 """
+S["HOUSE"] = """
+.........XX.........
+.......XX..XX.......
+.....XX......XX.....
+...XX..........XX...
+.XX..............XX.
+XXXXXXXXXXXXXXXXXXXX
+.X................X.
+.X..XXXX....XXXX..X.
+.X..XooX....XooX..X.
+.X..XooX.XX.XooX..X.
+.X..XXXX.XX.XXXX..X.
+.X.......XX.......X.
+.X.......XX.......X.
+.XXXXXXXXXXXXXXXXXX.
+"""
+S["DISH"] = """
+..XX.
+.X..X
+X...X
+X..X.
+.XX..
+..X..
+..X..
+"""
 S["COMET"] = """
 .oo.
 oXXo

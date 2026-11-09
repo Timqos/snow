@@ -57,7 +57,18 @@ static void stattic_scene_draw(int32_t top,int32_t bottom,uint16_t white,uint16_
         if(((h>>7)%9u)<3u)sc_plot(top,x,gy+3,grey);
         if(((h>>11)%11u)<2u)sc_plot(top,x,gy+6,grey);
         if(((h>>15)%13u)<2u)sc_plot(top,x,gy+9,grey);}
-    static const uint8_t sprout[4]={28,52,76,100};
+    sc_sprite(top,SC_HOUSE,SC_HOUSE_X,gy-14,0,white,accent);   /* the house, its dish and the signal into the sky */
+    sc_sprite(top,SC_DISH,SC_HOUSE_X+3,gy-21,1,white,accent);   /* (facing up-left, into the sky) */
+    {   static const int8_t ux[7]={-15,-14,-12,-10,-7,-4,-1},uy[7]={-4,-6,-9,-11,-13,-15,-16};   /* up-left, x16 */
+        int32_t cx=SC_HOUSE_X+3,cy=gy-21;uint32_t ph=sc.signal?(uint32_t)(16u-sc.signal):(sc.frame/6u);
+        uint16_t ink=sc.signal?TE_COL[song.sel&3u]:grey;
+        for(uint32_t a=0;a<4u;a++){
+            int32_t r=5+(int32_t)a*4;
+            if(sc.signal?((ph+4u-a)%4u)>1u:(ph%4u)!=a)continue;     /* (sending: the arcs run outward; else one dim arc at a time) */
+            for(uint32_t i=0;i<7u;i++)sc_plot(top,cx+ux[i]*r/16,cy+uy[i]*r/16,ink);
+        }
+    }
+    static const uint8_t sprout[4]={19,37,55,73};
     for(uint32_t i=0;i<4u;i++)sc_sprite(top,SC_SPROUT,sprout[i]-1,gy-3,0,white,accent);
     for(uint32_t f=0;f<4u;f++){                        /* the four channels' flowers */
         int32_t x=SC_FLOWER_X[f],h=sc.grow[f];uint32_t k=SC_FLOWER_TRK[f];
