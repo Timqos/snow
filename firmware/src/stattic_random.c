@@ -284,9 +284,9 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
         p[SN_DCOLOR]=ss_range(&r,44,100);p[SN_DWIDTH]=ss_range(&r,48,124);
         p[P_CHOR]=ss_range(&r,0,st==0u||st==1u?46:24);
     }
-    if(channel==6u){                                     /* (2026-11-09, the owner) SY: no clicks; short sounds last ~0.4 s and more */
+    if(channel>=5u){                                     /* (2026-11-09, the owner) SY, CH: no clicks; short sounds last ~0.4 s and more */
         if(p[P_SUS]<40&&p[P_DEC]<82)p[P_DEC]=ss_range(&r,82,94);
-        if(p[P_REL]<62)p[P_REL]=ss_range(&r,62,80);
+        if(channel==6u&&p[P_REL]<62)p[P_REL]=ss_range(&r,62,80);   /* (CH keeps its two-bar release, below) */
     }
     /* CH keeps its two-bar release, or the user's manual choice. */
     if(channel==5u)p[P_REL]=stattic_base_value(t,P_REL);
