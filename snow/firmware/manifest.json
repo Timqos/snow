@@ -1,13 +1,13 @@
 {
   "version": "STATTIC 0.9.0-S1",
   "product": "FM-1_990",
-  "package": "stattic-0.9.0-sloop-rc1-3ed5c69.fwsc",
-  "package_sha256": "009c46e7bd3d4664039bca343c2d979475038eeca41e4572d766f9022e6570ba",
+  "package": "stattic-0.9.0-sloop-rc1-49cf04b.fwsc",
+  "package_sha256": "179057ab04b4d6384a15b67b6d6675db5f32a9f0de69f087487adcf391901e44",
   "package_bytes": 611645,
-  "app_sha256": "04294671497ce6b9feb8ff6b41c6074a80944cb30d15d4594369f37a370811fe",
-  "app_bytes": 452260,
+  "app_sha256": "1dcde7141687db5df218af593878211a247d5ce57d4742d4ec208f9b53aa0c8d",
+  "app_bytes": 455580,
   "loader_sha256": "547a9c8d251dd71588286ae429cade84f672d8a6b6c7a9b4d3bc92f33ddb7e5b",
-  "source_commit": "3ed5c699e77ea891bcab7dce13801fca42270777",
+  "source_commit": "49cf04b7b43eafbb0a1a0183b43a0c20fb44e08f",
   "source_dirty": false,
   "sloop_base": "bac9c05ea7627449405aa10e48da21d75b6c8c56",
   "configuration": {
@@ -28,10 +28,10 @@
   "checks": [
     ".ram_text: 925 insns, no calls",
     ".c1_text: 160 B, the second core's loop in RAM",
-    ".hot_text: 23544 B of render code run from SRAM",
-    "image 452260 B; RAM .data+.bss 95852 B of 98304; lowram 27424 B of 29384; pool 329868 B of 344064",
+    ".hot_text: 23572 B of render code run from SRAM",
+    "image 455580 B; RAM .data+.bss 95980 B of 98304; lowram 27424 B of 29384; pool 329896 B of 344064",
     "register access: hal/ only (src/, loader/ clean)"
   ],
   "hardware_audio_validation": "pending",
-  "branch": "claude/archive-3ed5c69-samples"
+  "branch": "claude/rasp-fix-1"
 }
