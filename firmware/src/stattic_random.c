@@ -241,6 +241,12 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
         default:break;                                           /* OPEN: the draw above */
         }
         if(channel==6u)p[P_ED_FX]=style_trim[keys_style];
+        if(channel==5u){                                 /* (2026-11-09, the owner) CH: no high chords. Never an octave up,
+                                                          * no high bell partials (the modulator at most 4x) */
+            static const uint8_t ch_ratio[]={16,16,32,32,48,56,64};
+            if(p[SN_TUNE]>0)p[SN_TUNE]=0;
+            if(p[SN_RATIO]>64)p[SN_RATIO]=ch_ratio[ss_rand(&r)%NELEM(ch_ratio)];
+        }
     } else { /* Bass/chord: stable note tracking, harmonic ratios, gated envelopes. */
         static const uint8_t waves[]={0,1,2,4,5};int voice=ss_range(&r,0,4);
         p[SN_ALG]=ss_chance(&r,30)?4:ss_range(&r,0,2);

@@ -98,7 +98,7 @@ static void snow_ambient(track_t *t,uint32_t channel,uint32_t seed,step_t *out,u
             uint32_t at=snow_prob(rng,75)?0u:snow_int(rng,1,blen>6u?6u:blen-1u),n=t->p[SN_PLAY_MODE]?1u:snow_prob(rng,30)?4u:3u;
             if(at>=blen)at=0;
             bar[at]=(step_t){.time=ST_NOTE,.n=(uint8_t)n,.vel=(uint8_t)snow_int(rng,58,88)};
-            for(uint32_t k=0;k<n;k++){int32_t nd=harm+(int32_t)k*2;if(n>1u&&k<inv)nd+=7;bar[at].note[k]=(uint8_t)snow_degree(t,t->p[SN_G_BASE],nd);}
+            for(uint32_t k=0;k<n;k++){int32_t nd=harm+(int32_t)k*2;if(n>1u&&k<inv)nd+=7;while(nd>9)nd-=7;bar[at].note[k]=(uint8_t)snow_degree(t,t->p[SN_G_BASE],nd);}   /* (no high chords) */
         }else{                                                   /* SY: a sparse, slow line */
             if(snow_prob(rng,shape==2u?(b&1u?70u:5u):18u))continue;          /* (resting bars; shape 2 answers a bar later) */
             uint32_t want=1u+density/45u+(snow_prob(rng,30)?1u:0u),pos=snow_int(rng,0,3)*2u;
@@ -220,6 +220,7 @@ static void snow_phrase(track_t *t,uint32_t channel,uint32_t seed,step_t *out)
             for(uint32_t n=0;n<out[i].n;n++){
                 int32_t nd=degree+(int32_t)n*2;
                 if(channel==5u&&out[i].n>1u&&n<inversion)nd+=7;
+                if(channel==5u)while(nd>9)nd-=7;                 /* (2026-11-09, the owner: no high chords) */
                 out[i].note[n]=(uint8_t)snow_degree(t,t->p[SN_G_BASE],nd);
             }
         } else if(kind==0u&&t->step[i].n) {out[i].n=t->step[i].n;memcpy(out[i].note,t->step[i].note,sizeof out[i].note);}
