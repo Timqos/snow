@@ -2,9 +2,9 @@
   "version": "STATTIC 0.9.0-S1",
   "product": "FM-1_990",
   "package": "stattic-0.9.0-sloop-rc1-3ed5c69.fwsc",
-  "package_sha256": "5bd415c995339da85e9e284bd2a7c44530df1ed4a047e2e086e796d296676966",
+  "package_sha256": "009c46e7bd3d4664039bca343c2d979475038eeca41e4572d766f9022e6570ba",
   "package_bytes": 611645,
-  "app_sha256": "c9be0d209b903c10ffea8c02a1c37177482e4fa1cefac0db8336e5b27915ffd7",
+  "app_sha256": "04294671497ce6b9feb8ff6b41c6074a80944cb30d15d4594369f37a370811fe",
   "app_bytes": 452260,
   "loader_sha256": "547a9c8d251dd71588286ae429cade84f672d8a6b6c7a9b4d3bc92f33ddb7e5b",
   "source_commit": "3ed5c699e77ea891bcab7dce13801fca42270777",
@@ -33,5 +33,5 @@
     "register access: hal/ only (src/, loader/ clean)"
   ],
   "hardware_audio_validation": "pending",
-  "branch": "claude/rasp-fix-1"
+  "branch": "claude/archive-3ed5c69-samples"
 }
