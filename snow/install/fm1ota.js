@@ -184,9 +184,11 @@ export class Updater {
       if (!/fm-1|stattic|sloop|smk|elite|mke-p37|starry|felucca|ota|composite|sinco|usb-midi/i.test(input.name || "")) continue;   // never probe other gear
       const output = outs.find((o) => o.name === input.name && o.state !== "disconnected");
       if (!output) continue;
+      const fresh = input.connection !== "open" || output.connection !== "open";
       try { await input.open(); await output.open(); } catch (_) { continue; }
+      if (fresh) await sleep(300);                      // ((2026-11-09) a port just opened can miss the first reply)
       const link = new Link(input, output);
-      const id = await handshake(link, 2);
+      const id = await handshake(link, 3);
       if (id && (!filter || filter(id))) return { link, id, name: input.name };
       link.close();
     }
