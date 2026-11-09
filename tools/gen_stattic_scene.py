@@ -94,31 +94,82 @@ X.XX..XX..
 ..XX...XX.
 .XX.....XX
 """
+def house():
+    """the owner's reference: a white house, a checkered roof with eaves, a window of four panes"""
+    w, h = 20, 17
+    g = [["."] * w for _ in range(h)]
+    cx = 9.5
+    for y in range(0, 10):                               # the roof: a two-pixel checkered band, the gable white
+        for x in range(w):
+            d = abs(x - cx)
+            if y + 0.5 >= d - 0.5 and y - 1.5 <= d - 0.5 and (x + y) % 2 == 0:
+                g[y][x] = "X"
+            elif d < y - 1 and 2 <= x <= 17:
+                g[y][x] = "X"
+    for y in range(8, h):                                # the walls
+        for x in range(3, 17):
+            g[y][x] = "X"
+    for (px, py) in ((7, 10), (10, 10), (7, 13), (10, 13)):   # the window: four dark panes
+        for yy in range(py, py + 2):
+            for xx in range(px, px + 2):
+                g[yy][xx] = "."
+    return "\n".join("".join(r) for r in g)
+
+
+def dish():
+    """the reference's dish, white and turned the other way: its face up-left, the arm and ball up-left"""
+    w, h = 12, 13
+    g = [["."] * w for _ in range(h)]
+    cx, cy, r = 6.5, 6.0, 4.6
+    for y in range(h):
+        for x in range(w):
+            dx, dy = x - cx, y - cy
+            if dx * dx + dy * dy <= r * r and (dx + dy) >= -0.4:
+                g[y][x] = "X"
+    for t in range(1, 5):                                # the arm, then the ball
+        g[int(round(cy - t * 0.72))][int(round(cx - t * 0.72))] = "X"
+    for (x, y) in ((2, 1), (3, 1), (2, 2), (3, 2)):
+        g[y][x] = "X"
+    for y in range(9, h):                                # the stand
+        for x in range(7 - (y - 9), 9 + (y - 9) // 2):
+            if 0 <= x < w:
+                g[y][x] = "X"
+    return "\n".join("".join(r) for r in g)
+
+
 S["HOUSE"] = """
 .........XX.........
-.......XX..XX.......
-.....XX......XX.....
-...XX..........XX...
-.XX..............XX.
-XXXXXXXXXXXXXXXXXXXX
-.X................X.
-.X..XXXX....XXXX..X.
-.X..XooX....XooX..X.
-.X..XooX.XX.XooX..X.
-.X..XXXX.XX.XXXX..X.
-.X.......XX.......X.
-.X.......XX.......X.
-.XXXXXXXXXXXXXXXXXX.
+........X..X........
+.......X.XX.X.......
+......X.XXXX.X......
+.....X.XXXXXX.X.....
+....X.XXXXXXXX.X....
+...X.XXXXXXXXXX.X...
+..X.XXXXXXXXXXXX.X..
+.X..XXXXXXXXXXXX..X.
+X...XXXXXXXXXXXX...X
+....XXXXXXXXXXXX....
+....XXX..X..XXXX....
+....XXX..X..XXXX....
+....XXXXXXXXXXXX....
+....XXX..X..XXXX....
+....XXX..X..XXXX....
+....XXXXXXXXXXXX....
 """
 S["DISH"] = """
-..XX.
-.X..X
-X...X
-X..X.
-.XX..
-..X..
-..X..
+XX........
+XX........
+..X....X..
+...X..XX..
+....XXXX..
+...XXXXX..
+..XXXXXX..
+...XXXXX..
+....XX....
+...XXXX...
+..XXXXXX..
 """
+DISH_BALL = (1, 1)                                       # where the waves start, in the dish's pixels
 S["COMET"] = """
 .oo.
 oXXo
@@ -204,7 +255,9 @@ def main():
     for n in names:
         w, h, _, _ = masks(S[n])
         L.append("    {%d,%d,SC_%s_W,SC_%s_A}," % (w, h, n, n))
-    L += ["};", "#endif", ""]
+    L.append("};")
+    L.append("#define SC_DISH_BX %d\n#define SC_DISH_BY %d" % DISH_BALL)
+    L += ["#endif", ""]
     out.write_text("\n".join(L))
     print(len(names), "sprites ->", out)
 

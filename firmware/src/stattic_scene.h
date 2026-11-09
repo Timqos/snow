@@ -19,10 +19,10 @@ static const uint32_t SC_ASTRO_A_W[12]={120u,204u,132u,204u,120u,510u,765u,765u,
 static const uint32_t SC_ASTRO_A_A[12]={0u,0u,120u,0u,0u,0u,0u,0u,0u,0u,0u,0u};
 static const uint32_t SC_ASTRO_B_W[11]={286u,563u,545u,499u,254u,252u,252u,508u,716u,198u,387u};
 static const uint32_t SC_ASTRO_B_A[11]={0u,0u,30u,0u,0u,0u,0u,0u,0u,0u,0u};
-static const uint32_t SC_HOUSE_W[14]={1536u,6528u,24672u,98328u,393222u,1048575u,262146u,323826u,299154u,300690u,325362u,263682u,263682u,524286u};
-static const uint32_t SC_HOUSE_A[14]={0u,0u,0u,0u,0u,0u,0u,0u,24672u,24672u,0u,0u,0u,0u};
-static const uint32_t SC_DISH_W[7]={6u,9u,17u,18u,12u,4u,4u};
-static const uint32_t SC_DISH_A[7]={0u,0u,0u,0u,0u,0u,0u};
+static const uint32_t SC_HOUSE_W[17]={1536u,2304u,5760u,12096u,24480u,49104u,98280u,196596u,327666u,589809u,65520u,58608u,58608u,65520u,58608u,58608u,65520u};
+static const uint32_t SC_HOUSE_A[17]={0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u};
+static const uint32_t SC_DISH_W[11]={768u,768u,132u,76u,60u,124u,252u,124u,48u,120u,252u};
+static const uint32_t SC_DISH_A[11]={0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u};
 static const uint32_t SC_COMET_W[4]={0u,6u,6u,0u};
 static const uint32_t SC_COMET_A[4]={6u,9u,9u,6u};
 static const uint32_t SC_PLANET_W[10]={8128u,30064u,54616u,436907u,262142u,98316u,41000u,53336u,27312u,8128u};
@@ -39,10 +39,12 @@ static const st_sprite_t SC_SPRITES[SC_COUNT]={
     {14,6,SC_UFO_W,SC_UFO_A},
     {10,12,SC_ASTRO_A_W,SC_ASTRO_A_A},
     {10,11,SC_ASTRO_B_W,SC_ASTRO_B_A},
-    {20,14,SC_HOUSE_W,SC_HOUSE_A},
-    {5,7,SC_DISH_W,SC_DISH_A},
+    {20,17,SC_HOUSE_W,SC_HOUSE_A},
+    {10,11,SC_DISH_W,SC_DISH_A},
     {4,4,SC_COMET_W,SC_COMET_A},
     {19,10,SC_PLANET_W,SC_PLANET_A},
     {9,9,SC_MOON_W,SC_MOON_A},
 };
+#define SC_DISH_BX 1
+#define SC_DISH_BY 1
 #endif

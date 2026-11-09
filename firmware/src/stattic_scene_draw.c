@@ -57,10 +57,10 @@ static void stattic_scene_draw(int32_t top,int32_t bottom,uint16_t white,uint16_
         if(((h>>7)%9u)<3u)sc_plot(top,x,gy+3,grey);
         if(((h>>11)%11u)<2u)sc_plot(top,x,gy+6,grey);
         if(((h>>15)%13u)<2u)sc_plot(top,x,gy+9,grey);}
-    sc_sprite(top,SC_HOUSE,SC_HOUSE_X,gy-14,0,white,accent);   /* the house, its dish and the signal into the sky */
-    sc_sprite(top,SC_DISH,SC_HOUSE_X+3,gy-21,1,white,accent);   /* (facing up-left, into the sky) */
+    sc_sprite(top,SC_HOUSE,SC_HOUSE_X,gy-17,0,white,accent);   /* the house, its dish and the signal into the sky */
+    sc_sprite(top,SC_DISH,SC_HOUSE_X-1,gy-21,0,white,accent);   /* (in the chimney's place, facing up-left) */
     {   static const int8_t ux[7]={-15,-14,-12,-10,-7,-4,-1},uy[7]={-4,-6,-9,-11,-13,-15,-16};   /* up-left, x16 */
-        int32_t cx=SC_HOUSE_X+3,cy=gy-21;uint32_t ph=sc.signal?(uint32_t)(16u-sc.signal):(sc.frame/6u);
+        int32_t cx=SC_HOUSE_X-1+SC_DISH_BX,cy=gy-21+SC_DISH_BY;uint32_t ph=sc.signal?(uint32_t)(16u-sc.signal):(sc.frame/6u);
         uint16_t ink=sc.signal?TE_COL[song.sel&3u]:grey;
         for(uint32_t a=0;a<4u;a++){
             int32_t r=5+(int32_t)a*4;

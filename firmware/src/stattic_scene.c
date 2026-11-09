@@ -15,7 +15,7 @@
 enum { SG_NONE, SG_UFO, SG_PLANET, SG_ASTRO, SG_COMET };
 static const uint8_t SG_LEN[5]={0,64,100,90,28};       /* frames each guest plays (6.4 s, 10 s, 9 s, 2.8 s) */
 static const uint8_t SC_FLOWER_X[4]={10,28,46,64},SC_FLOWER_TRK[4]={3,0,1,2};
-#define SC_HOUSE_X 83                                  /* (2026-11-10, the owner) the house on the right, its dish sending */
+#define SC_HOUSE_X 84                                  /* (2026-11-10, the owner) the house on the right, its dish sending */
 #define SC_WALK_END 70
 static struct {
     uint32_t ms,frame,beat,rnd;
