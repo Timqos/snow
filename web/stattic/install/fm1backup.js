@@ -166,10 +166,22 @@ export class BackupConnection {
       if (this.pending?.cmd === d[4]) { const p = this.pending; this.pending = null; clearTimeout(p.timer); p.resolve(Array.from(d.slice(5, -1))); }
     };
   }
-  async request([cmd, args], opt = {}) {
+  // (2026-11-09, the owner: the backup failed every other time, "timed out ... stopped") a request that gets no
+  // answer is sent again, up to three times in all, after a pause that lets a late reply arrive and be dropped
+  // (the reads are idempotent, and a reply that still comes late is refused by its offset or the CRC check)
+  async request(msg, opt = {}) {
+    for (let t = 0; ; t++) {
+      try { return await this.requestOnce(msg, opt); }
+      catch (e) {
+        if (e.code !== "timeout" || t >= (opt.tries ?? 3) - 1 || this.closed) throw e;
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    }
+  }
+  async requestOnce([cmd, args], opt = {}) {
     if (this.pending || this.closed || this.input.state === "disconnected" || this.output.state === "disconnected") throw new Error("Backup connection closed or busy");
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { this.pending = null; reject(Object.assign(new Error("Backup timed out. Keep the FM-1 connected and stopped."), { code: "timeout" })); }, opt.timeout || 1200);
+      const timer = setTimeout(() => { this.pending = null; reject(Object.assign(new Error("Backup timed out. Keep the FM-1 connected and stopped."), { code: "timeout" })); }, opt.timeout || 2500);
       this.pending = { cmd, timer, resolve, reject };
       try { this.output.send([240, 125, 70, 76, cmd, ...args, 247]); }
       catch (e) { clearTimeout(timer); this.pending = null; reject(e); }

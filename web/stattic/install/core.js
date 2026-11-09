@@ -32,7 +32,9 @@ export class InstallSession{
   if(this.busy)throw new Error('An operation is already running.');
   this.busy=true;this.mode=null;this.archive=null;
   try{
-   const dev=await this.updater.find();if(!dev)throw new Error('FM-1 not found. Check USB, stop playback and close other MIDI apps.');
+   let dev=await this.updater.find();
+   if(!dev){await new Promise(r=>setTimeout(r,800));dev=await this.updater.find();}   // ((2026-11-09) a second look before giving up)
+   if(!dev)throw new Error('FM-1 not found. Check USB, stop playback and close other MIDI apps.');
    const input=dev.link.input,output=dev.link.output;dev.link.close();
    if(!sameModel(dev.id.model,'FM-1'))throw new Error('STATTIC is for the FM-1 only. No update was started.');
    if(this.config.factory&&dev.id.text===this.config.product)throw new Error('This FM-1 already runs the selected factory firmware. Nothing was written.');
@@ -42,7 +44,7 @@ export class InstallSession{
    let link=this.connection(input,output);
    try{
     let reply;
-    try{reply=await link.request([1,[]]);}
+    try{reply=await link.request([1,[]],/^FM-1_0(?:15|16)$/.test(dev.id.text)?{tries:1,timeout:1500}:{});}   // (factory firmware does not answer: no retries)
     catch(e){if(e.code==='timeout'&&/^FM-1_0(?:15|16)$/.test(dev.id.text)){this.mode='external';return {mode:this.mode,device:this.device};}throw e;}
     const info=archiveInfo(reply);
     if(/STATTIC 0\.9\.0-S1/.test(info.version)){
