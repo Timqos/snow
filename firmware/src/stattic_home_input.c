@@ -1,6 +1,36 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* HOME owns its encoders. Other buttons retain the native SLOOP screens/layers. */
 static struct { uint32_t at;uint8_t armed,used; } stattic_oct;
+/* (2026-11-09, the owner: no holds) HOME 6 PROJECTS, the slots A..D (the SAVE screen's sections): K1 picks
+ * the slot, K2 saves into it, K3 erases it, K4 opens it. An action asks for a second turn of its knob (after
+ * 0.3 s, within 3 s), so a knob touched by chance does nothing. Saving while playing keeps it in RAM and writes
+ * the flash once stopped; opening while playing takes the next bar; erasing waits for STOP */
+static void stattic_proj_note(const char *a,uint32_t slot)
+{
+    char b[24];str_cpy(b,a,sizeof b);uint32_t n=str_len(b);if(slot<4u&&n<22u){b[n]=(char)('A'+slot);b[n+1]=0;}
+    str_cpy(stattic_proj_msg,b,sizeof stattic_proj_msg);stattic_proj_msg_ms=fm1_ms;stattic_revision++;stattic_ui_dirty=1;
+}
+static void stattic_projects_turn(uint32_t knob,int32_t s)
+{
+    uint32_t slot=stattic_proj_sel&3u,full=(arrangement_ready()>>slot)&1u;
+    if(knob==0u){stattic_proj_sel=(uint8_t)clamp((int32_t)stattic_proj_sel+(s>0?1:-1),0,3);stattic_proj_arm=0;stattic_proj_msg[0]=0;stattic_revision++;stattic_ui_dirty=1;return;}
+    if((knob==2u||knob==3u)&&!full){stattic_proj_arm=0;stattic_proj_note("EMPTY ",slot);return;}
+    if(stattic_proj_arm!=knob||fm1_ms-stattic_proj_arm_ms>3000u){
+        static const char *const ask[4]={"","SAVE? AGAIN ","ERASE? AGAIN ","OPEN? AGAIN "};
+        stattic_proj_arm=(uint8_t)knob;stattic_proj_arm_ms=fm1_ms;stattic_proj_note(ask[knob],slot);return;
+    }
+    if(fm1_ms-stattic_proj_arm_ms<300u)return;          /* (the same turn going on: not yet the second one) */
+    stattic_proj_arm=0;
+    if(knob==1u){section_store(slot);stattic_proj_note(song.playing?"SAVED, STOP TO WRITE ":"SAVED ",slot);}
+    else if(knob==2u){
+        if(song.playing){stattic_proj_note("STOP TO ERASE ",slot);return;}
+        project_erase(slot);stattic_proj_note((arrangement_ready()>>slot)&1u?"ERASE ERROR ":"ERASED ",slot);
+    }else{
+        if(arrangement_clock.running){stattic_proj_note("SONG PLAYS ",4u);return;}
+        if(song.playing){fm1_irq_off();chain_n=0;live_req=(int8_t)slot;fm1_irq_on();stattic_proj_note("NEXT BAR: ",slot);}
+        else{section_load(slot);stattic_proj_note("OPENED ",slot);}
+    }
+}
 static void stattic_home_input(uint32_t *pressed)
 {
     uint32_t up=1u<<panel.btn[B_OCTUP],dn=1u<<panel.btn[B_OCTDN];int32_t s;
@@ -32,7 +62,7 @@ static void stattic_home_input(uint32_t *pressed)
         *pressed&=~(dn|up);
     }
     if((s=panel_enc(EN_SELECT))!=0){
-        stattic_home_page=(uint8_t)clamp((int32_t)stattic_home_page+s,0,4);
+        stattic_home_page=(uint8_t)clamp((int32_t)stattic_home_page+s,0,SN_HOME_COUNT-1);stattic_proj_arm=0;
         stattic_oct.armed=0;ui.force=1;
     }
     if((s=panel_enc(EN_ALGO))!=0){
@@ -62,6 +92,8 @@ static void stattic_home_input(uint32_t *pressed)
             static const uint8_t ids[]={P_LEVEL,P_PAN,SN_DJ_FILTER,SN_WIDTH};uint32_t id=ids[knob];
             const param_desc_t *d=track_desc(TSEL,id);uint32_t f=STATTIC_GUARD_SAVE();
             TSEL->p[id]=(int16_t)clamp(TSEL->p[id]+s,d->min,d->max);stattic_touch(TSEL,id);STATTIC_GUARD_RESTORE(f);
+        }else if(stattic_home_page==SN_HOME_PROJ){
+            stattic_projects_turn(knob,s);
         }else if(stattic_home_page==3u){
             uint32_t track=stattic_role_track(knob),slot=stattic_pattern_current(track);
             (void)stattic_pattern_select(track,(uint32_t)clamp((int32_t)slot+s,0,2));

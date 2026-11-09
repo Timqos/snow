@@ -101,7 +101,8 @@ static void stattic_footer(uint32_t page)
     if(page==2u){a="VOL  PAN";b="FLR  WDT";}
     if(page==3u){a="OCT+/-";b="RAND PTN";}
     if(page==4u){a="W:MUTE B:SOLO";b="K1:CH K2:VOL";}
-    char label[7]="PG 1/5";label[3]=(char)('1'+page);
+    if(page==SN_HOME_PROJ){a="K1:SLOT K2:SAVE";b="K3:DEL K4:OPEN";}
+    char label[7]="PG 1/6";label[3]=(char)('1'+page);label[5]=(char)('0'+SN_HOME_COUNT);
     stattic_hint_text(6,ST_HINT_Y,a,T_TEXT);
     stattic_hint_text(6,ST_HINT_Y+ST_HINT_PITCH,b,bink);
     stattic_hint_text(172,ST_HINT_Y+ST_HINT_PITCH,label,T_THEME);
@@ -144,6 +145,21 @@ static void stattic_page_body(uint32_t page)
                 if(p<2u)cv_rect(x+11,yy+23,2,6,T_TEXT);
             }
         }
+    }else if(page==SN_HOME_PROJ){
+        /* (2026-11-09) PROJECTS: the four slots; filled = saved, the frame = the one open, the box = K1's */
+        stattic_text(16,37,"PROJECTS",T_THEME,13,18,8);stattic_small_icon(1,170,33);
+        uint32_t ready=arrangement_ready();
+        for(uint32_t col=0;col<4u;col++){
+            int32_t x=16+(int32_t)col*55;int full=(ready>>col)&1u,sel=col==stattic_proj_sel;
+            char b[2]={(char)('A'+col),0};
+            if(sel)cv_rect(x-3,64,40,36,T_THEME);
+            if(live_sec==(int8_t)col)cv_frame(x-6,61,46,42,T_TEXT);
+            stattic_text(x+6,68,b,sel?T_INK:T_TEXT,16,24,1);
+            stattic_text(x,112,full?"SAVED":"-----",full?T_TEXT:T_MID,6,10,5);
+        }
+        int armed=stattic_proj_arm&&fm1_ms-stattic_proj_arm_ms<=3000u;
+        if(stattic_proj_msg[0]&&(armed||fm1_ms-stattic_proj_msg_ms<4000u))stattic_text(16,140,stattic_proj_msg,armed?T_THEME:T_TEXT,7,12,24);
+        else stattic_text(16,140,song.playing?"SAVE: RAM, FLASH ON STOP":"SLOT A-D = SAVE SCREEN",T_MID,7,12,24);
     }else{
         stattic_text(16,37,"M/S VOLUME",T_THEME,13,18,10);stattic_small_icon(3,173,31);
         for(uint32_t row=0;row<NTRK;row++){
@@ -185,6 +201,8 @@ static void snow_home_draw(void)
     if(page<3u)sig^=stattic_scroll[page]*104729u+stattic_focus[page]*349u+stattic_art_pick[page]*194713u;
     if(page==SN_HOME_MIX)for(uint32_t id=0;id<4u;id++)sig=(sig^(uint32_t)t->p[ST_MIX_IDS[id]])*16777619u;
     sig^=(uint32_t)t->p[SN_PLAY_MODE]*32993u;
+    if(page==SN_HOME_PROJ)sig^=(stattic_proj_sel+1u)*7703u+arrangement_ready()*1009u+(uint32_t)(live_sec+2)*97u+(uint32_t)song.playing*3u+
+        (uint32_t)(stattic_proj_arm&&fm1_ms-stattic_proj_arm_ms<=3000u)*50331653u+(uint32_t)(stattic_proj_msg[0]&&fm1_ms-stattic_proj_msg_ms<4000u)*1610612741u;
     sig^=((uint32_t)stattic_pending_mute_bits()|((uint32_t)stattic_pending_solo_bits()<<6))*63997u;
     sig^=(uint32_t)(ui.msg_t!=0)*301u+(uint32_t)(stattic_history_at!=0)*619u;
     if((sig!=snow_home_state.body||ui.force)&&(fresh||fm1_ms-snow_home_state.body_ms>=50u)){

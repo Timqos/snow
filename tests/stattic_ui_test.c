@@ -22,7 +22,7 @@ int main(int argc,char **argv)
     outdir=argc>1?argv[1]:"build/host";boot();
     assert(ui.home&&song.sel==TRK_DRUM);
     int16_t tempo=song.g[G_BPM];
-    for(uint32_t page=0;page<5;page++){
+    for(uint32_t page=0;page<SN_HOME_COUNT;page++){
         stattic_home_page=(uint8_t)page;ui.force=1;frames(4);
         char name[32];snprintf(name,sizeof name,"stattic-home-%u",page+1);ppm(name);
     }
@@ -42,6 +42,19 @@ int main(int argc,char **argv)
     stattic_home_page=3;encs[panel.enc[EN_K2]]=1;frame();frames(2);assert(stattic_current[0]==1);
     stattic_home_page=1;encs[panel.enc[EN_K2]]=1;frame();frames(2);
     for(uint32_t l=0;l<16;l++)assert(stattic_pick_ok(stattic_drum_pick[l],ST_LANE_CATEGORY[l]));
+    {   /* HOME 6 PROJECTS (the harness's slots: A and B saved): K1 picks B; K2, K4, K3 each act on their second turn */
+        stattic_home_page=SN_HOME_PROJ;song.playing=0;frames(2);
+        encs[panel.enc[EN_K1]]=1;frame();assert(stattic_proj_sel==1);
+        uint32_t st=sec_stores,ld=sec_loads,er=erases;
+        encs[panel.enc[EN_K2]]=1;frame();assert(sec_stores==st);
+        frames(40);encs[panel.enc[EN_K2]]=1;frame();assert(sec_stores==st+1u&&live_sec==1);
+        ui.force=1;frames(2);ppm("stattic-home-6");
+        encs[panel.enc[EN_K4]]=1;frame();assert(sec_loads==ld);frames(40);encs[panel.enc[EN_K4]]=1;frame();assert(sec_loads==ld+1u);
+        encs[panel.enc[EN_K3]]=1;frame();assert(erases==er);frames(40);encs[panel.enc[EN_K3]]=1;frame();assert(erases==er+1u);
+        encs[panel.enc[EN_K1]]=1;frame();encs[panel.enc[EN_K3]]=1;frame();frames(40);encs[panel.enc[EN_K3]]=1;frame();
+        assert(erases==er+1u);                         /* (C is empty: nothing to erase) */
+        stattic_home_page=0;frames(2);
+    }
     tap(B_ENV);assert(!ui.home&&cur_page()->fam==FAM_ENV);ui.force=1;frame();ppm("stattic-env");
     tap(B_HOME);assert(ui.home);tap(B_GLO);assert(!ui.home&&cur_page()->fam==FAM_GLO);
     int16_t before=song.g[G_BPM];encs[panel.enc[EN_SELECT]]=1;frame();
@@ -56,6 +69,6 @@ int main(int argc,char **argv)
             ui.page=(uint8_t)p;page_entered();ui.force=1;frames(2);
         }
     }
-    puts("STATTIC UI: five HOME pages, DR/BS/SY/CH, SELECT without tempo, long/short OCT+, mute/solo keys, native SLOOP screens");
+    puts("STATTIC UI: six HOME pages (PROJECTS: save, open, erase by two turns), DR/BS/SY/CH, SELECT without tempo, long/short OCT+, mute/solo keys, native SLOOP screens");
     return 0;
 }
