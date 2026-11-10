@@ -335,6 +335,14 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
                                                           * every note fades out at its end, never cut off */
         if(p[P_SUS]<40&&p[P_DEC]<90)p[P_DEC]=ss_range(&r,90,96);
         if(channel==6u&&p[P_REL]<72)p[P_REL]=ss_range(&r,72,86);   /* (~0.2-0.5 s; CH keeps its two-bar release, below) */
+        if(channel==6u&&!ss_chance(&r,10)){             /* (2026-11-10, the owner) SY: long sounds with a little attack; one in ten as drawn */
+            int32_t was=p[P_SUS]<40?12:p[P_DEC]<100||p[P_REL]<92?5:0;     /* (as loud as before: a short sound made long is trimmed) */
+            p[P_ED_FX]=(int16_t)clamp(p[P_ED_FX]-was,-64,63);
+            p[P_ATK]=(int16_t)(p[P_ATK]>62?p[P_ATK]:ss_range(&r,45,62));  /* (~25-90 ms; a slower one kept) */
+            if(p[P_DEC]<100)p[P_DEC]=ss_range(&r,100,110);            /* (1.4-2.9 s) */
+            if(p[P_SUS]<70)p[P_SUS]=ss_range(&r,70,105);
+            if(p[P_REL]<92)p[P_REL]=ss_range(&r,92,104);              /* (0.8-1.9 s tails) */
+        }
     }
     /* CH keeps its two-bar release, or the user's manual choice. */
     if(channel==5u)p[P_REL]=stattic_base_value(t,P_REL);
