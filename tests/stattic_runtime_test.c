@@ -139,9 +139,46 @@ static void shuffled_art(void)
     puts("HOME 1-3 art: shuffled bag of all pictures, no repeats, stable during one knob gesture, upward seamless wrap");
 }
 #ifndef STATTIC_RUNTIME_HARNESS_ONLY
+static int part_in_key(const track_t *t)
+{
+    uint32_t m=SCALE_MASK[t->p[P_SCALE]];
+    for(uint32_t i=0;i<NSTEP;i++)for(uint32_t j=0;j<t->step[i].n;j++)
+        if(!((m>>((t->step[i].note[j]-t->p[P_ROOT]+120)%12))&1u))return 0;
+    return 1;
+}
+/* (2026-11-10) one key for the song: parts saved apart meet in the bass's key; a key change moves every note by its
+ * degree; a pattern made before the change arrives in the new key */
+static void song_key(void)
+{
+    init();
+    for(uint32_t k=0;k<NPART;k++){trk[k].p[P_ROOT]=0;trk[k].p[P_SCALE]=k==1u?1:2;}
+    trk[0].step[0]=(step_t){.note={63},.n=1,.time=ST_NOTE,.vel=100};
+    trk[1].step[0]=(step_t){.note={64},.n=1,.time=ST_NOTE,.vel=100};
+    stattic_banks[1][1].step[0]=(step_t){.note={69},.n=1,.time=ST_NOTE,.vel=100};
+    stattic_key_unify();
+    for(uint32_t k=0;k<NTRK;k++)assert(trk[k].p[P_SCALE]==2&&trk[k].p[P_ROOT]==0);
+    assert(trk[1].step[0].note[0]==63&&stattic_banks[1][1].step[0].note[0]==68&&trk[0].step[0].note[0]==63);
+    stattic_key_set(0,1);
+    assert(trk[0].step[0].note[0]==64&&trk[1].step[0].note[0]==64&&stattic_banks[1][1].step[0].note[0]==69);
+    stattic_key_set(2,1);                                   /* D major: up a tone */
+    assert(trk[0].step[0].note[0]==66&&trk[2].p[P_ROOT]==2);
+    stattic_key_set(11,1);                                  /* B major: the shorter way, down */
+    assert(trk[0].step[0].note[0]==63);
+    stattic_key_set(0,2);
+    song.playing=1;
+    for(uint32_t k=0;k<NPART;k++)assert(!stattic_prepare(k,0));
+    stattic_key_set(0,1);                                   /* the patterns waiting were written in C minor */
+    for(int b=0;b<3;b++)next_bar();
+    for(uint32_t k=0;k<NPART;k++){assert(!stattic_change[k].armed);assert(trk[k].p[P_SCALE]==1);assert(part_in_key(&trk[k]));}
+    for(uint32_t k=0;k<NPART;k++)assert(!stattic_prepare(k,2));      /* a new LFO set never brings a part's own key */
+    for(int b=0;b<3;b++)next_bar();
+    for(uint32_t k=0;k<NPART;k++)assert(trk[k].p[P_SCALE]==1&&trk[k].p[P_ROOT]==0);
+    song.playing=0;
+    puts("stattic song key: one key, notes moved by degree, waiting patterns follow");
+}
 int main(void)
 {
-    quantized();generated();drums_catalog();phrases();scales();shuffled_art();return 0;
+    quantized();generated();drums_catalog();phrases();scales();shuffled_art();song_key();return 0;
 }
 
 #endif

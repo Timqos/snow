@@ -44,6 +44,7 @@ static volatile uint8_t stattic_home_ms,stattic_home_ms_reset,stattic_ms_pending
 static uint8_t stattic_ms_mute,stattic_ms_solo;
 static uint32_t stattic_ms_bar;
 static uint8_t stattic_ready,stattic_ui_dirty;
+static void stattic_key_set(int32_t root,int32_t scale);static void stattic_key_unify(void);   /* (the song's key: stattic_runtime.c) */
 static volatile uint8_t stattic_staging;
 static uint8_t stattic_macro[NTRK];
 static uint32_t stattic_role_track(uint32_t home) { static const uint8_t map[4]={3,0,1,2};return map[home%4u]; }

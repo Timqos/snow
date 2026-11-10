@@ -634,6 +634,7 @@ static void proj_apply(const project_t *p, int all)
     }
 #if FELUCCA_STATTIC
     stattic_ms_pending=0;stattic_history_at=stattic_history_n=0;stattic_ui_dirty=1;stattic_revision++;
+    stattic_key_unify();                               /* (one key for the song: the parts saved apart move to the bass's) */
 #endif
 }
 

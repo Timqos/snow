@@ -560,6 +560,9 @@ UI_SMALL static void edit_param(uint32_t slot, int32_t steps)
                                     : clamp(*vp + accel(EN_K1 + slot, steps, d->names ? 0 : d->max - d->min), d->min, d->max);
 #if FELUCCA_STATTIC
     if(pg->scope!=SC_GLOBAL&&id==P_MUTE){stattic_mute_set(song.sel,(uint32_t)v);return;}
+    if(pg->scope!=SC_GLOBAL&&(id==P_ROOT||id==P_SCALE)){  /* the song's key: every part, its notes moved along */
+        stattic_key_set(id==P_ROOT?v:TSEL->p[P_ROOT],id==P_SCALE?v:TSEL->p[P_SCALE]);return;
+    }
 #endif
     *vp = (int16_t)v;
 #if FELUCCA_STATTIC

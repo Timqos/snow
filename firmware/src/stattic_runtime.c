@@ -48,6 +48,53 @@ static void stattic_pattern_apply(track_t *t,const stattic_pattern_t *p)
     t->seq_abs=SEQ_NONE;t->seq_idx=0;t->seq_n=t->seq_hold=t->rh_n=0;
     t->seq_active=(uint8_t)!track_empty(t);
 }
+/* (2026-11-10, the owner: "harmony, not semitones") ROOT and SCALE are the song's key: BS, SY and CH always share
+ * one. A key change (SEL window, the SEL layer) moves every note already written by its degree: degree d of
+ * the old key becomes degree d of the new one (a minor phrase turns major, its chords stay chords of the scale),
+ * a new root moves it the shorter way round. A note out of the old key first falls to the key note below it */
+static uint32_t stattic_key_mask(int32_t scale){return SCALE_MASK[clamp(scale,0,(int32_t)NSCALES-1)];}
+static int32_t stattic_key_move(int32_t note,int32_t r0,int32_t s0,int32_t r1,int32_t s1)
+{
+    uint32_t m0=stattic_key_mask(s0),m1=stattic_key_mask(s1);r0=(r0%12+12)%12;r1=(r1%12+12)%12;
+    if(r0==r1&&m0==m1)return note;
+    int32_t rel=note-r0+120,oct=rel/12-10,pc=rel%12;
+    while(pc>0&&!((m0>>pc)&1u))pc--;
+    uint8_t i0[12],i1[12];uint32_t n0=0,n1=0,d=0;
+    for(uint32_t i=0;i<12;i++){if((m0>>i)&1u){if((int32_t)i==pc)d=n0;i0[n0++]=(uint8_t)i;}if((m1>>i)&1u)i1[n1++]=(uint8_t)i;}
+    int32_t to;
+    if(n0==n1)to=i1[d];
+    else{to=i1[0];for(uint32_t i=1;i<n1;i++){int32_t a=(int32_t)i1[i]-pc,b=to-pc;if((a<0?-a:a)<(b<0?-b:b))to=i1[i];}}   /* (another size: the nearest) */
+    int32_t shift=(r1-r0+18)%12-6,out=r0+shift+12*oct+to;
+    while(out>127)out-=12;while(out<0)out+=12;
+    return out;
+}
+static void stattic_key_steps(step_t *s,int32_t r0,int32_t s0,int32_t r1,int32_t s1)
+{
+    for(uint32_t i=0;i<NSTEP;i++)for(uint32_t j=0;j<s[i].n&&j<4u;j++)
+        s[i].note[j]=(uint8_t)stattic_key_move(s[i].note[j],r0,s0,r1,s1);
+}
+/* track k (BS, SY, CH) into the key r1/s1: its notes playing, its other patterns, a change waiting keeps its own key */
+static void stattic_key_track(uint32_t k,int32_t r1,int32_t s1)
+{
+    track_t *t=&trk[k];int32_t r0=t->p[P_ROOT],s0=t->p[P_SCALE];
+    if(r0!=r1||stattic_key_mask(s0)!=stattic_key_mask(s1)){
+        stattic_key_steps(t->step,r0,s0,r1,s1);
+        for(uint32_t slot=0;slot<ST_PATTERNS;slot++)if(slot!=stattic_current[k])stattic_key_steps(stattic_banks[k][slot].step,r0,s0,r1,s1);
+    }
+    t->p[P_ROOT]=(int16_t)r1;t->p[P_SCALE]=(int16_t)s1;
+}
+static void stattic_key_set(int32_t root,int32_t scale)
+{
+    root=clamp(root,0,11);scale=clamp(scale,0,(int32_t)NSCALES-1);
+    uint32_t f=STATTIC_GUARD_SAVE();
+    for(uint32_t k=0;k<NTRK;k++){
+        if(k==TRK_DRUM){trk[k].p[P_ROOT]=(int16_t)root;trk[k].p[P_SCALE]=(int16_t)scale;}
+        else stattic_key_track(k,root,scale);
+    }
+    stattic_ui_dirty=1;stattic_revision++;STATTIC_GUARD_RESTORE(f);
+}
+/* after a load: one key for the song (the bass's), whatever the parts were saved with */
+static void stattic_key_unify(void){stattic_key_set(trk[0].p[P_ROOT],trk[0].p[P_SCALE]);}
 static void stattic_capture(uint32_t k,stattic_snapshot_t *s)
 {
     track_t *t=&trk[k];
@@ -192,6 +239,7 @@ static void stattic_runtime_tick(void)
         stattic_change_t *q=&stattic_change[k];track_t *t=&trk[k];
         if(((stattic_staging>>k)&1u)||!q->armed||(song.playing&&(q->fine?(int32_t)(stattic_now16()-q->at16)<0:(int32_t)(bar-q->bar)<0)))continue;
         if(q->what&ST_CHANGE_PATTERN){
+            if(k!=TRK_DRUM)stattic_key_steps(q->value.pattern.step,q->value.p[P_ROOT],q->value.p[P_SCALE],t->p[P_ROOT],t->p[P_SCALE]);   /* (written in another key: into the song's) */
             stattic_pattern_capture(t,&stattic_banks[k][stattic_current[k]]);
             stattic_pattern_apply(t,&q->value.pattern);stattic_current[k]=q->slot%ST_PATTERNS;
             stattic_banks[k][stattic_current[k]]=q->value.pattern;
@@ -205,6 +253,7 @@ static void stattic_runtime_tick(void)
             if(m&&glide)for(uint32_t i=0;i<m->n;i++)m->from[i]=t->p[m->id[i]];   /* (a glide under way: on from where it is) */
             else if(m){for(uint32_t i=0;i<m->nd&&i<ST_MORPH_SW;i++)t->p[m->did[i]]=m->dval[i];m->n=0;m->nd=0;m->dstate=0;}
             for(uint32_t id=0;id<P_COUNT;id++)if((q->mask[id/32u]>>(id%32u))&1u){
+                if(id==P_ROOT||id==P_SCALE)continue;          /* (the song's key, not a part's: stattic_key_set) */
                 if(m&&glide&&stattic_morphable(t,id)){
                     uint32_t i=0;while(i<m->n&&m->id[i]!=id)i++;
                     if(i==m->n){if(m->n>=ST_MORPH_MAX||t->p[id]==q->value.p[id]){t->p[id]=q->value.p[id];continue;}m->n++;m->id[i]=(uint16_t)id;m->from[i]=t->p[id];}
@@ -549,6 +598,7 @@ static void stattic_temp_save(void)
 static int stattic_temp_load(uint32_t tracks)
 {
     if(!stattic_saved.valid)return 0;
+    if(tracks==15u)stattic_key_set(stattic_saved.track[0].p[P_ROOT],stattic_saved.track[0].p[P_SCALE]);   /* (all of it: its key too) */
     uint32_t f=STATTIC_GUARD_SAVE(),mask[ST_PARAM_WORDS],group=(stattic_action+=4u)|3u,bar=stattic_when();
     stattic_mask_all(mask);
     for(uint32_t k=0;k<NTRK;k++)if((tracks>>k)&1u){
