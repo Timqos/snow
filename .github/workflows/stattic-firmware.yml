@@ -113,7 +113,7 @@ jobs:
           python3 - <<'PY'
           import hashlib, json, os, shutil
           from pathlib import Path
-          fw, site = Path('fw'), Path('site/snow')
+          fw, site = Path('fw'), Path('site')
           trace = json.loads((fw / 'stattic-build.json').read_text())
           pkg = fw / trace['package']
           digest = hashlib.sha256(pkg.read_bytes()).hexdigest()
@@ -152,7 +152,7 @@ jobs:
           cd site
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A snow
+          git add -A .
           git commit -m "Install page: STATTIC firmware ${GITHUB_SHA::7} from ${GITHUB_REF_NAME}" || exit 0
           git push origin HEAD:gh-pages
       - name: Deploy the site
