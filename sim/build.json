@@ -1,7 +1,7 @@
 {
-  "source_commit": "b9d25a98c026167cbe0da8048eb9b17fdfe6d358",
+  "source_commit": "2ba5635f80abae1f6706d664950e0e19a60ab1a6",
   "source_dirty": false,
-  "wasm_sha256": "41e5630b0a569ac9f267e8ef1b819b5e422b17b15fb82bcb4a7eb5155bf77ccd",
-  "version": "STATTIC 0.9.0-S1 \u00b7 b9d25a9",
-  "firmware_package": "stattic-0.9.0-sloop-rc1-b9d25a9.fwsc"
+  "wasm_sha256": "38dd5021e71c61f68bef4ff81f06699b859147aa1dfbbcbdafd1ba33e91c2f8c",
+  "version": "STATTIC 0.9.0-S1 \u00b7 2ba5635",
+  "firmware_package": "stattic-0.9.0-sloop-rc1-2ba5635.fwsc"
 }
