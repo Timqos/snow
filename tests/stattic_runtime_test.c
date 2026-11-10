@@ -237,8 +237,9 @@ static void kick_no_ratchet(void)
         assert(!stattic_prepare(TRK_DRUM,g&1u?4u:0u));for(int i=0;i<3;i++)block();
         for(uint32_t s=0;s<NSTEP;s++)for(uint32_t l=0;l<16u;l++)
             if(ST_LANE_CATEGORY[l]==0u&&dstep_has(&trk[TRK_DRUM].dstep[s],l))assert(dstep_rat(&trk[TRK_DRUM].dstep[s],l)==0u);
+            else if(dstep_has(&trk[TRK_DRUM].dstep[s],l))assert(dstep_rat(&trk[TRK_DRUM].dstep[s],l)<=1u);
     }
-    puts("stattic DR: 300 kits at every COMPLEX, no kick ratchet (16ths and eighth triplets only)");
+    puts("stattic DR: 300 kits at every COMPLEX, no kick ratchet (16ths and eighth triplets only), the others x2 at most");
 }
 int main(void)
 {

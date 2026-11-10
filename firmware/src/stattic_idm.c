@@ -265,6 +265,11 @@ static void stattic_dr_make(track_t *c,stattic_pattern_t *p,uint32_t cat,uint32_
         if(near>=(n/5u>3u?n/5u:3u))break;                      /* (different enough) */
     }
     memcpy(p->drum,best,sizeof best);memcpy(p->micro,bestm,sizeof bestm);
+    /* (2026-11-10, the owner: a rasp) snare, hat and percussion ratchet x2 at most (1/32): x3 and x4 in a step,
+     * 24-32 clicks a second, rasp. Their rolls, ramps and bursts stay, at x2 */
+    for(uint32_t s=0;s<NSTEP;s++)for(uint32_t l=0;l<16u;l++)
+        if(ST_LANE_CATEGORY[l]==cat&&dstep_has(&p->drum[s],l)&&dstep_rat(&p->drum[s],l)>1u)
+            dstep_set(&p->drum[s],l,dstep_lvl(&p->drum[s],l),1u);
     uint64_t h,rt;st_idm_sign(p,cat,len,&h,&rt);
     if(h){uint32_t k=st_idm_head[cat]++%ST_IDM_MEM;st_idm_seen[cat][k].hit=h;st_idm_seen[cat][k].rat=rt;}
 }
