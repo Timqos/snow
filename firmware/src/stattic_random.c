@@ -75,7 +75,7 @@ static uint32_t stattic_sy_fx_kind(uint32_t *r)
 static void snow_design_sy_fx(uint32_t *r,int16_t *p)
 {
     static const uint8_t pws[]={16,32,64,96};
-    static const int8_t trim[6]={18,10,12,20,-4,12};   /* 1/2 dB, BLIP ZAP LASER NOISE ARP GLITCH: their loudest 23 ms
+    static const int8_t trim[6]={10,4,6,12,-8,6};      /* (2026-11-10: 3 dB lower, as their own delays add level now) */   /* 1/2 dB, BLIP ZAP LASER NOISE ARP GLITCH: their loudest 23 ms
                                                          * near the keys sounds' (host, 240 turns: the keys ~70 dB) */
     uint32_t kind=stattic_sy_fx_kind(r);
     p[SN_ALG]=0;p[SN_PAMT]=0;p[SN_RATIO3]=8;p[SN_WAVE2]=0;p[SN_WAVE3]=0;p[SN_SUB]=0;p[SN_MIX]=0;p[SN_FB_ROUTE]=0;
@@ -85,33 +85,44 @@ static void snow_design_sy_fx(uint32_t *r,int16_t *p)
     p[SN_TUNE]=(int16_t)(ss_chance(r,70)?0:12*ss_range(r,-1,1));
     p[P_E0]=ss_range(r,0,14);p[P_E2]=0;p[P_E4]=ss_range(r,0,50);p[P_E6]=ss_range(r,100,127);p[P_E7]=ss_range(r,0,20);
     p[P_ATK]=0;p[P_GLIDE]=0;
+    /* (2026-11-10, the owner) the pitch never slides: the moves are steps of the track's scale (CHIP ARP), the FM
+     * on whole harmonics; the 8-bit character stays (pulse/square, short and bright, noise, glitchy steps) */
+    static const uint8_t harm[]={48,64,80,96,112};
     switch(kind){
-    case 0:   /* BLIP: a short tone, a small quick jump */
-        p[SN_PAMT]=(int16_t)(ss_chance(r,50)?ss_range(r,3,12):-ss_range(r,3,12));p[SN_PDEC]=ss_range(r,3,12);
+    case 0:   /* BLIP: a short tone, now and then a quick step up the scale */
+        if(ss_chance(r,50)){p[SN_ALG]=2;p[SN_RATIO3]=ss_range(r,1,4);}
         p[P_DEC]=ss_range(r,25,50);p[P_SUS]=0;p[P_REL]=ss_range(r,8,22);break;
-    case 1:   /* ZAP: falls from far above */
-        p[SN_PAMT]=ss_range(r,18,48);p[SN_PDEC]=ss_range(r,14,40);
+    case 1:   /* ZAP: falls fast down the scale (8-5-3-1) */
+        p[SN_ALG]=4;p[SN_RATIO3]=ss_range(r,1,5);
         p[P_DEC]=ss_range(r,40,62);p[P_SUS]=ss_range(r,0,30);p[P_REL]=ss_range(r,12,30);break;
-    case 2:   /* LASER: rises into the note */
-        p[SN_PAMT]=(int16_t)-ss_range(r,12,36);p[SN_PDEC]=ss_range(r,10,32);
+    case 2:   /* LASER: climbs fast up the scale (1-3-5-8) */
+        p[SN_ALG]=3;p[SN_RATIO3]=ss_range(r,1,5);
         p[P_DEC]=ss_range(r,40,64);p[P_SUS]=ss_range(r,0,40);p[P_REL]=ss_range(r,12,30);break;
-    case 3:{  /* NOISE HIT: hiss and an air burst over a rough FM body */
-        static const uint8_t odd[]={56,72,88,104,120};
+    case 3:   /* NOISE HIT: hiss and an air burst over a rough FM body */
         p[SN_NOISE]=ss_range(r,70,127);p[P_E5]=ss_range(r,40,127);p[SN_PDEC]=ss_range(r,6,22);
-        p[P_E0]=ss_range(r,40,110);p[SN_RATIO]=odd[ss_rand(r)%NELEM(odd)];p[P_E2]=ss_range(r,30,90);p[SN_FMDEC]=ss_range(r,8,30);
-        p[SN_PAMT]=(int16_t)ss_range(r,-8,8);p[P_E6]=ss_range(r,60,120);
-        p[P_DEC]=ss_range(r,22,44);p[P_SUS]=0;p[P_REL]=ss_range(r,8,20);break;}
+        p[P_E0]=ss_range(r,40,110);p[SN_RATIO]=harm[ss_rand(r)%NELEM(harm)];p[P_E2]=ss_range(r,30,90);p[SN_FMDEC]=ss_range(r,8,30);
+        p[P_E6]=ss_range(r,60,120);
+        p[P_DEC]=ss_range(r,22,44);p[P_SUS]=0;p[P_REL]=ss_range(r,8,20);break;
     case 4:   /* CHIP ARP: the note stepped through the scale */
         p[SN_ALG]=ss_range(r,1,5);p[SN_RATIO3]=ss_range(r,8,60);
         p[P_DEC]=ss_range(r,60,90);p[P_SUS]=ss_range(r,50,110);p[P_REL]=ss_range(r,15,40);break;
-    default:{ /* GLITCH: heavy FM, a broken fast arp, a jump */
-        static const uint8_t odd[]={56,72,88,104,120};
-        p[P_E0]=ss_range(r,90,127);p[SN_RATIO]=odd[ss_rand(r)%NELEM(odd)];p[P_E2]=ss_range(r,60,127);p[SN_FMDEC]=ss_range(r,5,25);
-        if(ss_chance(r,60)){p[SN_ALG]=5;p[SN_RATIO3]=ss_range(r,1,15);}
-        p[SN_PAMT]=(int16_t)ss_range(r,-24,24);p[SN_PDEC]=ss_range(r,4,18);p[P_E7]=ss_range(r,10,40);
-        p[P_DEC]=ss_range(r,20,50);p[P_SUS]=ss_range(r,0,40);p[P_REL]=ss_range(r,8,24);break;}
+    default:  /* GLITCH: heavy FM, a broken fast arp in the scale */
+        p[P_E0]=ss_range(r,90,127);p[SN_RATIO]=harm[ss_rand(r)%NELEM(harm)];p[P_E2]=ss_range(r,60,127);p[SN_FMDEC]=ss_range(r,5,25);
+        if(ss_chance(r,70)){p[SN_ALG]=5;p[SN_RATIO3]=ss_range(r,1,15);}
+        p[P_E7]=ss_range(r,10,30);
+        p[P_DEC]=ss_range(r,20,50);p[P_SUS]=ss_range(r,0,40);p[P_REL]=ss_range(r,8,24);break;
     }
     p[P_ED_FX]=trim[kind];
+}
+/* (2026-11-10, the owner: SY/CH sometimes came out far too loud) the level a K2 sound's own space and sustain add:
+ * a wet sum (REV + DLY) past 90, a long delay feedback, a sustain past 90; in TRIM steps (1/2 dB), never up */
+static int16_t stattic_space_trim(const int16_t *p)
+{
+    int32_t t=0,wet=p[P_REV]+p[P_DLY];
+    if(wet>90)t-=(wet-90)/7;
+    if(p[SN_DFB]>55&&p[P_DLY]>50)t-=3;
+    if(p[P_SUS]>90)t-=(p[P_SUS]-90)/6;
+    return (int16_t)(t<-10?-10:t);
 }
 static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t seed,const uint32_t *mask,int16_t *p)
 {
@@ -296,6 +307,7 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
         p[SN_DCOLOR]=ss_range(&r,44,100);p[SN_DWIDTH]=ss_range(&r,48,124);
         p[P_CHOR]=ss_range(&r,0,st==0u||st==1u?46:24);
     }
+    if(channel==6u)p[P_ED_FX]=(int16_t)clamp(p[P_ED_FX]+stattic_space_trim(p),-64,63);   /* (CH: in stattic_runtime, with its own) */
     if(channel>=5u){                                     /* (2026-11-10, the owner) SY, CH: the shortest sounds last ~0.7-1 s, and
                                                           * every note fades out at its end, never cut off */
         if(p[P_SUS]<40&&p[P_DEC]<90)p[P_DEC]=ss_range(&r,90,96);
@@ -327,15 +339,16 @@ static void snow_design_lfo(uint32_t channel,uint32_t *r,int16_t *p)
     if(channel>=5u){                                     /* (2026-11-10, the owner) SY, CH: the LFOs never touch the pitch:
                                                           * no LFO or envelope on PITCH, and LFO B not on SHAPE (on KEYS it
                                                           * detunes the modulator, the notes go out of the scale) */
-        static const uint8_t keys2[]={1,4,5,7,8};
+        static const uint8_t keys2[]={1,4,7};            /* (TONE, DECAY, CUTOFF: not VELO or DRIVE, they change the loudness) */
         p[P_LD_PIT]=0;p[P_ED_PIT]=0;
-        if(p[SN_L2_DEST]==2||p[SN_L2_DEST]==3||p[SN_L2_DEST]==9)p[SN_L2_DEST]=keys2[ss_rand(r)%NELEM(keys2)];
+        if(p[SN_L2_DEST]!=1&&p[SN_L2_DEST]!=4&&p[SN_L2_DEST]!=7)p[SN_L2_DEST]=keys2[ss_rand(r)%NELEM(keys2)];
     }
     static const uint8_t dest[]={MD_CUT,MD_SHP,MD_PAN,MD_E1,MD_E1+4,MD_E1+6};
     uint32_t active=(uint32_t)ss_range(r,1,4);
     for(uint32_t i=0;i<4;i++){
         p[P_M1SRC+i*3u]=ss_chance(r,70)?MS_LFO:ss_chance(r,50)?MS_SH:MS_SLEW;
         p[P_M1DST+i*3u]=dest[ss_rand(r)%NELEM(dest)];
+        if(channel>=5u&&p[P_M1DST+i*3u]==MD_E1+4)p[P_M1DST+i*3u]=MD_CUT;   /* (SY, CH: not VELO: the loudness stays) */
         p[P_M1AMT+i*3u]=i<active?ss_range(r,2,7)*(ss_chance(r,50)?1:-1):0;
     }
 }
@@ -378,7 +391,7 @@ static void snow_design_section(track_t *t,uint32_t channel,uint32_t family,uint
                                                          * ~90 %, the reverb's tail long (size, its longer models, less damping) */
                 next[P_DLY]=ss_range(&r,0,114);next[P_REV]=ss_range(&r,6,114);
                 next[SN_RSIZE]=ss_range(&r,80,127);next[SN_RTYPE]=ss_chance(&r,70)?ss_range(&r,1,2):0;
-                next[SN_RDAMP]=ss_range(&r,16,72);next[SN_RPRE]=ss_range(&r,0,40);next[SN_DFB]=ss_range(&r,24,80);
+                next[SN_RDAMP]=ss_range(&r,16,72);next[SN_RPRE]=ss_range(&r,0,40);next[SN_DFB]=ss_range(&r,24,70);
             }
             if(t==TDRUM){                               /* (2026-11-09) DR's rack (shared with BS): a softer space */
                 next[P_REV]=ss_range(&r,12,40);next[P_DLY]=ss_chance(&r,55)?ss_range(&r,4,26):0;

@@ -408,7 +408,7 @@ static int stattic_prepare(uint32_t k,uint32_t knob)
             for(uint32_t i=0;i<NELEM(space);i++)mask[space[i]/32u]|=1u<<(space[i]%32u);
         }
         if(knob==1u&&k==2u){                                 /* (the owner) CH: a loud new sound is trimmed down */
-            next.p[P_ED_FX]=stattic_ch_trim(next.p);mask[P_ED_FX/32u]|=1u<<(P_ED_FX%32u);
+            next.p[P_ED_FX]=(int16_t)clamp(stattic_ch_trim(next.p)+stattic_space_trim(next.p),-64,63);mask[P_ED_FX/32u]|=1u<<(P_ED_FX%32u);   /* (+ its space's level) */
         }
         if(k==1u){next.p[P_VOICE]=V_POLY;next.p[SN_PLAY_MODE]=1;}
         if(k==TRK_DRUM&&knob==2u){next.p[SN_L2_DEST]=(int16_t)(1u+(uint32_t)next.p[SN_L2_DEST]%4u);if(!next.p[SN_L2_DEPTH])next.p[SN_L2_DEPTH]=24;}
