@@ -69,6 +69,9 @@
     [SN_G_SEED_D] = PD("SEED D", F_INT, 0, 127, 63),
     [SN_G_SCOPE] = PD("TARGET", F_INT, 0, 1, 0),
     [SN_G_STYLE] = PD("PARM AMT", F_PCT, 0, 100, 30),
+    [SN_MORPH_START] = PE("START", SN_MSTARTS, 1),     /* (2026-11-10) 1/8 */
+    [SN_MORPH_TIME] = PE("TIME", SN_MTIMES, 3),         /* 2 s */
+    [SN_MORPH_CURVE] = PE("CURVE", SN_MCURVES, 0),
     [SN_G_COMPLEX] = PD("COMPLEX", F_PCT, 0, 100, 30),
     [SN_G_HUMAN] = PD("HUMAN", F_PCT, 0, 100, 10),
     [SN_G_ROTATE] = PD("ROTATE", F_INT, 0, 15, 0),

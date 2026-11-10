@@ -60,11 +60,12 @@ static void stattic_mask_all(uint32_t *mask)
     for(uint32_t i=0;i<ST_PARAM_WORDS;i++)mask[i]=0xffffffffu;
 }
 static uint32_t stattic_when(void) { return song.playing?clk_beat/4u+1u:0u; }
+static uint8_t stattic_pub_fine,stattic_pub_glide;static uint32_t stattic_pub_at16;   /* (MORPH: the next publish on the START grid) */
 static void stattic_publish(uint32_t k,const stattic_snapshot_t *s,const uint32_t *mask,uint32_t what,uint32_t bar)
 {
     stattic_change_t *q=&stattic_change[k];q->armed=0;
     q->value=*s;memcpy(q->mask,mask,sizeof q->mask);q->what=(uint8_t)what;q->slot=s->slot;
-    q->bar=bar;q->serial=++stattic_serial;RING_PUBLISH();q->armed=1;
+    q->bar=bar;q->fine=stattic_pub_fine;q->at16=stattic_pub_at16;q->glide=stattic_pub_glide;stattic_pub_fine=stattic_pub_glide=0;q->serial=++stattic_serial;RING_PUBLISH();q->armed=1;
     stattic_revision++;stattic_ui_dirty=1;
 }
 static void stattic_undo_mark(const track_t *t,uint32_t session)
@@ -104,9 +105,12 @@ static int stattic_undo(int redo)
         (*stattic_history_entry(redo?stattic_history_at:stattic_history_at-1u)).session==group);
     STATTIC_GUARD_RESTORE(f);return 1;
 }
+#define ST_MORPH_MAX 96u
+typedef struct { uint16_t n,id[ST_MORPH_MAX];int16_t from[ST_MORPH_MAX],to[ST_MORPH_MAX];uint32_t t0,dur;uint8_t curve; } st_morph_t;
+static st_morph_t stattic_morph[3] __attribute__((section(".pool")));
 static void stattic_runtime_init(void)
 {
-    memset(stattic_banks,0,sizeof stattic_banks);memset(stattic_change,0,sizeof stattic_change);
+    memset(stattic_banks,0,sizeof stattic_banks);memset(stattic_change,0,sizeof stattic_change);memset(stattic_morph,0,sizeof stattic_morph);
     memset(stattic_current,0,sizeof stattic_current);memset(stattic_origin,0,sizeof stattic_origin);
     memset(stattic_step_time,0,sizeof stattic_step_time);
     memset(stattic_live_pass,0,sizeof stattic_live_pass);memset(snow_offset,0,sizeof snow_offset);
@@ -127,10 +131,46 @@ static void stattic_runtime_start(void)
     if(stattic_global_restore.armed)stattic_global_restore.bar=0;
     for(uint32_t k=0;k<NTRK;k++)if(stattic_change[k].armed)stattic_change[k].bar=0;
 }
+/* (2026-11-10, the owner) MORPH: a new sound, LFO or effects from HOME 2 K2-K4 starts on the START grid and its
+ * continuous values glide there over TIME (SMOOTH: eased in and out, as a hand on the knobs), from wherever they
+ * are, so a sound turns into the next without a seam. The switches (waves, ratios, models, sync divisions, routing)
+ * change at once; a value locked on the playing step takes the glide through its lock's base. A new turn during a
+ * glide aims again from where it is. Run in the event pass, a few hundred values a block at most. */
+static uint32_t stattic_now16(void){return clk_beat*4u+(uint32_t)((uint64_t)clk_pos*4u/BEAT_U);}
+static uint32_t stattic_morph_ms(const track_t *t)
+{
+    static const uint16_t ms[5]={0,500,1000,2000,4000};uint32_t v=(uint32_t)t->p[SN_MORPH_TIME];
+    if(v<5u)return ms[v];
+    uint32_t bpm=(uint32_t)clamp(song.g[G_BPM],20,300);return (v==5u?1u:2u)*240000u/bpm;
+}
+static int stattic_morphable(const track_t *t,uint32_t id)
+{
+    static const uint16_t sw[]={SN_RATIO,SN_RATIO3,SN_TUNE,SN_FINE,SN_DSYNC,P_LSYNC,SN_L2_SYNC,SN_L2_DEST,P_ITYPE,P_DKSRC,P_LEVEL,P_MUTE};
+    for(uint32_t i=0;i<NELEM(sw);i++)if(id==sw[i])return 0;
+    if(id>=P_M1SRC&&id<=P_M4AMT&&(id-P_M1SRC)%3u!=2u)return 0;
+    const param_desc_t *d=id>=P_IA&&id<=P_IC?ins_desc(t->p[P_ITYPE],id-P_IA):track_desc(t,id);
+    return d->fmt!=F_ENUM&&d->max-d->min>=8;
+}
+static void stattic_morph_write(track_t *t,uint32_t id,int16_t v)
+{
+    for(uint32_t i=0;i<t->lk_n&&i<NLOCK;i++)if(t->lk_param[i]==id){t->lk_base[i]=v;return;}
+    t->p[id]=v;
+}
+static void stattic_morph_run(void)
+{
+    for(uint32_t k=0;k<3u;k++){
+        st_morph_t *m=&stattic_morph[k];if(!m->n||m->n>ST_MORPH_MAX){m->n=0;continue;}
+        uint32_t e=fm1_ms-m->t0,f=e>=m->dur?1024u:e*1024u/(m->dur?m->dur:1u);
+        if(!m->curve)f=f*f/1024u*(3072u-2u*f)/1024u;
+        for(uint32_t i=0;i<m->n;i++)stattic_morph_write(&trk[k],m->id[i],(int16_t)(m->from[i]+((int32_t)(m->to[i]-m->from[i])*(int32_t)f)/1024));
+        if(e>=m->dur)m->n=0;
+    }
+}
 static void stattic_runtime_tick(void)
 {
     if(!stattic_ready)return;
     uint32_t bar=clk_beat/4u;
+    stattic_morph_run();
     if(stattic_global_restore.armed&&(!song.playing||(int32_t)(bar-stattic_global_restore.bar)>=0)){
         for(uint32_t g=0;g<G_COUNT;g++)
             if(g!=G_LOAD&&g!=G_SAVE&&g!=G_CLRSEQ&&g!=G_INITSND&&g!=G_NEWPRJ&&g!=G_INFO)
@@ -139,7 +179,7 @@ static void stattic_runtime_tick(void)
     }
     for(uint32_t k=0;k<NTRK;k++){
         stattic_change_t *q=&stattic_change[k];track_t *t=&trk[k];
-        if(((stattic_staging>>k)&1u)||!q->armed||(song.playing&&(int32_t)(bar-q->bar)<0))continue;
+        if(((stattic_staging>>k)&1u)||!q->armed||(song.playing&&(q->fine?(int32_t)(stattic_now16()-q->at16)<0:(int32_t)(bar-q->bar)<0)))continue;
         if(q->what&ST_CHANGE_PATTERN){
             stattic_pattern_capture(t,&stattic_banks[k][stattic_current[k]]);
             stattic_pattern_apply(t,&q->value.pattern);stattic_current[k]=q->slot%ST_PATTERNS;
@@ -149,7 +189,18 @@ static void stattic_runtime_tick(void)
         if((q->what&ST_CHANGE_FADE)&&k<4u)stattic_fade_stage[k]=1;
         if(q->what&ST_CHANGE_SOUND){
             locks_restore(t);
-            for(uint32_t id=0;id<P_COUNT;id++)if((q->mask[id/32u]>>(id%32u))&1u)t->p[id]=q->value.p[id];
+            uint32_t glide=k<3u&&q->glide?stattic_morph_ms(t):0u;st_morph_t *m=k<3u?&stattic_morph[k]:0;
+            if(m&&m->n>ST_MORPH_MAX)m->n=0;
+            if(m&&glide)for(uint32_t i=0;i<m->n;i++)m->from[i]=t->p[m->id[i]];   /* (a glide under way: on from where it is) */
+            else if(m)m->n=0;
+            for(uint32_t id=0;id<P_COUNT;id++)if((q->mask[id/32u]>>(id%32u))&1u){
+                if(m&&glide&&stattic_morphable(t,id)){
+                    uint32_t i=0;while(i<m->n&&m->id[i]!=id)i++;
+                    if(i==m->n){if(m->n>=ST_MORPH_MAX||t->p[id]==q->value.p[id]){t->p[id]=q->value.p[id];continue;}m->n++;m->id[i]=(uint16_t)id;m->from[i]=t->p[id];}
+                    m->to[i]=q->value.p[id];
+                }else t->p[id]=q->value.p[id];
+            }
+            if(m&&glide&&m->n){m->t0=fm1_ms;m->dur=glide;m->curve=(uint8_t)t->p[SN_MORPH_CURVE];}
             memcpy(snow_offset[k],q->value.offset,sizeof q->value.offset);
             if(k==2u)t->p[P_CHORD]=t->p[SN_PLAY_MODE]?0:1;
         }
@@ -401,7 +452,8 @@ static int stattic_prepare(uint32_t k,uint32_t knob)
         uint32_t own[ST_PARAM_WORDS];
         snow_design_section(&trk[k],role,knob==1u?FAM_EDIT:knob==2u?FAM_LFO:FAM_FX,own,next.p);
         for(uint32_t i=0;i<ST_PARAM_WORDS;i++)mask[i]|=own[i];what|=ST_CHANGE_SOUND;
-        if(knob==1u&&k!=TRK_DRUM)what|=ST_CHANGE_FADE;      /* (the owner) K2's new sound enters softly */
+        if(knob==1u&&k!=TRK_DRUM&&!stattic_morph_ms(&trk[k]))what|=ST_CHANGE_FADE;   /* (the owner) K2's new sound enters softly
+                                                                                     * (with MORPH it glides in instead) */
         if(knob==1u&&k==1u)mask[P_ED_FX/32u]|=1u<<(P_ED_FX%32u);   /* (SY: its 8-bit / FX sounds carry a TRIM) */
         if(knob==1u&&(k==1u||k==2u)){                    /* (2026-11-09) SY, CH: K2's sound brings its own space */
             static const uint8_t space[]={P_REV,P_DLY,P_CHOR,SN_RSIZE,SN_RDAMP,SN_RPRE,SN_RTYPE,SN_DSYNC,SN_DTIME,SN_DFB,SN_DCOLOR,SN_DWIDTH};
@@ -415,6 +467,11 @@ static int stattic_prepare(uint32_t k,uint32_t knob)
     }
     f=STATTIC_GUARD_SAVE();
     if(!prior||!q->armed||q->serial!=prior)stattic_undo_mark(&trk[k],(stattic_action+=4u)|3u);
+    if(k<3u&&knob>=1u&&knob<=3u&&!(what&(ST_CHANGE_PATTERN|ST_CHANGE_SHOTS)))stattic_pub_glide=1;
+    if(k<3u&&knob>=1u&&knob<=3u&&!(what&(ST_CHANGE_PATTERN|ST_CHANGE_SHOTS))&&song.playing){   /* (MORPH: on the START grid) */
+        static const uint8_t grid[4]={1,2,4,16};uint32_t g=grid[(uint32_t)trk[k].p[SN_MORPH_START]&3u],now=stattic_now16();
+        stattic_pub_at16=(now/g+1u)*g;stattic_pub_fine=1;
+    }
     stattic_publish(k,&next,mask,what,stattic_when());
     STATTIC_GUARD_RESTORE(f);return 0;
 }

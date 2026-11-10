@@ -21,7 +21,8 @@ typedef struct {
 } stattic_snapshot_t;
 typedef struct {
     stattic_snapshot_t value;
-    uint32_t mask[ST_PARAM_WORDS],bar,serial;
+    uint32_t mask[ST_PARAM_WORDS],bar,serial,at16;   /* at16: a sound's change on the START grid (16ths), when fine */
+    uint8_t fine,glide;                              /* glide: a HOME 2 K2-K4 change (MORPH); undo, loads... at once */
     uint8_t what,slot;
     volatile uint8_t armed;
 } stattic_change_t;
