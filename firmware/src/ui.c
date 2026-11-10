@@ -677,6 +677,7 @@ UI_SMALL static void apply_preset_to(track_t *t, uint32_t pi)
     }
 #if FELUCCA_STATTIC
     snow_fill(t->p,t->eng_req,pi);
+    if(t->p[P_ATK]<ST_ATK_MIN)t->p[P_ATK]=ST_ATK_MIN;   /* (2026-11-10, the owner: no attack under 40 ms) */
     t->p[SN_PLAY_MODE]=t->eng_req==STATTIC_CH_ENGINE?0:1;
     t->p[P_CHORD]=t->eng_req==STATTIC_CH_ENGINE?1:0;
     t->p[SN_MODE]=1;

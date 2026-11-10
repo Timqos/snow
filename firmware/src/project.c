@@ -630,6 +630,7 @@ static void proj_apply(const project_t *p, int all)
         for(uint32_t j=0;j<4;j++)snow_offset[k][j]=(int16_t)clamp(p->offset[k][j],-127,127);
         stattic_macro[k]=p->macro[k]&3u;stattic_origin[k]=0;stattic_change[k].armed=0;
         if(k==2u)t->p[P_CHORD]=t->p[SN_PLAY_MODE]?0:1;
+        if(k<3u&&t->p[P_ATK]<ST_ATK_MIN)t->p[P_ATK]=ST_ATK_MIN;   /* (2026-11-10, the owner: 40 ms at least) */
 #endif
     }
 #if FELUCCA_STATTIC

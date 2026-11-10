@@ -47,6 +47,8 @@ static uint8_t stattic_ready,stattic_ui_dirty;
 /* (2026-11-10, the owner) a K2-K4 change gliding in (MORPH) on BS, SY or CH: a note that would end before the next
  * one goes on until the glide is over (or the next note comes), so the glide is heard on a sounding note */
 static volatile uint8_t stattic_morph_live[3],stattic_morph_held[3];
+/* (2026-11-10, the owner) BS, SY, CH: the amp attack never under 40 ms (TIME_MS_X10[51] = 40.4 ms) from a preset or K2 */
+#define ST_ATK_MIN 51
 static void stattic_key_set(int32_t root,int32_t scale);static void stattic_key_unify(void);   /* (the song's key: stattic_runtime.c) */
 static volatile uint8_t stattic_staging;
 static uint8_t stattic_macro[NTRK];

@@ -391,6 +391,7 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
     }
     /* CH keeps its two-bar release, or the user's manual choice. */
     if(channel==5u)p[P_REL]=stattic_base_value(t,P_REL);
+    if(channel>=4u&&p[P_ATK]<ST_ATK_MIN)p[P_ATK]=(int16_t)(ST_ATK_MIN+ss_range(&r,0,3));   /* (the owner: BS, SY, CH attack 40 ms at least) */
     for(uint32_t id=0;id<P_COUNT;id++)if((mask[id/32u]>>(id%32u))&1u){
         const param_desc_t *d=id>=P_IA&&id<=P_IC?ins_desc(p[P_ITYPE],id-P_IA):track_desc(t,id);
         p[id]=(int16_t)clamp(p[id],d->min,d->max);
