@@ -103,6 +103,7 @@ static void stattic_footer(uint32_t page)
     if(page==3u){a="OCT+/-";b="RAND PTN";}
     if(page==4u){a="W:MUTE B:SOLO";b="K1:CH K2:VOL";}
     if(page==SN_HOME_PROJ){a="K1:SLOT K2:SAVE";b="K3:DEL K4:OPEN";}
+    if(page==SN_HOME_KEY){a="K1:NOTE K2:SCALE";b="K3:ALL SCALES";}
     char label[7]="PG 1/6";label[3]=(char)('1'+page);label[5]=(char)('0'+SN_HOME_COUNT);
     stattic_hint_text(6,ST_HINT_Y,a,T_TEXT);
     stattic_hint_text(6,ST_HINT_Y+ST_HINT_PITCH,b,bink);
@@ -147,6 +148,34 @@ static void stattic_page_body(uint32_t page)
                 if(p<2u)cv_rect(x+11,yy+23,2,6,T_TEXT);
             }
         }
+    }else if(page==SN_HOME_KEY){
+        /* (2026-11-10, the owner: the song's key, for people) the key big, how it feels, its notes on a keyboard */
+        static const char *const mood[]={"","BRIGHT, HAPPY","DARK, SAD","SOFT, DARK","WARM, BLUESY","OPEN, SIMPLE","OPEN, MOODY",
+            "DRAMATIC","TENSE, SPANISH","DREAMY, FLOATING"};
+        int32_t root=trk[0].p[P_ROOT]%12,scale=clamp(trk[0].p[P_SCALE],0,(int32_t)NSCALES-1);
+        stattic_text(16,37,"SONG KEY",T_THEME,13,18,8);
+        cv_rect(15,62,58,44,T_THEME);stattic_text(N_NOTE[root][1]?20:31,67,N_NOTE[root],T_INK,20,34,2);
+        const char *nm=N_SCALE[scale];uint32_t len=str_len(nm);
+        if(len<=10u)stattic_text(84,64,nm,T_TEXT,12,20,10);
+        else{                                                    /* (a long name on two lines) */
+            char a[16];uint32_t cut=0;for(uint32_t i=0;i<len&&i<15u;i++)if(nm[i]==' '||nm[i]=='-')cut=i;
+            if(!cut||cut>13u)cut=len<13u?len:13u;
+            str_cpy(a,nm,cut+1u<sizeof a?cut+1u:sizeof a);stattic_text(84,62,a,T_TEXT,9,14,13);
+            stattic_text(84,79,nm+cut+(nm[cut]==' '||nm[cut]=='-'),T_TEXT,9,14,13);
+        }
+        stattic_text(84,96,scale<(int32_t)NELEM(mood)?mood[scale]:"SPECIAL",T_THEME,6,10,16);
+        uint32_t mask=SCALE_MASK[scale];
+        static const uint8_t white[7]={0,2,4,5,7,9,11},black[5]={1,3,6,8,10};static const uint8_t bx[5]={0,1,3,4,5};
+        for(uint32_t i=0;i<7u;i++){                               /* (white keys) */
+            int32_t x=16+(int32_t)i*30;uint32_t pc=white[i],deg=(pc+12u-(uint32_t)root)%12u,in=(mask>>deg)&1u;
+            if(pc==(uint32_t)root)cv_rect(x,118,28,52,T_TEXT);else if(in)cv_rect(x,118,28,52,T_THEME);else cv_frame(x,118,28,52,T_MID);
+        }
+        for(uint32_t i=0;i<5u;i++){                               /* (black keys) */
+            int32_t x=16+(int32_t)bx[i]*30+20;uint32_t pc=black[i],deg=(pc+12u-(uint32_t)root)%12u,in=(mask>>deg)&1u;
+            cv_rect(x-2,116,20,34,T_BG);
+            if(pc==(uint32_t)root)cv_rect(x,118,16,30,T_TEXT);else if(in)cv_rect(x,118,16,30,T_THEME);else cv_frame(x,118,16,30,T_MID);
+        }
+        stattic_text(16,176,"EVERY CHANNEL PLAYS IN IT",T_MID,6,9,25);
     }else if(page==SN_HOME_PROJ){
         /* (2026-11-09) PROJECTS: the four slots; filled = saved, the frame = the one open, the box = K1's */
         stattic_text(16,37,"PROJECTS",T_THEME,13,18,8);stattic_small_icon(1,170,33);
@@ -198,6 +227,7 @@ static void snow_home_draw(void)
     if(page<3u)sig^=stattic_focus[page]*349u+sc.frame*2654435761u;
     if(page==SN_HOME_MIX)for(uint32_t id=0;id<4u;id++)sig=(sig^(uint32_t)t->p[ST_MIX_IDS[id]])*16777619u;
     sig^=(uint32_t)t->p[SN_PLAY_MODE]*32993u;
+    if(page==SN_HOME_KEY)sig^=((uint32_t)trk[0].p[P_ROOT]*64u+(uint32_t)trk[0].p[P_SCALE])*2246822519u;
     if(page==SN_HOME_PROJ)sig^=(stattic_proj_sel+1u)*7703u+arrangement_ready()*1009u+(uint32_t)(live_sec+2)*97u+(uint32_t)song.playing*3u+
         (uint32_t)(stattic_proj_arm&&fm1_ms-stattic_proj_arm_ms<=3000u)*50331653u+(uint32_t)(stattic_proj_msg[0]&&fm1_ms-stattic_proj_msg_ms<4000u)*1610612741u;
     sig^=((uint32_t)stattic_pending_mute_bits()|((uint32_t)stattic_pending_solo_bits()<<6))*63997u;

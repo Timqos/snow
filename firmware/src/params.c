@@ -552,6 +552,7 @@ static int page_shown(const page_t *pg)
         uint32_t c,any=0;for(c=0;c<4u;c++)any|=pg->id[c]!=0xFFu&&!stattic_bs_hidden(pg->id[c]);
         if(!any)return 0;
     }
+    if(pg->fam==FAM_SCL&&pg->scope==SC_TRACK&&((pg->id[0]==P_ROOT&&pg->id[3]==P_CHORD)||pg->id[0]==P_TRANS))return 0;   /* (SLOOP's SEL, SEL 2: KEY instead) */
     if(stattic_keys_track(TSEL)&&pg->scope==SC_TRACK){
         uint32_t c,any=0;for(c=0;c<4u;c++)any|=pg->id[c]!=0xFFu&&!stattic_keys_hidden(pg->id[c]);
         if(!any)return 0;

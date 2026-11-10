@@ -85,7 +85,7 @@ static void stattic_key_track(uint32_t k,int32_t r1,int32_t s1)
 }
 static void stattic_key_set(int32_t root,int32_t scale)
 {
-    root=clamp(root,0,11);scale=clamp(scale,0,(int32_t)NSCALES-1);
+    root=clamp(root,0,11);scale=clamp(scale,1,(int32_t)NSCALES-1);   /* (no CHROMATIC song: the generators need a scale) */
     uint32_t f=STATTIC_GUARD_SAVE();
     for(uint32_t k=0;k<NTRK;k++){
         if(k==TRK_DRUM){trk[k].p[P_ROOT]=(int16_t)root;trk[k].p[P_SCALE]=(int16_t)scale;}
@@ -93,8 +93,12 @@ static void stattic_key_set(int32_t root,int32_t scale)
     }
     stattic_ui_dirty=1;stattic_revision++;STATTIC_GUARD_RESTORE(f);
 }
-/* after a load: one key for the song (the bass's), whatever the parts were saved with */
-static void stattic_key_unify(void){stattic_key_set(trk[0].p[P_ROOT],trk[0].p[P_SCALE]);}
+/* after a load: one key for the song (the first part's with a scale: BS, SY, CH), whatever the parts were saved with */
+static void stattic_key_unify(void)
+{
+    uint32_t k=0;while(k<NPART&&trk[k].p[P_SCALE]<=0)k++;            /* (a part with a scale; else C minor's degrees) */
+    if(k<NPART)stattic_key_set(trk[k].p[P_ROOT],trk[k].p[P_SCALE]);else stattic_key_set(trk[0].p[P_ROOT],2);
+}
 static void stattic_capture(uint32_t k,stattic_snapshot_t *s)
 {
     track_t *t=&trk[k];
@@ -170,6 +174,7 @@ static void stattic_runtime_init(void)
     memset(&stattic_art_shuffle,0,sizeof stattic_art_shuffle);
     stattic_art_shuffle.random=0x73746174u^fm1_ms;stattic_art_shuffle.last=stattic_art_shuffle.page=stattic_art_shuffle.knob=255;
     for(uint32_t page=0;page<3;page++){stattic_art_pick[page]=(uint8_t)page;stattic_scroll[page]=0;}
+    stattic_key_unify();                               /* (one key, never CHROMATIC: a load unifies again) */
     stattic_ready=1;stattic_revision++;
 }
 static void stattic_runtime_start(void)

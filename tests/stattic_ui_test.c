@@ -55,6 +55,15 @@ int main(int argc,char **argv)
         assert(erases==er+1u);                         /* (C is empty: nothing to erase) */
         stattic_home_page=0;frames(2);
     }
+    {   /* HOME 7 SONG KEY: K1 the note, K2 the known scales, K3 all of them; every part at once, never CHROMATIC */
+        stattic_home_page=SN_HOME_KEY;frames(2);int16_t r0=trk[0].p[P_ROOT];
+        encs[panel.enc[EN_K1]]=1;frame();for(uint32_t k=0;k<NTRK;k++)assert(trk[k].p[P_ROOT]==(r0+1)%12);
+        encs[panel.enc[EN_K1]]=-1;frame();
+        stattic_key_set(trk[0].p[P_ROOT],2);encs[panel.enc[EN_K2]]=-1;frame();for(uint32_t k=0;k<NTRK;k++)assert(trk[k].p[P_SCALE]==1);
+        encs[panel.enc[EN_K3]]=-1;frame();assert(trk[0].p[P_SCALE]==1);
+        encs[panel.enc[EN_K3]]=1;frame();assert(trk[1].p[P_SCALE]==2&&trk[2].p[P_SCALE]==2);
+        ui.force=1;frames(2);ppm("stattic-home-7");stattic_home_page=0;frames(2);
+    }
     tap(B_ENV);assert(!ui.home&&cur_page()->fam==FAM_ENV);ui.force=1;frame();ppm("stattic-env");
     tap(B_HOME);assert(ui.home);tap(B_GLO);assert(!ui.home&&cur_page()->fam==FAM_GLO);
     int16_t before=song.g[G_BPM];encs[panel.enc[EN_SELECT]]=1;frame();
@@ -69,6 +78,6 @@ int main(int argc,char **argv)
             ui.page=(uint8_t)p;page_entered();ui.force=1;frames(2);
         }
     }
-    puts("STATTIC UI: six HOME pages (PROJECTS: save, open, erase by two turns), DR/BS/SY/CH, SELECT without tempo, long/short OCT+, mute/solo keys, native SLOOP screens");
+    puts("STATTIC UI: seven HOME pages (SONG KEY: every part) (PROJECTS: save, open, erase by two turns), DR/BS/SY/CH, SELECT without tempo, long/short OCT+, mute/solo keys, native SLOOP screens");
     return 0;
 }

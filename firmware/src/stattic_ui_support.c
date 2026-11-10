@@ -5,7 +5,7 @@
 #define T_THEME C_WHITE
 #define T_INK 0u
 #define T_MID RGB(176,172,168)
-enum { SN_HOME_SYNTH,SN_HOME_GEN,SN_HOME_MIX,SN_HOME_PAT,SN_HOME_MS,SN_HOME_PROJ,SN_HOME_COUNT };
+enum { SN_HOME_SYNTH,SN_HOME_GEN,SN_HOME_MIX,SN_HOME_PAT,SN_HOME_MS,SN_HOME_PROJ,SN_HOME_KEY,SN_HOME_COUNT };
 static void cv_frame(int32_t x,int32_t y,int32_t w,int32_t h,uint16_t ink)
 {
     cv_rect(x,y,w,1,ink);cv_rect(x,y+h-1,w,1,ink);cv_rect(x,y,1,h,ink);cv_rect(x+w-1,y,1,h,ink);

@@ -31,6 +31,20 @@ static void stattic_projects_turn(uint32_t knob,int32_t s)
         else{section_load(slot);stattic_proj_note("OPENED ",slot);}
     }
 }
+/* (2026-11-10, the owner) HOME 7 SONG KEY: K1 the key note, K2 the scales people know, K3 every scale; at once,
+ * for every part, the notes written moving along (stattic_key_set) */
+static void stattic_key_turn(uint32_t knob,int32_t s)
+{
+    static const uint8_t common[]={1,2,3,4,9,8,5,6,7};
+    int32_t root=trk[0].p[P_ROOT]%12,scale=trk[0].p[P_SCALE],step=s>0?1:-1;
+    if(knob==0u)root=((root+step)%12+12)%12;
+    else if(knob==1u){
+        int32_t at=-1;for(uint32_t i=0;i<NELEM(common);i++)if(common[i]==scale)at=(int32_t)i;
+        at=at<0?0:clamp(at+step,0,(int32_t)NELEM(common)-1);scale=common[at];
+    }else if(knob==2u)scale=clamp(scale+step,1,(int32_t)NSCALES-1);
+    else return;
+    stattic_key_set(root,scale);ui.force=1;
+}
 static void stattic_home_input(uint32_t *pressed)
 {
     uint32_t up=1u<<panel.btn[B_OCTUP],dn=1u<<panel.btn[B_OCTDN];int32_t s;
@@ -94,6 +108,8 @@ static void stattic_home_input(uint32_t *pressed)
             TSEL->p[id]=(int16_t)clamp(TSEL->p[id]+s,d->min,d->max);stattic_touch(TSEL,id);STATTIC_GUARD_RESTORE(f);
         }else if(stattic_home_page==SN_HOME_PROJ){
             stattic_projects_turn(knob,s);
+        }else if(stattic_home_page==SN_HOME_KEY){
+            stattic_key_turn(knob,s);
         }else if(stattic_home_page==3u){
             uint32_t track=stattic_role_track(knob),slot=stattic_pattern_current(track);
             (void)stattic_pattern_select(track,(uint32_t)clamp((int32_t)slot+s,0,2));
