@@ -106,7 +106,9 @@ static int stattic_undo(int redo)
     STATTIC_GUARD_RESTORE(f);return 1;
 }
 #define ST_MORPH_MAX 96u
-typedef struct { uint16_t n,id[ST_MORPH_MAX];int16_t from[ST_MORPH_MAX],to[ST_MORPH_MAX];uint32_t t0,dur;uint8_t curve; } st_morph_t;
+#define ST_MORPH_SW 24u
+typedef struct { uint16_t n,id[ST_MORPH_MAX];int16_t from[ST_MORPH_MAX],to[ST_MORPH_MAX];uint32_t t0,dur;uint8_t curve,nd,dstate;
+                 uint16_t did[ST_MORPH_SW];int16_t dval[ST_MORPH_SW]; } st_morph_t;   /* d*: the switches, at the glide's middle */
 static st_morph_t stattic_morph[3] __attribute__((section(".pool")));
 static void stattic_runtime_init(void)
 {
@@ -159,8 +161,17 @@ static void stattic_morph_write(track_t *t,uint32_t id,int16_t v)
 static void stattic_morph_run(void)
 {
     for(uint32_t k=0;k<3u;k++){
-        st_morph_t *m=&stattic_morph[k];if(!m->n||m->n>ST_MORPH_MAX){m->n=0;continue;}
-        uint32_t e=fm1_ms-m->t0,f=e>=m->dur?1024u:e*1024u/(m->dur?m->dur:1u);
+        st_morph_t *m=&stattic_morph[k];if(m->n>ST_MORPH_MAX)m->n=0;if(m->nd>ST_MORPH_SW)m->nd=0;
+        uint32_t e=fm1_ms-m->t0;
+        /* (the switches, waves, ratios, octave, algorithm...: at the middle of the glide, in a short dip of the
+         * channel: down in ~3 ms, the switch at the bottom, back up over ~0.15 s) */
+        if(m->dstate==1u&&e>=m->dur/2u){stattic_fade_stage[k]=1;m->dstate=2;}
+        else if(m->dstate==2u&&stattic_fade_stage[k]!=1u){
+            for(uint32_t i=0;i<m->nd;i++)trk[k].p[m->did[i]]=m->dval[i];
+            m->nd=0;m->dstate=0;
+        }
+        if(!m->n)continue;
+        uint32_t f=e>=m->dur?1024u:e*1024u/(m->dur?m->dur:1u);
         if(!m->curve)f=f*f/1024u*(3072u-2u*f)/1024u;
         for(uint32_t i=0;i<m->n;i++)stattic_morph_write(&trk[k],m->id[i],(int16_t)(m->from[i]+((int32_t)(m->to[i]-m->from[i])*(int32_t)f)/1024));
         if(e>=m->dur)m->n=0;
@@ -192,15 +203,19 @@ static void stattic_runtime_tick(void)
             uint32_t glide=k<3u&&q->glide?stattic_morph_ms(t):0u;st_morph_t *m=k<3u?&stattic_morph[k]:0;
             if(m&&m->n>ST_MORPH_MAX)m->n=0;
             if(m&&glide)for(uint32_t i=0;i<m->n;i++)m->from[i]=t->p[m->id[i]];   /* (a glide under way: on from where it is) */
-            else if(m)m->n=0;
+            else if(m){for(uint32_t i=0;i<m->nd&&i<ST_MORPH_SW;i++)t->p[m->did[i]]=m->dval[i];m->n=0;m->nd=0;m->dstate=0;}
             for(uint32_t id=0;id<P_COUNT;id++)if((q->mask[id/32u]>>(id%32u))&1u){
                 if(m&&glide&&stattic_morphable(t,id)){
                     uint32_t i=0;while(i<m->n&&m->id[i]!=id)i++;
                     if(i==m->n){if(m->n>=ST_MORPH_MAX||t->p[id]==q->value.p[id]){t->p[id]=q->value.p[id];continue;}m->n++;m->id[i]=(uint16_t)id;m->from[i]=t->p[id];}
                     m->to[i]=q->value.p[id];
+                }else if(m&&glide&&t->p[id]!=q->value.p[id]){   /* a switch: kept for the glide's middle */
+                    uint32_t i=0;while(i<m->nd&&m->did[i]!=id)i++;
+                    if(i==m->nd){if(m->nd>=ST_MORPH_SW){t->p[id]=q->value.p[id];continue;}m->nd++;m->did[i]=(uint16_t)id;}
+                    m->dval[i]=q->value.p[id];
                 }else t->p[id]=q->value.p[id];
             }
-            if(m&&glide&&m->n){m->t0=fm1_ms;m->dur=glide;m->curve=(uint8_t)t->p[SN_MORPH_CURVE];}
+            if(m&&glide&&(m->n||m->nd)){m->t0=fm1_ms;m->dur=glide;m->curve=(uint8_t)t->p[SN_MORPH_CURVE];if(m->nd)m->dstate=1;}
             memcpy(snow_offset[k],q->value.offset,sizeof q->value.offset);
             if(k==2u)t->p[P_CHORD]=t->p[SN_PLAY_MODE]?0:1;
         }
