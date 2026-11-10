@@ -241,9 +241,15 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
         default:break;                                           /* OPEN: the draw above */
         }
         if(channel==6u)p[P_ED_FX]=style_trim[keys_style];
+        /* (2026-11-10, the owner) SY, CH: K2 never moves the notes off the scale: no fine detune, the FM
+         * modulator only on whole harmonics (1x..7x: a half-way ratio such as 3.5x gives partials between
+         * the notes), the shape centred, a glide no more than a touch */
+        p[SN_FINE]=0;p[P_E1]=64;
+        {int32_t q=(p[SN_RATIO]+8)/16;p[SN_RATIO]=(int16_t)(16*clamp(q,1,7));}
+        if(p[P_GLIDE]>6)p[P_GLIDE]=ss_range(&r,0,6);
         if(channel==5u){                                 /* (2026-11-09, the owner) CH: no high chords. Never an octave up,
                                                           * no high bell partials (the modulator at most 4x) */
-            static const uint8_t ch_ratio[]={16,16,32,32,48,56,64};
+            static const uint8_t ch_ratio[]={16,16,32,32,48,64,64};
             if(p[SN_TUNE]>0)p[SN_TUNE]=0;
             if(p[SN_RATIO]>64)p[SN_RATIO]=ch_ratio[ss_rand(&r)%NELEM(ch_ratio)];
         }
@@ -269,8 +275,8 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
     p[P_LD_SHP]=ss_range(&r,-3,3);p[P_LD_FLT]=ss_range(&r,-3,3);p[P_LD_AMP]=ss_range(&r,0,4);
     p[P_LRATE]=ss_range(&r,18,83);p[P_LWAVE]=ss_range(&r,0,2);p[P_LPHASE]=ss_range(&r,0,127);
     p[P_LFADE]=ss_range(&r,0,60);p[P_LSYNC]=ss_chance(&r,35)?ss_range(&r,4,9):0;p[P_LTRIG]=ss_range(&r,0,1);
-    static const uint8_t destinations[]={1,2,5,7};
-    p[SN_L2_DEST]=destinations[ss_rand(&r)%NELEM(destinations)];p[SN_L2_DEPTH]=ss_range(&r,-5,5);
+    static const uint8_t destinations[]={1,2,5,7},keys_dest[]={1,5,7};
+    p[SN_L2_DEST]=channel>=5u?keys_dest[ss_rand(&r)%NELEM(keys_dest)]:destinations[ss_rand(&r)%NELEM(destinations)];   /* (SY, CH: not SHAPE) */p[SN_L2_DEPTH]=ss_range(&r,-5,5);
     p[SN_L2_RATE]=ss_range(&r,15,76);p[SN_L2_WAVE]=ss_range(&r,0,2);p[SN_L2_SYNC]=ss_chance(&r,35)?ss_range(&r,4,9):0;
     p[SN_L2_PHASE]=ss_range(&r,0,127);p[SN_L2_FADE]=ss_range(&r,0,63);p[SN_L2_TRIG]=ss_range(&r,0,1);
     p[P_EG2_ATK]=ss_range(&r,0,42);p[P_EG2_DEC]=ss_range(&r,40,93);p[P_EG2_SUS]=ss_range(&r,0,86);p[P_EG2_REL]=ss_range(&r,30,77);
@@ -290,9 +296,10 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
         p[SN_DCOLOR]=ss_range(&r,44,100);p[SN_DWIDTH]=ss_range(&r,48,124);
         p[P_CHOR]=ss_range(&r,0,st==0u||st==1u?46:24);
     }
-    if(channel>=5u){                                     /* (2026-11-09, the owner) SY, CH: no clicks; short sounds last ~0.4 s and more */
-        if(p[P_SUS]<40&&p[P_DEC]<82)p[P_DEC]=ss_range(&r,82,94);
-        if(channel==6u&&p[P_REL]<62)p[P_REL]=ss_range(&r,62,80);   /* (CH keeps its two-bar release, below) */
+    if(channel>=5u){                                     /* (2026-11-10, the owner) SY, CH: the shortest sounds last ~0.7-1 s, and
+                                                          * every note fades out at its end, never cut off */
+        if(p[P_SUS]<40&&p[P_DEC]<90)p[P_DEC]=ss_range(&r,90,96);
+        if(channel==6u&&p[P_REL]<72)p[P_REL]=ss_range(&r,72,86);   /* (~0.2-0.5 s; CH keeps its two-bar release, below) */
     }
     /* CH keeps its two-bar release, or the user's manual choice. */
     if(channel==5u)p[P_REL]=stattic_base_value(t,P_REL);
@@ -317,6 +324,13 @@ static void snow_design_lfo(uint32_t channel,uint32_t *r,int16_t *p)
     p[SN_L2_PHASE]=ss_range(r,0,127);p[SN_L2_FADE]=ss_range(r,0,72);
     p[SN_L2_SYNC]=ss_chance(r,65)?ss_range(r,2,10):0;p[SN_L2_TRIG]=ss_range(r,0,1);
     p[SN_L2_DEST]=dest2[ss_rand(r)%NELEM(dest2)];p[SN_L2_DEPTH]=ss_range(r,4,channel==0?8:18)*(ss_chance(r,50)?1:-1);
+    if(channel>=5u){                                     /* (2026-11-10, the owner) SY, CH: the LFOs never touch the pitch:
+                                                          * no LFO or envelope on PITCH, and LFO B not on SHAPE (on KEYS it
+                                                          * detunes the modulator, the notes go out of the scale) */
+        static const uint8_t keys2[]={1,4,5,7,8};
+        p[P_LD_PIT]=0;p[P_ED_PIT]=0;
+        if(p[SN_L2_DEST]==2||p[SN_L2_DEST]==3||p[SN_L2_DEST]==9)p[SN_L2_DEST]=keys2[ss_rand(r)%NELEM(keys2)];
+    }
     static const uint8_t dest[]={MD_CUT,MD_SHP,MD_PAN,MD_E1,MD_E1+4,MD_E1+6};
     uint32_t active=(uint32_t)ss_range(r,1,4);
     for(uint32_t i=0;i<4;i++){
