@@ -13,12 +13,14 @@ $('start').onclick=async()=>{
   $('start').disabled=true;status('Loading the interface and audio…');
   try{
     audio=new AudioContext({sampleRate:44100,latencyHint:'interactive'});await audio.resume();
-    const response=await fetch('./stattic.wasm');if(!response.ok)throw new Error('The simulator could not be loaded');const module=await WebAssembly.compile(await response.arrayBuffer());
+    let build={};try{build=await (await fetch('./build.json?fresh='+Date.now(),{cache:'no-store'})).json();}catch{}
+    const v=encodeURIComponent(build.wasm_sha256||Date.now());
+    const response=await fetch('./stattic.wasm?v='+v,{cache:'no-cache'});if(!response.ok)throw new Error('The simulator could not be loaded');const module=await WebAssembly.compile(await response.arrayBuffer());
     if(WebAssembly.Module.imports(module).length)throw new Error('Unexpected firmware imports');
-    await audio.audioWorklet.addModule('./processor.mjs');node=new AudioWorkletNode(audio,'stattic',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2],processorOptions:{module}});
+    await audio.audioWorklet.addModule('./processor.mjs?v='+v);node=new AudioWorkletNode(audio,'stattic',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2],processorOptions:{module}});
     gain=audio.createGain();gain.gain.value=$('volume').value/100;node.connect(gain).connect(audio.destination);
     node.port.onmessage=({data})=>{if(data.type==='screen')draw(data.screen,data.state);if(data.type==='error')status(data.message);};
-    ready=true;$('silence').disabled=false;$('start').textContent='Simulator running';status('HOME: SELECT changes pages; ALGORITHM changes channel. PLAY starts the sequence.');
+    ready=true;$('silence').disabled=false;$('start').textContent='Simulator running';status((build.version?build.version+'. ':'')+'HOME: SELECT changes pages; ALGORITHM changes channel. PLAY starts the sequence.');
   }catch(error){status(error.message);$('start').disabled=false;await audio?.close();}
 };
 const setVolume=v=>{$('volume').value=v;if(gain)gain.gain.setTargetAtTime(v/100,audio.currentTime,.02);};
