@@ -176,9 +176,36 @@ static void song_key(void)
     song.playing=0;
     puts("stattic song key: one key, notes moved by degree, waiting patterns follow");
 }
+static void sounding_pcs(const step_t *s,uint16_t *pcs)
+{
+    int last=-1;for(int i=0;i<64;i++){if(s[i].time==ST_NOTE&&s[i].n)last=i;else if(s[i].time!=ST_TIE)last=-1;
+        pcs[i]=0;if(last>=0)for(int j=0;j<s[last].n;j++)pcs[i]|=(uint16_t)(1u<<(s[last].note[j]%12));}
+}
+static int semitone_rub(uint16_t a,uint16_t b)
+{
+    for(int x=0;x<12;x++)if((a>>x)&1)for(int y=0;y<12;y++)if((b>>y)&1){int d=(x-y+12)%12;if(d==1||d==11)return 1;}
+    return 0;
+}
+/* (2026-11-10, the owner: "variety without end, but harmony") AMBIENT, every part at once, many times: the parts
+ * share each bar's chord (bass and chords hardly ever a semitone apart), and no two phrases are the same */
+static void ambient_harmony(void)
+{
+    init();stattic_key_set(0,1);trk[0].p[SN_G_SCOPE]=1;
+    enum{G=60};static uint32_t h[3][G];long rub=0,sy=0,steps=0;
+    for(int g=0;g<G;g++){
+        stattic_prepare_scope(0,0);for(int i=0;i<4;i++)block();
+        for(uint32_t k=0;k<NPART;k++){assert(!stattic_change[k].armed);assert(part_in_key(&trk[k]));}
+        uint16_t b[64],c[64],y[64];sounding_pcs(trk[0].step,b);sounding_pcs(trk[2].step,c);sounding_pcs(trk[1].step,y);
+        for(int i=0;i<64;i++){steps++;rub+=semitone_rub(b[i],c[i]);sy+=semitone_rub(y[i],b[i]|c[i]);}
+        for(uint32_t k=0;k<NPART;k++){uint32_t x=2166136261u;for(int i=0;i<64;i++){x=(x^trk[k].step[i].time)*16777619u;for(int j=0;j<trk[k].step[i].n;j++)x=(x^trk[k].step[i].note[j])*16777619u;}h[k][g]=x;}
+    }
+    assert(rub*100<steps*5&&sy*100<steps*5);
+    for(uint32_t k=0;k<NPART;k++){int same=0;for(int i=0;i<G;i++)for(int j=0;j<i;j++)same+=h[k][i]==h[k][j];assert(same<=2);}
+    printf("stattic AMBIENT: parts on one chord a bar (semitone rubs %.1f%% / %.1f%%), %d phrases each, all different\n",100.0*rub/steps,100.0*sy/steps,G);
+}
 int main(void)
 {
-    quantized();generated();drums_catalog();phrases();scales();shuffled_art();song_key();return 0;
+    quantized();generated();drums_catalog();phrases();scales();shuffled_art();song_key();ambient_harmony();return 0;
 }
 
 #endif

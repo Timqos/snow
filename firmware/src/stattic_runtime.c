@@ -551,7 +551,10 @@ static void stattic_prepare_scope(uint32_t track,uint32_t knob)
 {
     uint32_t mask=trk[track].p[SN_G_SCOPE]?15u:1u<<track,f=STATTIC_GUARD_SAVE();
     stattic_staging|=(uint8_t)mask;STATTIC_GUARD_RESTORE(f);
-    for(uint32_t k=0;k<NTRK;k++)if((mask>>k)&1u)(void)stattic_prepare(k,k==TRK_DRUM&&knob<4u?knob+4u:knob);   /* (DR: by category) */
+    static const uint8_t order[NTRK]={2,0,1,3};                 /* (CH first: BS and SY then follow its chords) */
+    stattic_amb_lead=(uint8_t)(knob==0u&&(mask&7u)==7u);
+    for(uint32_t i=0;i<NTRK;i++){uint32_t k=order[i];if((mask>>k)&1u)(void)stattic_prepare(k,k==TRK_DRUM&&knob<4u?knob+4u:knob);}   /* (DR: by category) */
+    stattic_amb_lead=0;
     stattic_group_end(mask);
 }
 static void stattic_pattern_random(void)
