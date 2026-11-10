@@ -71,7 +71,8 @@ if(factory){
  };
  say(navigator.requestMIDIAccess?'Select an unmodified original FM-1 V15 or V16 .fwsc file.':'Web MIDI SysEx is unavailable. Use desktop Chrome or Edge on this HTTPS page.');
 }else try{
- const res=await fetch('config.json',{cache:'no-store'});if(!res.ok)throw new Error('Cannot load the release configuration.');config=await res.json();if(config.previewOnly)throw new Error('Local preview: no firmware package is offered for installation.');
+ const res=await fetch('config.json?fresh='+Date.now(),{cache:'no-store'});   // (2026-11-10: past the Pages CDN's ~10 min cache)
+ if(!res.ok)throw new Error('Cannot load the release configuration.');config=await res.json();if(config.previewOnly)throw new Error('Local preview: no firmware package is offered for installation.');
  const pkg=await fetch(config.package,{cache:'no-store'});if(!pkg.ok)throw new Error('Cannot download the firmware package.');
  image=await verifyPackage(new Uint8Array(await pkg.arrayBuffer()),config);
  $('package-hash').textContent='SHA-256: '+config.sha256;

@@ -48,7 +48,7 @@ class UISession extends InstallSession{constructor(updater,img,cfg,opts){super(u
 const context={console,Uint8Array,Date,Blob,URL:{createObjectURL:()=>'/local-backup',revokeObjectURL(){}},setTimeout:()=>0,
  document:{getElementById:id=>{assert(elements.has(id),id);return elements.get(id);},body:{append(){}},createElement:()=>({click(){events.push('download');},remove(){}})},
  window:{addEventListener(){}},navigator:{requestMIDIAccess:async()=>{midiRequests++;return {}; }},
- fetch:async url=>url==='config.json'?{ok:true,json:async()=>config}:{ok:true,arrayBuffer:async()=>bytes.slice().buffer},
+ fetch:async url=>String(url).split('?')[0]==='config.json'?{ok:true,json:async()=>config}:{ok:true,arrayBuffer:async()=>bytes.slice().buffer},
  Updater:UIUpdater,InstallSession:UISession,verifyPackage};
 const app=fs.readFileSync(path.join(dir,'app.js'),'utf8').replace(/^import .*;\n/gm,'');
 await vm.runInNewContext('(async()=>{'+app+'\n})()',context);
