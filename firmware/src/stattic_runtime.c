@@ -222,11 +222,13 @@ static void stattic_morph_run(void)
             for(uint32_t i=0;i<m->nd;i++)trk[k].p[m->did[i]]=m->dval[i];
             m->nd=0;m->dstate=0;
         }
+        stattic_morph_live[k]=(uint8_t)(m->n||m->nd||m->dstate);
         if(!m->n)continue;
         uint32_t f=e>=m->dur?1024u:e*1024u/(m->dur?m->dur:1u);
         if(!m->curve)f=f*f/1024u*(3072u-2u*f)/1024u;
         for(uint32_t i=0;i<m->n;i++)stattic_morph_write(&trk[k],m->id[i],(int16_t)(m->from[i]+((int32_t)(m->to[i]-m->from[i])*(int32_t)f)/1024));
         if(e>=m->dur)m->n=0;
+        stattic_morph_live[k]=(uint8_t)(m->n||m->nd||m->dstate);
     }
 }
 static void stattic_runtime_tick(void)

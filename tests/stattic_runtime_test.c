@@ -203,9 +203,34 @@ static void ambient_harmony(void)
     for(uint32_t k=0;k<NPART;k++){int same=0;for(int i=0;i<G;i++)for(int j=0;j<i;j++)same+=h[k][i]==h[k][j];assert(same<=2);}
     printf("stattic AMBIENT: parts on one chord a bar (semitone rubs %.1f%% / %.1f%%), %d phrases each, all different\n",100.0*rub/steps,100.0*sy/steps,G);
 }
+/* (2026-11-10, the owner) a K2 sound gliding in (MORPH): SY's short note is held on through the glide,
+ * not cut before the next note, and ends when the glide is over */
+static uint64_t morph_samples;
+static void tick_ms(void){morph_samples+=CTL;fm1_ms=(uint32_t)(morph_samples*1000u/FS);}
+static void morph_holds_notes(void)
+{
+    morph_samples=(uint64_t)fm1_ms*FS/1000u;
+    init();stattic_key_set(0,1);song.g[G_BPM]=120;
+    track_t *t=&trk[1];
+    for(uint32_t i=0;i<NSTEP;i++){memset(&t->step[i],0,sizeof t->step[i]);t->step[i].time=ST_REST;}
+    for(uint32_t i=0;i<NSTEP;i+=16u)t->step[i]=(step_t){.note={60},.n=1,.time=ST_NOTE,.vel=100};   /* (a short note a bar) */
+    t->p[P_SLEN]=64;t->p[SN_MORPH_TIME]=4;t->p[SN_MORPH_START]=0;          /* (a 4 s glide on the 1/16 grid) */
+    song.playing=1;
+    uint32_t held_off=0,held_during=0,released_after=0;
+    for(uint32_t n=0;n<(uint32_t)FS*2u;n+=CTL){block();tick_ms();}       /* (a bar: the note ends by itself) */
+    held_off=t->seq_n==0;
+    assert(!stattic_prepare(1,1));
+    for(uint32_t n=0;n<(uint32_t)FS*3u;n+=CTL){block();tick_ms();if(stattic_morph_live[1]&&t->seq_n)held_during++;}
+    for(uint32_t n=0;n<(uint32_t)FS*4u;n+=CTL){block();tick_ms();}
+    released_after=!stattic_morph_live[1];
+    song.playing=0;
+    uint32_t gaps=0;for(uint32_t n=0;n<(uint32_t)FS*4u;n+=CTL){block();tick_ms();gaps+=t->seq_n==0;}
+    assert(held_off);assert(held_during>200u);assert(released_after);assert(gaps>100u);
+    printf("stattic MORPH: a short note held through the glide (%u blocks), released after\n",held_during);
+}
 int main(void)
 {
-    quantized();generated();drums_catalog();phrases();scales();shuffled_art();song_key();ambient_harmony();return 0;
+    quantized();generated();drums_catalog();phrases();scales();shuffled_art();song_key();ambient_harmony();morph_holds_notes();return 0;
 }
 
 #endif

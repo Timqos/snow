@@ -44,6 +44,9 @@ static volatile uint8_t stattic_home_ms,stattic_home_ms_reset,stattic_ms_pending
 static uint8_t stattic_ms_mute,stattic_ms_solo;
 static uint32_t stattic_ms_bar;
 static uint8_t stattic_ready,stattic_ui_dirty;
+/* (2026-11-10, the owner) a K2-K4 change gliding in (MORPH) on BS, SY or CH: a note that would end before the next
+ * one goes on until the glide is over (or the next note comes), so the glide is heard on a sounding note */
+static volatile uint8_t stattic_morph_live[3],stattic_morph_held[3];
 static void stattic_key_set(int32_t root,int32_t scale);static void stattic_key_unify(void);   /* (the song's key: stattic_runtime.c) */
 static volatile uint8_t stattic_staging;
 static uint8_t stattic_macro[NTRK];

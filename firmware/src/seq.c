@@ -2697,6 +2697,17 @@ static uint32_t step_vel(const step_t *s, uint32_t i)
  * step makes this one legato with a glide (acid style). skip: bit k = note k already sounds
  * from live recording (not triggered, not released here). len: the step's length (units). */
 static uint32_t stattic_seq_index(const track_t *t,uint32_t abs);
+#if FELUCCA_STATTIC
+/* (2026-11-10, the owner) during a MORPH glide the notes that would end are held on (stattic_runtime.h) */
+static int stattic_morph_holds(const track_t *t)
+{
+    uint32_t k = trk_index(t);
+    if (k >= 3u || !song.playing || !stattic_morph_live[k] || !t->seq_n)
+        return 0;
+    stattic_morph_held[k] = 1;
+    return 1;
+}
+#endif
 static void seq_step(track_t *t, const step_t *s, uint32_t slen, uint32_t skip)
 {
     uint32_t i, j, gate = slen * (uint32_t)t->p[P_SGATE] / 128u;
@@ -2716,9 +2727,17 @@ static void seq_step(track_t *t, const step_t *s, uint32_t slen, uint32_t skip)
         return;
     }
     if (s->time == ST_REST || !s->n) {
+#if FELUCCA_STATTIC
+        if (stattic_morph_holds(t))
+            return;
+#endif
         seq_release(t);
         return;
     }
+#if FELUCCA_STATTIC
+    if (trk_index(t) < 3u)
+        stattic_morph_held[trk_index(t)] = 0;      /* (a new note: what was held ends here, as ever) */
+#endif
     if (s->flags & SF_CONT_ALL) {                   /* (2.7) notes going on: kept; the others end, the new ones start */
         uint8_t old[4];
         uint32_t no = t->seq_n > 4u ? 4u : t->seq_n, kept = 0;
@@ -2898,10 +2917,22 @@ static void seq_tick(track_t *t, uint32_t adv)
 {
     uint32_t len = trk_len(t), into, slen, abs, idx, nabs, fire = 0;
     int32_t rel;
-    if (t->seq_n && !t->seq_hold) {
-        if (t->seq_off <= adv)
+#if FELUCCA_STATTIC
+    if (trk_index(t) < 3u && stattic_morph_held[trk_index(t)] && !stattic_morph_live[trk_index(t)]) {
+        stattic_morph_held[trk_index(t)] = 0;      /* (the glide is over: the held notes end now) */
+        if (t->seq_n && !t->seq_hold && (t->seq_off <= adv || t->step[t->seq_idx % NSTEP].time == ST_REST))
             seq_release(t);
-        else
+    }
+#endif
+    if (t->seq_n && !t->seq_hold) {
+        if (t->seq_off <= adv) {
+#if FELUCCA_STATTIC
+            if (stattic_morph_holds(t))
+                t->seq_off = 0;
+            else
+#endif
+            seq_release(t);
+        } else
             t->seq_off -= adv;
     }
     if (!song.playing)
