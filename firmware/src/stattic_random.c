@@ -3,6 +3,7 @@
  * are invariants; oscillator/envelope/filter/motion/FX choices are generated
  * from a fresh 32-bit state. No factory preset selection or short patch list.
  * Runs in the main loop; only the bounded commit holds the audio guard. */
+static int8_t stattic_k2_style=-1;                       /* (the K2 style drawn last: 7 = CH's PAD) */
 static void snow_family_mask(uint32_t family,uint32_t *mask)
 {
     memset(mask,0,((P_COUNT+31u)/32u)*sizeof *mask);
@@ -147,6 +148,7 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
     p[P_VOICE]=channel==5u?V_POLY:V_MONO;
     p[P_ATK]=ss_range(&r,0,5);p[P_SUS]=0;p[P_REL]=ss_range(&r,20,55);
     int keys_style=-1;                               /* (SY, CH: the ambient style drawn below) */
+    stattic_k2_style=-1;
     if(channel==0u){ /* Kick: a low fundamental and a brief pitch transient. */
         int body=ss_range(&r,0,5);
         p[SN_TUNE]=ss_range(&r,-34,-22);p[SN_WAVE1]=body==4?1:0;p[SN_WAVE2]=ss_range(&r,0,1);
@@ -208,9 +210,10 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
          * wider draw above as it was). A style sets its envelope, brightness and FM; everything else stays
          * drawn as above, so two sounds of a style still differ */
         static const uint8_t style_w[7]={22,16,16,12,10,9,15};   /* SCAPE DARK PLUCK MALLET BELL BLIP OPEN */
-        static const int8_t style_trim[7]={-3,0,2,2,-5,3,0};      /* (SY: their loudness against each other) */
+        static const int8_t style_trim[8]={-3,0,2,2,-5,3,0,0};      /* (SY: their loudness against each other) */
         uint32_t x=(uint32_t)ss_range(&r,0,99);keys_style=0;
         while(keys_style<6&&x>=style_w[keys_style]){x-=style_w[keys_style];keys_style++;}
+        if(channel==5u&&ss_chance(&r,30))keys_style=7;          /* (2026-11-10, the owner) CH: a PAD, one turn in three or so */
         static const uint8_t harm[]={16,16,32,32,48},mallet[]={48,64,64,112},bell[]={56,56,88,112,112};
         switch(keys_style){
         case 0:                                                  /* SCAPE: slow, smooth, dark, held */
@@ -249,6 +252,14 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
             p[P_ATK]=0;p[P_DEC]=ss_range(&r,18,36);p[P_SUS]=0;p[P_REL]=ss_range(&r,10,30);
             p[P_E6]=ss_range(&r,60,100);
             break;
+        case 7:                                                  /* PAD (CH): atmospheric, low, warm, a little lo-fi */
+            p[SN_WAVE1]=ss_chance(&r,50)?0:ss_chance(&r,50)?1:5;p[SN_RATIO]=ss_chance(&r,70)?16:32;
+            p[P_E0]=ss_range(&r,4,24);p[P_E2]=ss_range(&r,0,20);p[SN_FMDEC]=ss_range(&r,70,100);
+            p[P_ATK]=ss_range(&r,50,100);p[P_DEC]=ss_range(&r,90,100);p[P_SUS]=ss_range(&r,110,127);p[P_REL]=ss_range(&r,80,115);
+            p[P_E6]=ss_range(&r,30,60);p[P_E4]=ss_range(&r,10,30);p[P_E5]=ss_range(&r,0,6);p[P_E7]=ss_range(&r,4,22);
+            p[SN_NOISE]=ss_range(&r,2,7);p[P_GLIDE]=ss_range(&r,0,4);
+            if(ss_chance(&r,30))p[SN_TUNE]=-12;               /* (lower now and then; never higher) */
+            break;
         default:break;                                           /* OPEN: the draw above */
         }
         if(channel==6u)p[P_ED_FX]=style_trim[keys_style];
@@ -268,8 +279,15 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
         static const uint8_t waves[]={0,1,2,4,5};int voice=ss_range(&r,0,4);
         p[SN_ALG]=ss_chance(&r,30)?4:ss_range(&r,0,2);
         p[SN_WAVE1]=waves[voice];p[SN_WAVE2]=ss_chance(&r,65)?0:ss_chance(&r,50)?1:5;
+        if(channel==4u){                                 /* (2026-11-10, the owner) BS: sine basses of every kind, now and then
+                                                          * a triangle or a square, never a saw (nor a saw-bright FM) */
+            static const uint8_t bw[10]={0,0,0,0,0,0,1,1,3,5};
+            voice=ss_chance(&r,65)?0:1;p[SN_WAVE1]=bw[ss_rand(&r)%10u];
+            p[SN_WAVE2]=ss_chance(&r,80)?0:1;p[SN_ALG]=ss_chance(&r,25)?4:ss_chance(&r,70)?0:ss_range(&r,1,2);
+        }
         p[SN_TUNE]=(int16_t)(channel==4u?(ss_chance(&r,65)?-24:-12):12*ss_range(&r,-1,1));
         p[SN_NOISE]=ss_range(&r,0,4);p[P_E0]=ss_range(&r,voice==0?12:0,channel==4u?68:61);
+        if(channel==4u)p[P_E0]=ss_range(&r,0,ss_chance(&r,70)?30:46);   /* (TONE: an FM colour on the sine, not a saw's edge) */
         p[SN_RATIO3]=ss_chance(&r,channel==4u?65:20)?8:ss_harmonic(&r);
         p[SN_SUB]=ss_range(&r,channel==4u?10:0,channel==4u?38:18);
         p[SN_FILTER]=1;p[SN_RESO]=ss_range(&r,0,channel==4u?31:22);
@@ -296,16 +314,21 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
         /* (2026-11-09, the owner: atmosphere) SY and CH: each K2 sound comes with its own space, drawn wide
          * (stattic_runtime adds the rack's sends and shapes to K2's mask on these two): SCAPE in a big room,
          * PLUCK, BELL and BLIP into delays, the keys and mallets in between; SY's 8-bit sounds into a delay */
-        static const uint8_t rv_lo[7]={60,34,28,40,52,22,30},rv_hi[7]={110,72,62,80,98,56,74};
-        static const uint8_t dl_lo[7]={8,12,40,24,42,48,10},dl_hi[7]={42,46,84,62,88,92,60};
+        static const uint8_t rv_lo[8]={60,34,28,40,52,22,30,70},rv_hi[8]={110,72,62,80,98,56,74,112};
+        static const uint8_t dl_lo[8]={8,12,40,24,42,48,10,4},dl_hi[8]={42,46,84,62,88,92,60,36};
         uint32_t st=keys_style<0?5u:(uint32_t)keys_style;
         p[P_REV]=ss_range(&r,rv_lo[st],rv_hi[st]);p[P_DLY]=ss_range(&r,dl_lo[st],dl_hi[st]);
-        p[SN_RSIZE]=ss_range(&r,st==0u||st==4u?96:72,127);p[SN_RDAMP]=ss_range(&r,20,80);
+        p[SN_RSIZE]=ss_range(&r,st==0u||st==4u||st==7u?96:72,127);p[SN_RDAMP]=ss_range(&r,20,80);
         p[SN_RPRE]=ss_range(&r,0,st==0u?44:28);p[SN_RTYPE]=ss_chance(&r,70)?ss_range(&r,1,2):0;   /* (longer tails) */
         p[SN_DSYNC]=ss_chance(&r,70)?ss_range(&r,5,9):0;p[SN_DTIME]=ss_range(&r,18,72);
         p[SN_DFB]=ss_range(&r,st==2u||st==4u||st==5u?38:22,st==2u||st==4u||st==5u?74:58);
         p[SN_DCOLOR]=ss_range(&r,44,100);p[SN_DWIDTH]=ss_range(&r,48,124);
-        p[P_CHOR]=ss_range(&r,0,st==0u||st==1u?46:24);
+        p[P_CHOR]=ss_range(&r,st==7u?16:0,st==0u||st==1u||st==7u?46:24);
+        if(st==7u){                                      /* (PAD: worn tape, lo-fi: stattic_runtime adds it to K2's mask) */
+            p[SN_TMIX]=ss_range(&r,30,80);p[SN_TDRIVE]=ss_range(&r,20,50);p[SN_TTONE]=ss_range(&r,60,95);
+            p[SN_TWOW]=ss_range(&r,6,22);p[SN_TFLUT]=ss_range(&r,2,10);
+        }
+        stattic_k2_style=(int8_t)st;
     }
     if(channel==6u)p[P_ED_FX]=(int16_t)clamp(p[P_ED_FX]+stattic_space_trim(p),-64,63);   /* (CH: in stattic_runtime, with its own) */
     if(channel>=5u){                                     /* (2026-11-10, the owner) SY, CH: the shortest sounds last ~0.7-1 s, and

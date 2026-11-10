@@ -528,6 +528,10 @@ static int stattic_prepare(uint32_t k,uint32_t knob)
             static const uint8_t space[]={P_REV,P_DLY,P_CHOR,SN_RSIZE,SN_RDAMP,SN_RPRE,SN_RTYPE,SN_DSYNC,SN_DTIME,SN_DFB,SN_DCOLOR,SN_DWIDTH};
             for(uint32_t i=0;i<NELEM(space);i++)mask[space[i]/32u]|=1u<<(space[i]%32u);
         }
+        if(knob==1u&&k==2u&&stattic_k2_style==7){          /* (CH's PAD: its worn tape too) */
+            static const uint8_t tape[]={SN_TMIX,SN_TDRIVE,SN_TTONE,SN_TWOW,SN_TFLUT};
+            for(uint32_t i=0;i<NELEM(tape);i++)mask[tape[i]/32u]|=1u<<(tape[i]%32u);
+        }
         if(knob==1u&&k==2u){                                 /* (the owner) CH: a loud new sound is trimmed down */
             next.p[P_ED_FX]=(int16_t)clamp(stattic_ch_trim(next.p)+stattic_space_trim(next.p),-64,63);mask[P_ED_FX/32u]|=1u<<(P_ED_FX%32u);   /* (+ its space's level) */
         }
