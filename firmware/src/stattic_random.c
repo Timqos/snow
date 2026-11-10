@@ -115,6 +115,49 @@ static void snow_design_sy_fx(uint32_t *r,int16_t *p)
     }
     p[P_ED_FX]=trim[kind];
 }
+/* (2026-11-10, the owner) SY's percussive effects: static, crackle, a broken radio, ticks, a hiss swell, a broken
+ * glitch; short hits with noise and bitcrush (stattic_runtime adds the crush to K2's mask, and takes it off
+ * again with the next K2 sound that is not one of these). The notes stay in the scale (whole harmonics only) */
+static void snow_design_sy_perc(uint32_t *r,int16_t *p)
+{
+    static const int8_t trim[6]={2,0,4,8,2,4};          /* (1/2 dB: their loudest 50 ms near the keys sounds') */
+    static const uint8_t harm[]={48,64,80,96,112};
+    uint32_t kind=(uint32_t)ss_range(r,0,5);
+    p[SN_ALG]=0;p[SN_PAMT]=0;p[SN_RATIO3]=8;p[SN_WAVE2]=0;p[SN_WAVE3]=0;p[SN_SUB]=0;p[SN_MIX]=0;p[SN_FB_ROUTE]=0;
+    p[SN_FILTER]=0;p[SN_RESO]=0;p[SN_MODE]=1;p[SN_FINE]=0;p[P_E1]=64;p[SN_TUNE]=0;p[P_GLIDE]=0;
+    p[SN_WAVE1]=ss_chance(r,60)?0:ss_chance(r,50)?1:3;p[SN_RATIO]=16;
+    p[P_E4]=ss_range(r,0,40);p[P_ATK]=0;p[P_SUS]=0;
+    p[SN_BMIX]=ss_range(r,30,80);p[SN_BBITS]=ss_range(r,4,9);p[SN_BRATE]=ss_range(r,2,10);p[SN_BTONE]=ss_range(r,70,120);
+    switch(kind){
+    case 0:   /* STATIC: a burst of hiss through the crusher */
+        p[SN_NOISE]=ss_range(r,90,127);p[P_E5]=ss_range(r,60,127);p[SN_PDEC]=ss_range(r,4,14);
+        p[P_E0]=ss_range(r,0,20);p[P_E2]=0;p[P_E6]=ss_range(r,70,110);p[P_E7]=ss_range(r,0,20);
+        p[P_DEC]=ss_range(r,55,70);p[P_REL]=ss_range(r,40,60);break;
+    case 1:   /* CRACKLE: bright noise, few bits, slow hold */
+        p[SN_NOISE]=ss_range(r,100,127);p[P_E5]=ss_range(r,30,90);p[SN_PDEC]=ss_range(r,2,10);
+        p[P_E0]=ss_range(r,0,10);p[P_E6]=ss_range(r,90,127);p[P_E7]=ss_range(r,20,40);
+        p[SN_BMIX]=ss_range(r,60,100);p[SN_BBITS]=ss_range(r,3,6);p[SN_BRATE]=ss_range(r,6,16);
+        p[P_DEC]=ss_range(r,50,64);p[P_REL]=ss_range(r,36,56);break;
+    case 2:   /* RADIO: a rough FM body, noise, band-limited, crushed */
+        p[P_E0]=ss_range(r,60,110);p[SN_RATIO]=harm[ss_rand(r)%NELEM(harm)];p[P_E2]=ss_range(r,60,127);p[SN_FMDEC]=ss_range(r,5,20);
+        p[SN_NOISE]=ss_range(r,30,60);p[P_E5]=ss_range(r,20,60);p[SN_PDEC]=ss_range(r,6,16);
+        p[P_E6]=ss_range(r,50,80);p[P_E7]=ss_range(r,10,30);
+        p[P_DEC]=ss_range(r,58,74);p[P_REL]=ss_range(r,40,62);break;
+    case 3:   /* TICK: a short metal tick */
+        p[P_E0]=ss_range(r,20,60);p[SN_RATIO]=harm[2u+ss_rand(r)%3u];p[P_E2]=ss_range(r,80,127);p[SN_FMDEC]=ss_range(r,4,14);
+        p[SN_NOISE]=ss_range(r,0,20);p[P_E5]=ss_range(r,40,100);p[SN_PDEC]=ss_range(r,2,8);p[P_E6]=ss_range(r,90,127);
+        p[SN_BMIX]=ss_range(r,0,40);
+        p[P_DEC]=ss_range(r,48,60);p[P_REL]=ss_range(r,36,52);break;
+    case 4:   /* SWELL: hiss rising, then gone */
+        p[SN_NOISE]=ss_range(r,80,127);p[P_E5]=0;p[P_E0]=ss_range(r,0,16);p[P_E6]=ss_range(r,60,100);
+        p[P_ATK]=ss_range(r,68,84);p[P_DEC]=ss_range(r,60,72);p[P_REL]=ss_range(r,40,60);break;
+    default:  /* BROKEN: heavy FM, a broken fast arp in the scale, crushed */
+        p[P_E0]=ss_range(r,90,127);p[SN_RATIO]=harm[ss_rand(r)%NELEM(harm)];p[P_E2]=ss_range(r,60,127);p[SN_FMDEC]=ss_range(r,5,25);
+        p[SN_ALG]=5;p[SN_RATIO3]=ss_range(r,1,8);p[SN_NOISE]=ss_range(r,10,40);p[P_E6]=ss_range(r,70,110);p[P_E7]=ss_range(r,10,30);
+        p[P_DEC]=ss_range(r,58,72);p[P_REL]=ss_range(r,40,60);break;
+    }
+    p[P_ED_FX]=trim[kind];
+}
 /* (2026-11-10, the owner: SY/CH sometimes came out far too loud) the level a K2 sound's own space and sustain add:
  * a wet sum (REV + DLY) past 90, a long delay feedback, a sustain past 90; in TRIM steps (1/2 dB), never up */
 static int16_t stattic_space_trim(const int16_t *p)
@@ -147,7 +190,7 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
     p[SN_MODE]=melodic?1:0;p[SN_KEYTRACK]=channel>=3u?127:0;
     p[P_VOICE]=channel==5u?V_POLY:V_MONO;
     p[P_ATK]=ss_range(&r,0,5);p[P_SUS]=0;p[P_REL]=ss_range(&r,20,55);
-    int keys_style=-1;                               /* (SY, CH: the ambient style drawn below) */
+    int keys_style=-1,percfx=0;                      /* (SY, CH: the ambient style drawn below; SY's percussive effects) */
     stattic_k2_style=-1;
     if(channel==0u){ /* Kick: a low fundamental and a brief pitch transient. */
         int body=ss_range(&r,0,5);
@@ -188,6 +231,8 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
         p[P_DEC]=ss_range(&r,family==2?75:34,family==2?89:71);
     } else if(channel==6u&&stattic_sy_fx_turn(&r)){   /* (SY: an 8-bit / FX sound, one turn in four) */
         snow_design_sy_fx(&r,p);
+    } else if(channel==6u&&ss_chance(&r,20)){           /* (2026-11-10, the owner) SY: a percussive effect, one turn in seven or so */
+        snow_design_sy_perc(&r,p);percfx=1;
     } else if(channel>=5u){ /* KEYS (SY, CH): electric pianos, organs, glassy and soft keys */
         if(channel==6u)p[P_ED_FX]=0;                  /* (SY: a keys sound, no FX trim) */
         static const uint8_t waves[]={0,0,0,1,5,4,2};static const uint8_t ratios[]={16,16,16,32,32,48,56,64,112};
@@ -328,10 +373,10 @@ static void snow_design_sound_from(const track_t *t,uint32_t channel,uint32_t se
             p[SN_TMIX]=ss_range(&r,30,80);p[SN_TDRIVE]=ss_range(&r,20,50);p[SN_TTONE]=ss_range(&r,60,95);
             p[SN_TWOW]=ss_range(&r,6,22);p[SN_TFLUT]=ss_range(&r,2,10);
         }
-        stattic_k2_style=(int8_t)st;
+        stattic_k2_style=(int8_t)(percfx?9:st);
     }
     if(channel==6u)p[P_ED_FX]=(int16_t)clamp(p[P_ED_FX]+stattic_space_trim(p),-64,63);   /* (CH: in stattic_runtime, with its own) */
-    if(channel>=5u){                                     /* (2026-11-10, the owner) SY, CH: the shortest sounds last ~0.7-1 s, and
+    if(channel>=5u&&!percfx){                            /* (2026-11-10, the owner) SY, CH: the shortest sounds last ~0.7-1 s, and
                                                           * every note fades out at its end, never cut off */
         if(p[P_SUS]<40&&p[P_DEC]<90)p[P_DEC]=ss_range(&r,90,96);
         if(channel==6u&&p[P_REL]<72)p[P_REL]=ss_range(&r,72,86);   /* (~0.2-0.5 s; CH keeps its two-bar release, below) */

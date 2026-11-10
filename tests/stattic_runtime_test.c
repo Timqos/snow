@@ -228,9 +228,21 @@ static void morph_holds_notes(void)
     assert(held_off);assert(held_during>200u);assert(released_after);assert(gaps>100u);
     printf("stattic MORPH: a short note held through the glide (%u blocks), released after\n",held_during);
 }
+/* (2026-11-10, the owner: a rasp on the kick) the kick never ratchets: its fastest figure is a 16th apart */
+static void kick_no_ratchet(void)
+{
+    init();
+    for(uint32_t g=0;g<300u;g++){
+        trk[TRK_DRUM].p[SN_G_COMPLEX]=(int16_t)(g%101u);trk[TRK_DRUM].p[SN_G_SEED]=(int16_t)(g&127u);
+        assert(!stattic_prepare(TRK_DRUM,g&1u?4u:0u));for(int i=0;i<3;i++)block();
+        for(uint32_t s=0;s<NSTEP;s++)for(uint32_t l=0;l<16u;l++)
+            if(ST_LANE_CATEGORY[l]==0u&&dstep_has(&trk[TRK_DRUM].dstep[s],l))assert(dstep_rat(&trk[TRK_DRUM].dstep[s],l)==0u);
+    }
+    puts("stattic DR: 300 kits at every COMPLEX, no kick ratchet (16ths and eighth triplets only)");
+}
 int main(void)
 {
-    quantized();generated();drums_catalog();phrases();scales();shuffled_art();song_key();ambient_harmony();morph_holds_notes();return 0;
+    quantized();generated();drums_catalog();phrases();scales();shuffled_art();song_key();ambient_harmony();morph_holds_notes();kick_no_ratchet();return 0;
 }
 
 #endif

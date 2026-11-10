@@ -530,10 +530,17 @@ static int stattic_prepare(uint32_t k,uint32_t knob)
             static const uint8_t space[]={P_REV,P_DLY,P_CHOR,SN_RSIZE,SN_RDAMP,SN_RPRE,SN_RTYPE,SN_DSYNC,SN_DTIME,SN_DFB,SN_DCOLOR,SN_DWIDTH};
             for(uint32_t i=0;i<NELEM(space);i++)mask[space[i]/32u]|=1u<<(space[i]%32u);
         }
-        if(knob==1u&&k==2u&&stattic_k2_style==7){          /* (CH's PAD: its worn tape too) */
-            static const uint8_t tape[]={SN_TMIX,SN_TDRIVE,SN_TTONE,SN_TWOW,SN_TFLUT};
-            for(uint32_t i=0;i<NELEM(tape);i++)mask[tape[i]/32u]|=1u<<(tape[i]%32u);
+        if(knob==1u&&(k==1u||k==2u)){                    /* (CH's PAD brings worn tape, SY's percussive effects a crusher;
+                                                          * the next K2 sound without them takes them off again; K4 keeps its own) */
+            static const uint8_t tape[]={SN_TMIX,SN_TDRIVE,SN_TTONE,SN_TWOW,SN_TFLUT},crush[]={SN_BMIX,SN_BBITS,SN_BRATE,SN_BTONE};
+            uint32_t bring=k==2u&&stattic_k2_style==7?1u:k==1u&&stattic_k2_style==9?2u:0u;
+            if(bring==1u)for(uint32_t i=0;i<NELEM(tape);i++)mask[tape[i]/32u]|=1u<<(tape[i]%32u);
+            if(bring==2u)for(uint32_t i=0;i<NELEM(crush);i++)mask[crush[i]/32u]|=1u<<(crush[i]%32u);
+            if((stattic_k2_lofi[k]&1u)&&bring!=1u){next.p[SN_TMIX]=0;mask[SN_TMIX/32u]|=1u<<(SN_TMIX%32u);}
+            if((stattic_k2_lofi[k]&2u)&&bring!=2u){next.p[SN_BMIX]=0;mask[SN_BMIX/32u]|=1u<<(SN_BMIX%32u);}
+            stattic_k2_lofi[k]=(uint8_t)bring;
         }
+        if(knob==3u&&k<3u)stattic_k2_lofi[k]=0;
         if(knob==1u&&k==2u){                                 /* (the owner) CH: a loud new sound is trimmed down */
             next.p[P_ED_FX]=(int16_t)clamp(stattic_ch_trim(next.p)+stattic_space_trim(next.p),-64,63);mask[P_ED_FX/32u]|=1u<<(P_ED_FX%32u);   /* (+ its space's level) */
         }
