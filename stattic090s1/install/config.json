@@ -1,7 +1,0 @@
-{
-  "version": "STATTIC 0.9.0-S1",
-  "product": "FM-1_990",
-  "sha256": "fccb846f8cb374adddf42ba66004b1f7602908965175be34b652c3264bb6b6aa",
-  "package": "../firmware/stattic-0.9.0-sloop-rc1.fwsc",
-  "source_commit": "75f556175a9776f5a54a815635ef332801ae417f"
-}

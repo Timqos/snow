@@ -1,7 +1,0 @@
-{
-  "stage": "Snow fixed instruments, pixel UI and random phrase generator",
-  "version": "v0.4-snow",
-  "source_commit": "b53c1c285ea65475fcad825f8a5e271741179636",
-  "source_dirty": false,
-  "package_sha256": "9cf2482c2b2083133408646267d31033d542b55302dd0d6673192dc1a87e2c79"
-}
