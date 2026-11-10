@@ -1,13 +1,13 @@
 {
   "version": "STATTIC 0.9.0-S1",
   "product": "FM-1_990",
-  "package": "stattic-0.9.0-sloop-rc1-8b49646.fwsc",
-  "package_sha256": "646762706124ab5504085b624e526bba0bbbe95a9e11a9828f63afb3b6804afc",
+  "package": "stattic-0.9.0-sloop-rc1-b9d25a9.fwsc",
+  "package_sha256": "0655c68d33f4502a498331f425316d51418fa41f079fb7d359d2f6a09f684102",
   "package_bytes": 611645,
-  "app_sha256": "39dc29f5dd5d096e1ae66543712ba2b0b1b8a320273b4af87eb66c5ace8dd4d9",
-  "app_bytes": 455404,
+  "app_sha256": "b34246770e7ba5fa04673c7bd3821d35c8dc9438331633b6950aaa204ca6e4fa",
+  "app_bytes": 455804,
   "loader_sha256": "547a9c8d251dd71588286ae429cade84f672d8a6b6c7a9b4d3bc92f33ddb7e5b",
-  "source_commit": "8b496466fd14cca3726d57d0fa977842d97b48c4",
+  "source_commit": "b9d25a98c026167cbe0da8048eb9b17fdfe6d358",
   "source_dirty": false,
   "sloop_base": "bac9c05ea7627449405aa10e48da21d75b6c8c56",
   "configuration": {
@@ -29,7 +29,7 @@
     ".ram_text: 925 insns, no calls",
     ".c1_text: 160 B, the second core's loop in RAM",
     ".hot_text: 23604 B of render code run from SRAM",
-    "image 455404 B; RAM .data+.bss 96268 B of 98304; lowram 27452 B of 29384; pool 332056 B of 344064",
+    "image 455804 B; RAM .data+.bss 96284 B of 98304; lowram 27452 B of 29384; pool 332056 B of 344064",
     "register access: hal/ only (src/, loader/ clean)"
   ],
   "hardware_audio_validation": "pending",
