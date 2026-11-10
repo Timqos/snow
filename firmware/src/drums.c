@@ -318,6 +318,7 @@ static void __attribute__((noinline)) stattic_micro_on(uint32_t lane, uint32_t n
     drums.kit[i] = (uint8_t)DRUM_STATTIC;
     d = &stattic_micro_snd[i];
     crush = stattic_micro_make(d, lane, stattic_drum_pick[lane]);
+    d->level = (uint8_t)clamp((int32_t)d->level + 28, 0, 255);   /* (2026-11-10, the owner: the drums sat far back) +7 dB: about the sampled kit's loudness, the limiter no busier */
     d->decay = (uint8_t)clamp((int32_t)d->decay + len / 3, 0, 127);
     d->ndec = (uint8_t)clamp((int32_t)d->ndec + len / 3, 0, 127);
     if (bend > 0 && d->wave)
